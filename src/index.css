@@ -1,0 +1,30 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+@source "./src/**/*.{tsx, ts}";
+@font-face {
+  font-family: "";
+  src: url();
+}
+:root {
+  --color-gradient-from: #5d7cff;
+  --color-gradient-to: #7e51c2;
+}
+
+body {
+  background: linear-gradient(
+    to bottom,
+    var(--color-gradient-from),
+    var(--color-gradient-to)
+  );
+}
+
+.dark {
+  --color-gradient-from: #232946;
+  --color-gradient-to: #5d7cff;
+  background: linear-gradient(
+    to bottom,
+    var(--color-gradient-from),
+    var(--color-gradient-to)
+  );
+}
