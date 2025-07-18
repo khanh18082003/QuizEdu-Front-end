@@ -17,6 +17,7 @@ import ForgotPassword from "./pages/auth/ForgotPassword";
 import ResetPassword from "./pages/auth/ResetPassword";
 import StudentHome from "./pages/student/StudentHome";
 import TeacherHome from "./pages/teacher/TeacherHome";
+import { Oauth2Authentication } from "./pages/auth/Oauth2Authentication";
 
 function App() {
   return (
@@ -31,6 +32,7 @@ function App() {
 
         {/* Auth Routes with Authentication Layout */}
         <Route path="/authentication" element={<AuthenticationLayout />}>
+          <Route path="oauth2" element={<Oauth2Authentication />} />
           <Route path="login" element={<Login />} />
           <Route path="register" element={<RegisterOptions />} />
           <Route path="register/student" element={<StudentRegister />} />

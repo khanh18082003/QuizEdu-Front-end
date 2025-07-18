@@ -54,7 +54,7 @@ const StudentLayout = () => {
           if (response.data) {
             // Lưu profile vào Redux store
             dispatch(myProfile(response.data));
-
+            console.log("User profile loaded:", response.data);
             // Kiểm tra role, nếu không phải student thì chuyển hướng
             if (response.data.role.toLowerCase() !== "student") {
               navigate("/teacher/dashboard");
@@ -266,12 +266,29 @@ const StudentLayout = () => {
             </h2>
             <div className="flex items-center gap-3">
               <div className="group relative">
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-r from-[var(--color-gradient-from)] to-[var(--color-gradient-to)] text-white shadow-md transition-transform group-hover:scale-105">
-                  <span className="font-medium">
-                    {user && user.display_name
-                      ? user.display_name.substring(0, 2).toUpperCase()
-                      : ""}
-                  </span>
+                <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-gradient-to-r from-[var(--color-gradient-from)] to-[var(--color-gradient-to)] text-white shadow-md transition-transform group-hover:scale-105">
+                  {user && user.avatar ? (
+                    <img
+                      src={user.avatar}
+                      alt={user.display_name || "User Avatar"}
+                      className="h-full w-full rounded-full object-cover"
+                      onError={(e) => {
+                        // Fallback to initials if image fails to load
+                        const target = e.target as HTMLImageElement;
+                        target.style.display = "none";
+                        const parent = target.parentElement;
+                        if (parent) {
+                          parent.innerHTML = `<span class="font-medium">${user.display_name ? user.display_name.substring(0, 2).toUpperCase() : ""}</span>`;
+                        }
+                      }}
+                    />
+                  ) : (
+                    <span className="font-medium">
+                      {user && user.display_name
+                        ? user.display_name.substring(0, 2).toUpperCase()
+                        : ""}
+                    </span>
+                  )}
                 </div>
               </div>
               {user && user.display_name && (

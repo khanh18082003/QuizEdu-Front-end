@@ -14,6 +14,7 @@ import FormAnimation from "../../components/ui/FormAnimation";
 import { loginUser } from "../../services/authService";
 import { UserRole } from "../../types/userRole";
 import { setAuthCredentials } from "../../utils/axiosCustom";
+import { OAuthConfig } from "../../utils/oauth2";
 
 const Login = () => {
   const navigate = useNavigate();
@@ -156,8 +157,17 @@ const Login = () => {
   };
 
   const handleGoogleLogin = () => {
-    // Google SSO login logic would go here
-    console.log("Login with Google");
+    // Google SSO login logic with selected role
+    console.log("Login with Google as", role);
+    const redirectUrl = OAuthConfig.google.redirectUri;
+    const authUrl = OAuthConfig.google.authUri;
+    const clientId = OAuthConfig.google.clientId;
+
+    // Add the selected role as state parameter to be retrieved after OAuth flow
+    const targetUrl = `${authUrl}?redirect_uri=${encodeURIComponent(
+      redirectUrl,
+    )}&response_type=code&client_id=${clientId}&scope=openid%20email%20profile&state=${role}`;
+    window.location.href = targetUrl;
   };
 
   return (

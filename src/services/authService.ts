@@ -119,3 +119,20 @@ export const requestPasswordReset = async (
     throw error;
   }
 };
+
+export const outboundAuthentication = async (
+  code: string,
+  role: string = "student",
+): Promise<SuccessApiResponse<TokenResponse>> => {
+  try {
+    // Make login request
+    const response = await api.post<SuccessApiResponse<TokenResponse>>(
+      `/auth/outbound/authentication?code=${code}&role=${role}`,
+    );
+    // Return the user info
+    return response.data;
+  } catch (error) {
+    console.error("Login error:", error);
+    throw error;
+  }
+};
