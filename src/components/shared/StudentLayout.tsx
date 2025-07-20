@@ -22,12 +22,20 @@ import {
   clearAuthCredentials,
   setAuthCredentials,
 } from "../../utils/axiosCustom";
+import type {
+  StudentProfileResponse,
+  TeacherProfileResponse,
+} from "../../types/response";
 
 const StudentLayout = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(true);
-  const user = useSelector((state: { user: RegisterResponse }) => state.user);
+  const user = useSelector(
+    (state: {
+      user: RegisterResponse | StudentProfileResponse | TeacherProfileResponse;
+    }) => state.user,
+  );
   const dispatch = useDispatch();
 
   // Fetch user profile on component mount

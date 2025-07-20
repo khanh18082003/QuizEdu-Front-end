@@ -1,3 +1,5 @@
+import type { RegisterResponse } from "../services/userService";
+
 export interface ApiResponse {
   code: string;
   status: number;
@@ -12,4 +14,15 @@ export interface ErrorApiResponse extends ApiResponse {
   time_stamp: string;
   path: string;
   error: string;
+}
+
+export interface StudentProfileResponse extends RegisterResponse {
+  level: string;
+  school_name: string;
+}
+
+export interface TeacherProfileResponse extends RegisterResponse {
+  subjects: Array<string>;
+  experience: string;
+  school_name: string;
 }
