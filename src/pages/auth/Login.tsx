@@ -329,21 +329,6 @@ const Login = () => {
             />
 
             <div className="flex items-center justify-between pt-2">
-              <div className="flex items-center">
-                <input
-                  id="remember-me"
-                  name="remember-me"
-                  type="checkbox"
-                  className="h-4 w-4 rounded border-gray-300 text-[var(--color-gradient-from)] focus:ring-[var(--color-gradient-from)]"
-                />
-                <label
-                  htmlFor="remember-me"
-                  className="ml-2 block text-sm text-gray-700 dark:text-gray-300"
-                >
-                  Remember me
-                </label>
-              </div>
-
               <div className="text-sm">
                 <Link
                   to="/authentication/forgot-password"
