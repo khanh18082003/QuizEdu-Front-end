@@ -1,5 +1,9 @@
 import api from "../utils/axiosCustom";
-import type { SuccessApiResponse } from "../types/response";
+import type {
+  StudentProfileResponse,
+  SuccessApiResponse,
+  TeacherProfileResponse,
+} from "../types/response";
 
 // Interface for user registration response
 export interface RegisterResponse {
@@ -73,11 +77,17 @@ export const registerTeacher = async (
 };
 
 export const fetchUserProfile = async (): Promise<
-  SuccessApiResponse<RegisterResponse>
+  SuccessApiResponse<
+    RegisterResponse | StudentProfileResponse | TeacherProfileResponse
+  >
 > => {
   try {
     const response =
-      await api.get<SuccessApiResponse<RegisterResponse>>(`/users/my-profile`);
+      await api.get<
+        SuccessApiResponse<
+          RegisterResponse | StudentProfileResponse | TeacherProfileResponse
+        >
+      >(`/users/my-profile`);
     return response.data;
   } catch (error) {
     console.error("Failed to fetch user profile:", error);
@@ -110,5 +120,92 @@ export const resetPassword = async (
   } catch (error) {
     console.error("Password reset failed:", error);
     throw error;
+  }
+};
+
+/**
+ * Update user profile with camelCase field names for the backend API
+ * @param userData User data with snake_case field names
+ * @param avatarFile Optional avatar file to upload
+ * @param role User role (default: "student")
+ * @returns Promise with the updated profile data
+ */
+export const updateUserProfile = async (
+  userData: Partial<StudentProfileResponse | TeacherProfileResponse>,
+  avatarFile?: File | null,
+  role: string = "student",
+): Promise<
+  | SuccessApiResponse<StudentProfileResponse>
+  | SuccessApiResponse<TeacherProfileResponse>
+> => {
+  try {
+    // Validate file size if avatar is provided
+    if (avatarFile) {
+      // 5MB limit
+      const maxSizeInBytes = 5 * 1024 * 1024;
+      if (avatarFile.size > maxSizeInBytes) {
+        throw new Error("Avatar image size must be less than 5MB");
+      }
+
+      // Validate file type
+      const allowedTypes = [
+        "image/jpeg",
+        "image/png",
+        "image/gif",
+        "image/jpg",
+      ];
+      if (!allowedTypes.includes(avatarFile.type)) {
+        throw new Error("Only JPG, PNG and GIF images are supported");
+      }
+    }
+
+    // Create a FormData object
+    const formData = new FormData();
+
+    // Add form fields with camelCase keys
+    Object.entries(userData).forEach(([key, value]) => {
+      if (value !== undefined && value !== null) {
+        formData.append(key, value.toString());
+        console.log("Adding field:", key, "with value:", value);
+      }
+    });
+
+    // Add avatar file if provided
+    if (avatarFile) {
+      formData.append("avatar", avatarFile);
+      console.log(`Adding avatar file: ${avatarFile.name}`);
+    }
+
+    const apiUrl = `/users/${role}/profile`;
+
+    // Use a timeout to prevent hanging requests
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 seconds timeout
+
+    try {
+      const response = await api.put<
+        | SuccessApiResponse<StudentProfileResponse>
+        | SuccessApiResponse<TeacherProfileResponse>
+      >(apiUrl, formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      return response.data;
+    } catch (err) {
+      clearTimeout(timeoutId);
+      throw err;
+    }
+  } catch (error) {
+    console.error("Failed to update user profile:", error);
+    if (error instanceof Error) {
+      throw new Error(`Profile update failed: ${error.message}`);
+    } else {
+      throw new Error("Profile update failed due to an unknown error");
+    }
   }
 };

@@ -18,6 +18,8 @@ import ResetPassword from "./pages/auth/ResetPassword";
 import StudentHome from "./pages/student/StudentHome";
 import TeacherHome from "./pages/teacher/TeacherHome";
 import { Oauth2Authentication } from "./pages/auth/Oauth2Authentication";
+import { StudentProfile } from "./pages/student/StudentProfile";
+import { TeacherProfile } from "./pages/teacher/TeacherProfile";
 
 function App() {
   return (
@@ -48,7 +50,7 @@ function App() {
           {/* Add more student routes as needed */}
           <Route path="courses" element={<div>Student Courses</div>} />
           <Route path="exams" element={<div>Student Exams</div>} />
-          <Route path="profile" element={<div>Student Profile</div>} />
+          <Route path="profile" element={<StudentProfile />} />
           <Route path="settings" element={<div>Student Settings</div>} />
         </Route>
 
@@ -59,7 +61,7 @@ function App() {
           <Route path="courses" element={<div>Teacher Courses</div>} />
           <Route path="exams" element={<div>Teacher Exams</div>} />
           <Route path="students" element={<div>Teacher Students</div>} />
-          <Route path="profile" element={<div>Teacher Profile</div>} />
+          <Route path="profile" element={<TeacherProfile />} />
           <Route path="settings" element={<div>Teacher Settings</div>} />
         </Route>
       </Routes>
