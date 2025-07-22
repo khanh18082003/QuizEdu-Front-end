@@ -37,6 +37,7 @@ export const PAGE_TITLES = {
   CLASSROOM_LIST: "pageTitle.classroomList",
   TEACHER_HOME: "pageTitle.teacherHome",
   TEACHER_PROFILE: "pageTitle.teacherProfile",
+  TEACHER_CLASSES: "pageTitle.teacherClasses",
   ABOUT_US: "pageTitle.aboutUs",
   CONTACT: "pageTitle.contact",
   NOT_FOUND: "pageTitle.notFound",

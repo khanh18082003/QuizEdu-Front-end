@@ -12,6 +12,7 @@ export default {
     classroomList: "My Classrooms",
     teacherHome: "Teacher Home",
     teacherProfile: "Teacher Profile",
+    teacherClasses: "My Classes",
     aboutUs: "About Us",
     contact: "Contact",
     notFound: "Page Not Found",
@@ -109,6 +110,25 @@ export default {
     experience: "Experience",
     enterExperience: "Describe your teaching experience",
     noSubjects: "No subjects yet",
+  },
+
+  // Teacher Class Management
+  teacherClass: {
+    myClasses: "My Classes",
+    createClass: "Create Class",
+    createFirstClass: "Create First Class",
+    noClasses: "No classes yet",
+    noClassesDesc: "Start by creating your first class",
+    manageClasses: "Manage and monitor your classes",
+    classCode: "Class Code",
+    copyCode: "Copy class code",
+    copiedCode: "Copied!",
+    students: "students",
+    createdOn: "Created on",
+    viewClass: "View Class",
+    editClass: "Edit",
+    deleteClass: "Delete",
+    search: "Search classes...",
   },
 
   // Error messages

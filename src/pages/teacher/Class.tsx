@@ -1,9 +1,12 @@
-
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
+import { FaSearch, FaPlus, FaUserAlt, FaClock } from "react-icons/fa";
 import Button from "../../components/ui/Button";
 import CreateClassModal from "../../components/ui/CreateClassModal";
 import Toast from "../../components/ui/Toast";
+import SkeletonLoader from "../../components/ui/SkeletonLoader";
+import { usePageTitle, PAGE_TITLES } from "../../utils/title";
 import {
   getClassrooms,
   createClassroom,
@@ -12,7 +15,11 @@ import {
 } from "../../services/classroomService";
 
 const Class = () => {
+  const { t } = useTranslation();
   const navigate = useNavigate();
+  usePageTitle(PAGE_TITLES.TEACHER_CLASSES);
+
+  const [searchQuery, setSearchQuery] = useState("");
   const [classrooms, setClassrooms] = useState<ClassRoomResponse[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -28,124 +35,79 @@ const Class = () => {
     message: "",
     type: "success" as "success" | "error" | "info",
   });
-  const [copiedClassCodes, setCopiedClassCodes] = useState<Set<string>>(new Set());
 
-  // Fetch classrooms when component mounts
-  useEffect(() => {
-    fetchClassrooms();
-  }, []);
-
-  // Show toast notification
-  const showToast = (message: string, type: "success" | "error" | "info" = "success") => {
-    setToast({
-      isVisible: true,
-      message,
-      type,
+  // Format date to be displayed in user's locale
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString(undefined, {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
     });
   };
 
+  // Filter classrooms based on search query
+  const filteredClassrooms = searchQuery
+    ? classrooms.filter(
+        (classroom) =>
+          classroom.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          classroom.description
+            .toLowerCase()
+            .includes(searchQuery.toLowerCase()) ||
+          classroom.class_code
+            .toLowerCase()
+            .includes(searchQuery.toLowerCase()),
+      )
+    : classrooms;
+
+  // Show toast notification
+  const showToast = useCallback(
+    (message: string, type: "success" | "error" | "info" = "success") => {
+      setToast({
+        isVisible: true,
+        message,
+        type,
+      });
+    },
+    [],
+  );
+
   // Hide toast
-  const hideToast = () => {
-    setToast(prev => ({ ...prev, isVisible: false }));
-  };
+  const hideToast = useCallback(() => {
+    setToast((prev) => ({ ...prev, isVisible: false }));
+  }, []);
 
-  const fetchClassrooms = async (page: number = 1, pageSize: number = 9) => {
-    try {
-      setIsLoading(true);
-      
-      // Toggle between mock data và real API - thay đổi giá trị này để test
-      const USE_MOCK_DATA = false; // Set true để dùng mock data, false để dùng real API
-      
-      if (USE_MOCK_DATA) {
-        // Mock API delay
-        await new Promise(resolve => setTimeout(resolve, 800));
-        
-        // Mock data for classrooms
-        const mockClassrooms: ClassRoomResponse[] = [
-          {
-            id: "CLASS001",
-            name: "Lập trình Web 2024",
-            description: "Môn học lập trình web frontend và backend với React, Node.js. Học sinh sẽ được học từ HTML/CSS cơ bản đến các framework hiện đại.",
-            class_code: "WEB2024"
-          },
-          {
-            id: "CLASS002", 
-            name: "Mobile App Development",
-            description: "Phát triển ứng dụng di động với React Native và Flutter. Từ cơ bản đến nâng cao, tích hợp API và publish app.",
-            class_code: "MOBILE24"
-          },
-          {
-            id: "CLASS003",
-            name: "Database Design",
-            description: "Thiết kế cơ sở dữ liệu với MySQL, PostgreSQL. Học cách tối ưu hóa query và quản lý dữ liệu hiệu quả.",
-            class_code: "DB2024"
-          },
-          {
-            id: "CLASS004",
-            name: "DevOps & Cloud",
-            description: "Triển khai ứng dụng lên cloud (AWS, Azure), CI/CD pipeline, Docker, Kubernetes và monitoring.",
-            class_code: "DEVOPS24"
-          },
-          {
-            id: "CLASS005",
-            name: "UI/UX Design",
-            description: "Thiết kế giao diện người dùng với Figma, Adobe XD. Học về user research, wireframing và prototyping.",
-            class_code: "UIUX24"
-          },
-          {
-            id: "CLASS006",
-            name: "Machine Learning Basics",
-            description: "Nhập môn Machine Learning với Python, scikit-learn. Từ linear regression đến neural networks cơ bản.",
-            class_code: "ML2024"
-          }
-        ];
-
-        // Mock pagination response
-        const mockResponse = {
-          data: {
-            data: mockClassrooms.slice((page - 1) * pageSize, page * pageSize),
-            page: page,
-            page_size: pageSize,
-            total: mockClassrooms.length,
-            pages: Math.ceil(mockClassrooms.length / pageSize)
-          }
-        };
-
-        setClassrooms(mockResponse.data.data);
-        setPagination({
-          page: mockResponse.data.page,
-          pageSize: mockResponse.data.page_size,
-          total: mockResponse.data.total,
-          pages: mockResponse.data.pages,
-        });
-      } else {
-        // Use real API
+  // Fetch classrooms from API
+  const fetchClassrooms = useCallback(
+    async (page: number = 1, pageSize: number = 9) => {
+      try {
+        setIsLoading(true);
         const response = await getClassrooms(page, pageSize);
         setClassrooms(response.data.data);
         setPagination({
           page: response.data.page,
-          pageSize: response.data.page_size,  // Map từ page_size
+          pageSize: response.data.page_size,
           total: response.data.total,
           pages: response.data.pages,
         });
+      } catch (error) {
+        console.error("Error fetching classrooms:", error);
+        showToast(t("errors.general"), "error");
+      } finally {
+        setIsLoading(false);
       }
-    } catch (error) {
-      console.error("Error fetching classrooms:", error);
-      showToast("Không thể tải danh sách lớp học", "error");
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    },
+    [t, showToast],
+  );
+
+  useEffect(() => {
+    fetchClassrooms();
+  }, [fetchClassrooms]);
 
   const handleCreateClass = async (formData: CreateClassroomRequest) => {
     try {
       setIsCreating(true);
-      
       await createClassroom(formData);
-      
-      // Refresh the classroom list to include the new classroom
       await fetchClassrooms(pagination.page, pagination.pageSize);
-      
       showToast("Tạo lớp học thành công!", "success");
       setIsModalOpen(false);
     } catch (error) {
@@ -157,209 +119,206 @@ const Class = () => {
   };
 
   const handleClassClick = (classroom: ClassRoomResponse) => {
-    // Navigate to classroom detail page
     navigate(`/teacher/classes/${classroom.id}`);
   };
 
-  // Handle copy class code
-  const handleCopyClassCode = (classCode: string, event: React.MouseEvent) => {
-    event.stopPropagation(); // Prevent triggering handleClassClick
-    navigator.clipboard.writeText(classCode).then(() => {
-      // Add to copied set
-      setCopiedClassCodes(prev => new Set(prev).add(classCode));
-      
-      // Reset after 2 seconds
-      setTimeout(() => {
-        setCopiedClassCodes(prev => {
-          const newSet = new Set(prev);
-          newSet.delete(classCode);
-          return newSet;
-        });
-      }, 2000);
-    }).catch(() => {
-      showToast("Không thể copy mã lớp", "error");
-    });
-  };
-
-  // Handle pagination
-  const handlePageChange = (newPage: number) => {
-    fetchClassrooms(newPage, pagination.pageSize);
-  };
-
-  // Loading skeleton component
-  const LoadingSkeleton = () => (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-      {[...Array(6)].map((_, index) => (
-        <div key={index} className="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700">
-          <div className="p-6 animate-pulse">
-            <div className="flex items-start justify-between mb-4">
-              <div className="flex-1">
-                <div className="h-5 bg-gray-300 dark:bg-gray-600 rounded mb-2 w-3/4"></div>
-                <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-full"></div>
-              </div>
-              <div className="h-6 bg-gray-200 dark:bg-gray-700 rounded-full w-16"></div>
-            </div>
-            <div className="mb-4">
-              <div className="h-6 bg-blue-100 dark:bg-blue-900 rounded-full w-20"></div>
-            </div>
-            <div className="flex items-center justify-between">
-              <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-24"></div>
-              <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-16"></div>
-            </div>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-
   return (
-    <div className="p-6">
-      {/* Header */}
-      <div className="flex justify-between items-center mb-6">
+    <div className="mx-auto max-w-6xl px-4 py-8">
+      {/* Header and Actions */}
+      <div className="mb-8 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-            Lớp học của tôi
+          <h1 className="text-3xl font-bold text-gray-800 dark:text-white">
+            {t("teacherClass.myClasses")}
           </h1>
-          <p className="text-gray-600 dark:text-gray-400 mt-1">
-            Quản lý và theo dõi các lớp học của bạn
+          <p className="mt-1 text-gray-600 dark:text-gray-400">
+            {t("teacherClass.manageClasses")}
           </p>
         </div>
-        <Button
-          onClick={() => setIsModalOpen(true)}
-          variant="primary"
-          className="flex items-center gap-2"
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          Tạo lớp học
-        </Button>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          {/* Search Input */}
+          <div className="relative">
+            <input
+              type="text"
+              placeholder={t("teacherClass.search")}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full rounded-full border border-gray-300 bg-white px-4 py-2 pr-4 pl-10 text-sm shadow-sm focus:border-[var(--color-gradient-to)] focus:ring-1 focus:ring-[var(--color-gradient-from)] focus:outline-none sm:w-64 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+            />
+            <FaSearch className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 transform text-gray-400 dark:text-gray-500" />
+          </div>
+
+          {/* Create Class Button */}
+          <Button
+            variant="primary"
+            size="md"
+            onClick={() => setIsModalOpen(true)}
+            className="flex items-center justify-center gap-2"
+          >
+            <FaPlus className="h-4 w-4" />
+            <span>{t("teacherClass.createClass")}</span>
+          </Button>
+        </div>
       </div>
 
       {/* Loading State */}
       {isLoading ? (
-        <LoadingSkeleton />
+        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          {[1, 2, 3].map((item) => (
+            <div
+              key={item}
+              className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-md dark:border-gray-700 dark:bg-gray-800"
+            >
+              <SkeletonLoader
+                height="120px"
+                className="w-full"
+                animation="pulse"
+              />
+              <div className="p-4 pt-8">
+                <SkeletonLoader
+                  height="24px"
+                  width="70%"
+                  className="mb-3"
+                  animation="pulse"
+                />
+                <div className="mb-4 flex flex-col gap-2">
+                  <SkeletonLoader height="16px" width="50%" animation="pulse" />
+                  <SkeletonLoader height="16px" width="60%" animation="pulse" />
+                  <SkeletonLoader height="16px" width="40%" animation="pulse" />
+                </div>
+                <div className="flex justify-between">
+                  <SkeletonLoader height="32px" width="30%" animation="pulse" />
+                  <SkeletonLoader height="32px" width="25%" animation="pulse" />
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
       ) : (
         <>
-          {/* Classroom Grid */}
-          {classrooms.length === 0 ? (
-            <div className="text-center py-12">
-              <div className="mx-auto h-24 w-24 text-gray-400 mb-4">
+          {/* Filtered Results Label */}
+          {searchQuery && (
+            <div className="mb-4">
+              <h2 className="text-lg font-medium text-gray-700 dark:text-gray-300">
+                Search results for: "{searchQuery}"
+              </h2>
+            </div>
+          )}
+
+          {/* No Results Message */}
+          {filteredClassrooms.length === 0 && (
+            <div className="flex flex-col items-center justify-center rounded-lg border border-gray-200 bg-white py-10 text-center dark:border-gray-700 dark:bg-gray-800">
+              <div className="mx-auto mb-4 h-24 w-24 text-gray-400">
                 <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} 
-                    d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={1.5}
+                    d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"
+                  />
                 </svg>
               </div>
-              <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
-                Chưa có lớp học nào
+              <h3 className="mb-1 text-xl font-semibold text-gray-700 dark:text-gray-300">
+                {searchQuery ? "No classes found" : t("teacherClass.noClasses")}
               </h3>
-              <p className="text-gray-600 dark:text-gray-400 mb-6">
-                Bắt đầu bằng cách tạo lớp học đầu tiên của bạn
-              </p>
-              <Button
-                onClick={() => setIsModalOpen(true)}
-                variant="primary"
-              >
-                Tạo lớp học đầu tiên
-              </Button>
+              {!searchQuery && (
+                <p className="mb-6 text-gray-600 dark:text-gray-400">
+                  {t("teacherClass.noClassesDesc")}
+                </p>
+              )}
+              {!searchQuery && (
+                <Button onClick={() => setIsModalOpen(true)} variant="primary">
+                  {t("teacherClass.createFirstClass")}
+                </Button>
+              )}
             </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {classrooms.map((classroom) => (
+          )}
+
+          {/* Classroom Grid */}
+          {filteredClassrooms.length > 0 && (
+            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+              {filteredClassrooms.map((classroom) => (
                 <div
                   key={classroom.id}
                   onClick={() => handleClassClick(classroom)}
-                  className="bg-white dark:bg-gray-800 rounded-lg shadow-md hover:shadow-lg transition-shadow duration-200 cursor-pointer border border-gray-200 dark:border-gray-700"
+                  className="cursor-pointer overflow-hidden rounded-lg border border-gray-200 bg-white shadow-md transition-shadow hover:shadow-lg dark:border-gray-700 dark:bg-gray-800"
                 >
-                  <div className="p-6">
-                    {/* Class Header */}
-                    <div className="flex items-start justify-between mb-4">
-                      <div className="flex-1">
-                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">
+                  {/* Card Header with Gradient Background */}
+                  <div className="relative">
+                    <div className="h-28 bg-gradient-to-br from-blue-400 to-purple-500 bg-cover bg-center">
+                      {/* Title overlay on banner */}
+                      <div className="absolute right-0 bottom-0 left-0 bg-gradient-to-t from-black/70 to-transparent p-4">
+                        <h3 className="text-xl font-bold text-white">
                           {classroom.name}
                         </h3>
-                        <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2">
-                          {classroom.description}
+                        <p className="mt-1 text-sm text-gray-200">
+                          {classroom.class_code}
                         </p>
                       </div>
                     </div>
 
-                    {/* Class Code */}
-                    <div className="mb-4">
+                    {/* Teacher avatar */}
+                    <div className="absolute right-4 -bottom-6 flex h-12 w-12 items-center justify-center overflow-hidden rounded-full border-2 border-white bg-orange-500 text-xl font-bold text-white shadow-md">
+                      {classroom.teacher?.display_name?.charAt(0) || "T"}
+                    </div>
+                  </div>
+
+                  {/* Card Content */}
+                  <div className="p-4 pt-8">
+                    <div className="mb-4 flex flex-col gap-2">
                       <div className="flex items-center gap-2">
-                        <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
-                          <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14" />
-                          </svg>
-                          {classroom.class_code}
+                        <FaUserAlt className="h-3.5 w-3.5 text-gray-500 dark:text-gray-400" />
+                        <span className="text-sm text-gray-600 dark:text-gray-300">
+                          {classroom.teacher?.display_name || "Teacher"}
                         </span>
-                        <button
-                          onClick={(e) => handleCopyClassCode(classroom.class_code, e)}
-                          className="p-1 rounded-md text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                          title={copiedClassCodes.has(classroom.class_code) ? "Đã copy!" : "Copy mã lớp"}
-                        >
-                          {copiedClassCodes.has(classroom.class_code) ? (
-                            // Checkmark icon when copied
-                            <svg className="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                            </svg>
-                          ) : (
-                            // Copy icon when not copied
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                            </svg>
-                          )}
-                        </button>
                       </div>
+                      <div className="flex items-center gap-2">
+                        <FaClock className="h-3.5 w-3.5 text-gray-500 dark:text-gray-400" />
+                        <span className="text-sm text-gray-600 dark:text-gray-300">
+                          {formatDate(classroom.created_at)}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="mt-4 flex justify-between">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="flex items-center gap-1 border-red-500 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          // Handle edit/delete action
+                        }}
+                      >
+                        <svg
+                          className="h-3 w-3"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+                          />
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                          />
+                        </svg>
+                        <span>Edit</span>
+                      </Button>
+
+                      <Button variant="primary" size="sm">
+                        View
+                      </Button>
                     </div>
                   </div>
                 </div>
               ))}
-            </div>
-          )}
-          
-          {/* Pagination */}
-          {classrooms.length > 0 && pagination.pages > 1 && (
-            <div className="flex items-center justify-between mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
-              <div className="text-sm text-gray-700 dark:text-gray-300">
-                Hiển thị {(pagination.page - 1) * pagination.pageSize + 1} đến{' '}
-                {Math.min(pagination.page * pagination.pageSize, pagination.total)} của{' '}
-                {pagination.total} lớp học
-              </div>
-              
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handlePageChange(pagination.page - 1)}
-                  disabled={pagination.page === 1}
-                >
-                  Trước
-                </Button>
-                
-                <div className="flex gap-1">
-                  {Array.from({ length: pagination.pages }, (_, i) => (
-                    <Button
-                      key={i}
-                      variant={i + 1 === pagination.page ? "primary" : "outline"}
-                      size="sm"
-                      onClick={() => handlePageChange(i + 1)}
-                      className="w-10 h-10"
-                    >
-                      {i + 1}
-                    </Button>
-                  ))}
-                </div>
-                
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handlePageChange(pagination.page + 1)}
-                  disabled={pagination.page >= pagination.pages}
-                >
-                  Sau
-                </Button>
-              </div>
             </div>
           )}
         </>

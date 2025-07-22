@@ -12,6 +12,7 @@ export default {
     classroomList: "Lớp học của tôi",
     teacherHome: "Trang chủ giáo viên",
     teacherProfile: "Hồ sơ giáo viên",
+    teacherClasses: "Lớp học của tôi",
     aboutUs: "Về chúng tôi",
     contact: "Liên hệ",
     notFound: "Không tìm thấy trang",
@@ -109,6 +110,25 @@ export default {
     experience: "Kinh nghiệm",
     enterExperience: "Mô tả kinh nghiệm giảng dạy của bạn",
     noSubjects: "Chưa có môn học nào",
+  },
+
+  // Teacher Class Management
+  teacherClass: {
+    myClasses: "Lớp học của tôi",
+    createClass: "Tạo lớp học",
+    createFirstClass: "Tạo lớp học đầu tiên",
+    noClasses: "Chưa có lớp học nào",
+    noClassesDesc: "Bắt đầu bằng cách tạo lớp học đầu tiên của bạn",
+    manageClasses: "Quản lý và theo dõi các lớp học của bạn",
+    classCode: "Mã lớp",
+    copyCode: "Copy mã lớp",
+    copiedCode: "Đã copy!",
+    students: "học sinh",
+    createdOn: "Tạo ngày",
+    viewClass: "Xem lớp",
+    editClass: "Chỉnh sửa",
+    deleteClass: "Xóa lớp",
+    search: "Tìm kiếm lớp học...",
   },
 
   // Error messages

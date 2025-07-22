@@ -13,53 +13,34 @@ import {
 import Button from "../../components/ui/Button";
 import SkeletonLoader from "../../components/ui/SkeletonLoader";
 import { usePageTitle, PAGE_TITLES } from "../../utils/title";
+import { getClassrooms } from "../../services/classroomService";
 
-// Mock classroom data (replace with API call in production)
-const mockClassrooms = [
-  {
-    id: "class-001",
-    name: "Mathematics 101",
-    subject: "Mathematics",
-    teacherName: "Dr. Smith",
-    semester: "Năm học 2024 - 2025 (01-2025)",
-    lastUpdated: new Date("2025-07-15"),
-    imageUrl: "https://gstatic.com/classroom/themes/img_graduation.jpg",
-  },
-  {
-    id: "class-002",
-    name: "Biology Advanced",
-    subject: "Biology",
-    teacherName: "Prof. Johnson",
-    semester: "Năm học 2024 - 2025 (01-2025)",
-    lastUpdated: new Date("2025-07-10"),
-    imageUrl: "https://gstatic.com/classroom/themes/img_bookclub.jpg",
-  },
-  {
-    id: "class-003",
-    name: "English Literature",
-    subject: "English",
-    teacherName: "Ms. Williams",
-    semester: "Năm học 2023 - 2024 (01-2024)",
-    lastUpdated: new Date("2025-07-18"),
-    imageUrl: "https://gstatic.com/classroom/themes/img_reachout.jpg",
-  },
-  {
-    id: "class-004",
-    name: "Chemistry Fundamentals",
-    subject: "Chemistry",
-    teacherName: "Dr. Garcia",
-    semester: "Năm học 2024 - 2025 (01-2025)",
-    lastUpdated: new Date("2025-07-05"),
-    imageUrl: "https://gstatic.com/classroom/themes/Chemistry.jpg",
-  },
-];
+// Define the classroom type based on API response
+interface Classroom {
+  id: string;
+  name: string;
+  description: string;
+  class_code: string;
+  teacher: {
+    email: string;
+    first_name: string;
+    last_name: string;
+    display_name: string;
+    subjects: string[];
+    experience: string;
+    school_name: string;
+    active: boolean;
+  };
+  created_at: string;
+  active: boolean;
+}
 
 const ClassRoomList = () => {
   const { t } = useTranslation();
   usePageTitle(PAGE_TITLES.CLASSROOM_LIST);
 
   const [searchQuery, setSearchQuery] = useState("");
-  const [classrooms, setClassrooms] = useState<typeof mockClassrooms>([]);
+  const [classrooms, setClassrooms] = useState<Classroom[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isJoinDialogOpen, setIsJoinDialogOpen] = useState(false);
   const [classCode, setClassCode] = useState("");
@@ -73,9 +54,14 @@ const ClassRoomList = () => {
     className: "",
   });
 
+  const [pageable, setPageable] = useState({
+    page: 1,
+    pageSize: 9,
+  });
+
   // Format date to be displayed in user's locale
-  const formatDate = (date: Date) => {
-    return new Date(date).toLocaleDateString(undefined, {
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString(undefined, {
       year: "numeric",
       month: "short",
       day: "numeric",
@@ -83,30 +69,30 @@ const ClassRoomList = () => {
   };
 
   useEffect(() => {
-    // Simulate API call with a delay
     const fetchClassrooms = async () => {
       try {
-        // In a real app, you would fetch data from your API here
-        setTimeout(() => {
-          setClassrooms(mockClassrooms);
-          setIsLoading(false);
-        }, 1500);
+        setIsLoading(true);
+        const response = await getClassrooms(pageable.page, pageable.pageSize);
+        setClassrooms(response.data.data);
       } catch (error) {
         console.error("Error fetching classrooms:", error);
+      } finally {
         setIsLoading(false);
       }
     };
 
     fetchClassrooms();
-  }, []);
+  }, [pageable.page, pageable.pageSize]);
 
   // Filter classrooms based on search query
   const filteredClassrooms = searchQuery
     ? classrooms.filter(
         (classroom) =>
           classroom.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          classroom.subject.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          classroom.teacherName
+          classroom.teacher.subjects.some((subject) =>
+            subject.toLowerCase().includes(searchQuery.toLowerCase()),
+          ) ||
+          classroom.teacher.display_name
             .toLowerCase()
             .includes(searchQuery.toLowerCase()),
       )
@@ -260,24 +246,21 @@ const ClassRoomList = () => {
                 >
                   {/* Card Header with Image and Overlay Text */}
                   <div className="relative">
-                    <div
-                      className="h-28 bg-cover bg-center"
-                      style={{ backgroundImage: `url(${classroom.imageUrl})` }}
-                    >
+                    <div className="h-28 bg-gradient-to-br from-blue-400 to-purple-500 bg-cover bg-center">
                       {/* Title overlay on banner image */}
                       <div className="absolute right-0 bottom-0 left-0 bg-gradient-to-t from-black/70 to-transparent p-4">
                         <h3 className="text-xl font-bold text-white">
                           {classroom.name}
                         </h3>
                         <p className="mt-1 text-sm text-gray-200">
-                          {classroom.semester}
+                          {classroom.class_code}
                         </p>
                       </div>
                     </div>
 
                     {/* Teacher avatar */}
                     <div className="absolute right-4 -bottom-6 flex h-12 w-12 items-center justify-center overflow-hidden rounded-full border-2 border-white bg-orange-500 text-xl font-bold text-white shadow-md">
-                      {classroom.teacherName.charAt(0)}
+                      {classroom.teacher.display_name.charAt(0)}
                     </div>
                   </div>
 
@@ -287,19 +270,13 @@ const ClassRoomList = () => {
                       <div className="flex items-center gap-2">
                         <FaUserAlt className="h-3.5 w-3.5 text-gray-500 dark:text-gray-400" />
                         <span className="text-sm text-gray-600 dark:text-gray-300">
-                          {classroom.teacherName}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <FaBook className="h-3.5 w-3.5 text-gray-500 dark:text-gray-400" />
-                        <span className="text-sm text-gray-600 dark:text-gray-300">
-                          {classroom.subject}
+                          {classroom.teacher.display_name}
                         </span>
                       </div>
                       <div className="flex items-center gap-2">
                         <FaClock className="h-3.5 w-3.5 text-gray-500 dark:text-gray-400" />
                         <span className="text-sm text-gray-600 dark:text-gray-300">
-                          {formatDate(classroom.lastUpdated)}
+                          {formatDate(classroom.created_at)}
                         </span>
                       </div>
                     </div>

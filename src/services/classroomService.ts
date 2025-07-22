@@ -1,6 +1,9 @@
-import type { PaginationResponse, SuccessApiResponse } from "../types/response";
+import type {
+  PaginationResponse,
+  SuccessApiResponse,
+  TeacherProfileResponse,
+} from "../types/response";
 import api from "../utils/axiosCustom";
-
 
 // Interface for classroom data
 export interface Classroom {
@@ -28,13 +31,15 @@ export interface ClassroomListResponse {
   total: number;
 }
 
-
 // Interface for classroom response from API
 export interface ClassRoomResponse {
   id: string;
   name: string;
   description: string;
   class_code: string;
+  active: boolean;
+  teacher: TeacherProfileResponse;
+  created_at: string;
 }
 
 /**
@@ -42,12 +47,12 @@ export interface ClassRoomResponse {
  */
 export const getClassrooms = async (
   page: number = 1,
-  pageSize: number = 9
+  pageSize: number = 9,
 ): Promise<SuccessApiResponse<PaginationResponse<ClassRoomResponse>>> => {
   try {
-    const response = await api.get<SuccessApiResponse<PaginationResponse<ClassRoomResponse>>>(
-      `/users/classrooms/all?page=${page}&page_size=${pageSize}`
-    );
+    const response = await api.get<
+      SuccessApiResponse<PaginationResponse<ClassRoomResponse>>
+    >(`/users/classrooms/all?page=${page}&page_size=${pageSize}`);
     console.log("Fetched classrooms:", response.data);
     return response.data;
   } catch (error) {
