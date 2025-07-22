@@ -1,11 +1,20 @@
 import type { RegisterResponse } from "../services/userService";
+import type {
+  StudentProfileResponse,
+  TeacherProfileResponse,
+} from "../types/response";
 
 export type UserAction = {
   type: "MY_PROFILE" | "CLEAR_PROFILE";
-  payload?: RegisterResponse | null;
+  payload?: RegisterResponse | StudentProfileResponse | TeacherProfileResponse;
 };
 
-export const myProfile = (userProfile: RegisterResponse): UserAction => {
+export const myProfile = (
+  userProfile:
+    | RegisterResponse
+    | StudentProfileResponse
+    | TeacherProfileResponse,
+): UserAction => {
   return {
     type: "MY_PROFILE",
     payload: userProfile,

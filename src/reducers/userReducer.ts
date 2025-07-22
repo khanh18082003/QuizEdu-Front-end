@@ -1,7 +1,15 @@
 import type { UserAction } from "../actions/user";
 import type { RegisterResponse } from "../services/userService";
+import type {
+  StudentProfileResponse,
+  TeacherProfileResponse,
+} from "../types/response";
 
-const initial: RegisterResponse = {
+type UserProfile =
+  | RegisterResponse
+  | StudentProfileResponse
+  | TeacherProfileResponse;
+const initial: UserProfile = {
   id: "",
   email: "",
   first_name: "",
