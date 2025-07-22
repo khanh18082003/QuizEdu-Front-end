@@ -8,10 +8,17 @@ import {
 } from "react-icons/fa";
 import InputField from "../../components/ui/InputField";
 import Button from "../../components/ui/Button";
+import { PAGE_TITLES, usePageTitle } from "../../utils/title";
+import { useTranslation } from "react-i18next";
 
 const StudentHome = () => {
   const [roomCode, setRoomCode] = useState("");
   const [error, setError] = useState("");
+
+  // Set page title
+  const { t } = useTranslation();
+  // Set page title
+  usePageTitle(PAGE_TITLES.STUDENT_HOME);
 
   const handleJoinRoom = (e: React.FormEvent) => {
     e.preventDefault();

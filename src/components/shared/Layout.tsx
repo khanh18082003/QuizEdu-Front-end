@@ -1,13 +1,15 @@
 import ThemeToggle from "../ui/ThemeToggle";
 import LanguageSwitcher from "../ui/LanguageSwitcher";
 import { Link, Outlet, useLocation } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 
 const Layout = () => {
   const location = useLocation();
+  const { t } = useTranslation();
   const navItems = [
-    { to: "/", label: "Home", match: /^\/$/ },
-    { to: "/about", label: "About", match: /^\/about/ },
-    { to: "/contact", label: "Contact", match: /^\/contact/ },
+    { to: "/", label: t("nav.home"), match: /^\/$/ },
+    { to: "/about", label: t("nav.aboutUs"), match: /^\/about/ },
+    { to: "/contact", label: t("nav.contact"), match: /^\/contact/ },
   ];
   return (
     <div className="min-h-screen bg-gradient-to-b from-[var(--color-gradient-from)] to-[var(--color-gradient-to)] transition-colors">
@@ -45,13 +47,13 @@ const Layout = () => {
               to="/authentication/login"
               className="rounded-full bg-gradient-to-r from-[var(--color-gradient-from)] to-[var(--color-gradient-to)] px-4 py-1 text-sm font-medium text-white shadow-sm duration-200 hover:opacity-90"
             >
-              Sign In
+              {t("nav.login")}
             </Link>
             <Link
               to="/authentication/register"
               className="rounded-full bg-gradient-to-r from-[var(--color-gradient-from)] to-[var(--color-gradient-to)] px-4 py-1 text-sm font-medium text-white shadow-sm duration-200 hover:opacity-90"
             >
-              Sign Up
+              {t("nav.register")}
             </Link>
           </div>
           <ThemeToggle />

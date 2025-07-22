@@ -21,6 +21,8 @@ import type {
   TeacherProfileResponse,
 } from "../../types/response";
 import { UserRole } from "../../types/userRole";
+import { setPageTitle, PAGE_TITLES, usePageTitle } from "../../utils/title";
+import { useTranslation } from "react-i18next";
 
 interface TeacherData {
   email: string;
@@ -34,6 +36,9 @@ interface TeacherData {
 }
 
 export const TeacherProfile = () => {
+  const { t } = useTranslation();
+  // Set page title
+  usePageTitle(PAGE_TITLES.TEACHER_PROFILE);
   const [isEditing, setIsEditing] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedAvatarFile, setSelectedAvatarFile] = useState<File | null>(
@@ -229,6 +234,11 @@ export const TeacherProfile = () => {
       fileInputRef.current.value = "";
     }
   };
+
+  // Set page title on mount
+  useEffect(() => {
+    setPageTitle(PAGE_TITLES.TEACHER_PROFILE);
+  }, []);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-6 dark:from-gray-900 dark:to-gray-800">

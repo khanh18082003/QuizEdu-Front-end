@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { FaLock } from "react-icons/fa";
 import InputField from "../../components/ui/InputField";
@@ -6,6 +6,7 @@ import Button from "../../components/ui/Button";
 import FormAnimation from "../../components/ui/FormAnimation";
 import LoadingOverlay from "../../components/ui/LoadingOverlay";
 import { resetPassword } from "../../services/userService";
+import { setPageTitle, PAGE_TITLES } from "../../utils/title";
 
 const ResetPassword = () => {
   const location = useLocation();
@@ -23,6 +24,11 @@ const ResetPassword = () => {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(false);
   const [generalError, setGeneralError] = useState<string | null>(null);
+
+  // Set page title
+  useEffect(() => {
+    setPageTitle(PAGE_TITLES.RESET_PASSWORD);
+  }, []);
 
   // Validate password field
   const validatePassword = (password: string): string => {

@@ -10,6 +10,7 @@ import {
 import { outboundAuthentication } from "../../services/authService";
 import { UserRole } from "../../types/userRole";
 import FormAnimation from "../../components/ui/FormAnimation";
+import { setPageTitle, PAGE_TITLES } from "../../utils/title";
 
 export const Oauth2Authentication = () => {
   const navigate = useNavigate();

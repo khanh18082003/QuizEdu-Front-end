@@ -11,6 +11,7 @@ import {
   loginUser,
 } from "../../services/authService";
 import { setAuthCredentials } from "../../utils/axiosCustom";
+import { setPageTitle, PAGE_TITLES } from "../../utils/title";
 
 const Verification = () => {
   const location = useLocation();
@@ -40,6 +41,11 @@ const Verification = () => {
     if (inputRefs.current[0]) {
       inputRefs.current[0].focus();
     }
+  }, []);
+
+  // Set page title
+  useEffect(() => {
+    setPageTitle(PAGE_TITLES.VERIFICATION);
   }, []);
 
   // Timer for resend button countdown

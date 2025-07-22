@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import InputField from "../../components/ui/InputField";
 import Button from "../../components/ui/Button";
@@ -8,6 +8,7 @@ import {
   registerTeacher,
   type TeacherRegistrationData,
 } from "../../services/userService";
+import { setPageTitle, PAGE_TITLES } from "../../utils/title";
 
 const TeacherRegister = () => {
   const navigate = useNavigate();
@@ -23,6 +24,11 @@ const TeacherRegister = () => {
     experience: "",
     schoolName: "",
   });
+
+  // Set page title
+  useEffect(() => {
+    setPageTitle(PAGE_TITLES.REGISTER);
+  }, []);
 
   const [touched, setTouched] = useState<Record<string, boolean>>({
     firstName: false,

@@ -17,11 +17,13 @@ import ForgotPassword from "./pages/auth/ForgotPassword";
 import ResetPassword from "./pages/auth/ResetPassword";
 import StudentHome from "./pages/student/StudentHome";
 import TeacherHome from "./pages/teacher/TeacherHome";
-import Class from "./pages/teacher/Class";
-import ClassDetail from "./pages/teacher/ClassDetail";
-import { Oauth2Authentication } from "./pages/auth/Oauth2Authentication";
 import { StudentProfile } from "./pages/student/StudentProfile";
 import { TeacherProfile } from "./pages/teacher/TeacherProfile";
+import { Oauth2Authentication } from "./pages/auth/Oauth2Authentication";
+import ClassRoomList from "./pages/student/ClassRoomList";
+import ClassRoomDetail from "./pages/student/ClassRoomDetail";
+import ClassDetail from "./pages/teacher/ClassDetail";
+import Class from "./pages/teacher/Class";
 
 function App() {
   return (
@@ -50,7 +52,8 @@ function App() {
         <Route path="/student" element={<StudentLayout />}>
           <Route path="dashboard" element={<StudentHome />} />
           {/* Add more student routes as needed */}
-          <Route path="courses" element={<div>Student Courses</div>} />
+          <Route path="classrooms" element={<ClassRoomList />} />
+          <Route path="classroom/:id" element={<ClassRoomDetail />} />
           <Route path="exams" element={<div>Student Exams</div>} />
           <Route path="profile" element={<StudentProfile />} />
           <Route path="settings" element={<div>Student Settings</div>} />
@@ -60,10 +63,10 @@ function App() {
         <Route path="/teacher" element={<TeacherLayout />}>
           <Route path="dashboard" element={<TeacherHome />} />
           {/* Add more teacher routes as needed */}
-          <Route path="classes" element={<Class/>} />
-          <Route path="classes/:classId" element={<ClassDetail/>} />
+          <Route path="classes" element={<Class />} />
+          <Route path="classes/:classId" element={<ClassDetail />} />
           <Route path="exams" element={<div>Teacher Exams</div>} />
-          <Route path="profile" element={<div>Teacher Profile</div>} />
+          <Route path="profile" element={<TeacherProfile />} />
 
           <Route path="settings" element={<div>Teacher Settings</div>} />
         </Route>

@@ -1,7 +1,14 @@
 import { Link } from "react-router-dom";
 import { FaUserGraduate, FaChalkboardTeacher } from "react-icons/fa";
+import { useEffect } from "react";
+import { setPageTitle, PAGE_TITLES } from "../../utils/title";
 
 const RegisterOptions = () => {
+  // Set page title
+  useEffect(() => {
+    setPageTitle(PAGE_TITLES.REGISTER);
+  }, []);
+
   return (
     <div className="mx-auto max-w-3xl">
       <div className="mb-8 text-center">

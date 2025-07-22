@@ -158,8 +158,8 @@ const StudentLayout = () => {
       match: /^\/student\/dashboard/,
     },
     {
-      to: "/student/courses",
-      label: "Courses",
+      to: "/student/classrooms",
+      label: "Classrooms",
       icon: <FaBook className="text-xl" />,
       match: /^\/student\/courses/,
     },

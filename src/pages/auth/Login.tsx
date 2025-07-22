@@ -15,6 +15,7 @@ import { loginUser } from "../../services/authService";
 import { UserRole } from "../../types/userRole";
 import { setAuthCredentials } from "../../utils/axiosCustom";
 import { OAuthConfig } from "../../utils/oauth2";
+import { setPageTitle, PAGE_TITLES } from "../../utils/title";
 
 const Login = () => {
   const navigate = useNavigate();
@@ -36,6 +37,11 @@ const Login = () => {
   const [errors, setErrors] = useState<{ email?: string; password?: string }>(
     {},
   );
+
+  // Set page title
+  useEffect(() => {
+    setPageTitle(PAGE_TITLES.LOGIN);
+  }, []);
 
   // Auto-hide success message after 8 seconds
   useEffect(() => {

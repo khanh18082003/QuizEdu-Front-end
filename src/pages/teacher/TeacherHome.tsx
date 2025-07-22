@@ -1,4 +1,3 @@
-// filepath: /home/khanhnguyen/Public/workspace/reactjs/quiz/quiz-edu/src/pages/teacher/TeacherHome.tsx
 import {
   FaPlus,
   FaEye,
@@ -8,8 +7,15 @@ import {
   FaClipboardList,
 } from "react-icons/fa";
 import Button from "../../components/ui/Button";
+import { PAGE_TITLES, usePageTitle } from "../../utils/title";
+import { useTranslation } from "react-i18next";
 
 const TeacherHome = () => {
+  // Set page title
+  const { t } = useTranslation();
+  // Set page title
+  usePageTitle(PAGE_TITLES.TEACHER_HOME);
+
   const activeClasses = [
     {
       id: 1,

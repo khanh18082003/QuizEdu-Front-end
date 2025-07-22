@@ -1,7 +1,13 @@
 import { Link } from "react-router-dom";
 import { FaExclamationTriangle } from "react-icons/fa";
+import { PAGE_TITLES, usePageTitle } from "../utils/title";
+import { useTranslation } from "react-i18next";
 
 const NotFound = () => {
+  const { t } = useTranslation();
+  // Set page title
+  usePageTitle(PAGE_TITLES.NOT_FOUND);
+
   return (
     <div className="flex min-h-[40vh] flex-col items-center justify-center text-center">
       <FaExclamationTriangle className="mb-4 text-6xl text-[#7e51c2]" />

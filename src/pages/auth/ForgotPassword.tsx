@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { FaEnvelope } from "react-icons/fa";
 import InputField from "../../components/ui/InputField";
@@ -6,6 +6,7 @@ import Button from "../../components/ui/Button";
 import FormAnimation from "../../components/ui/FormAnimation";
 import LoadingOverlay from "../../components/ui/LoadingOverlay";
 import { requestPasswordReset } from "../../services/authService";
+import { setPageTitle, PAGE_TITLES } from "../../utils/title";
 
 const ForgotPassword = () => {
   const navigate = useNavigate();
@@ -13,6 +14,11 @@ const ForgotPassword = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [touched, setTouched] = useState(false);
   const [error, setError] = useState<string | undefined>(undefined);
+
+  // Set page title
+  useEffect(() => {
+    setPageTitle(PAGE_TITLES.FORGOT_PASSWORD);
+  }, []);
 
   const validateEmail = (email: string): string => {
     if (!email) return "Email is required";
