@@ -7,7 +7,6 @@ import {
   FaBook,
   FaClipboardList,
   FaChalkboardTeacher,
-  FaUsers,
   FaCog,
   FaSignOutAlt,
 } from "react-icons/fa";
@@ -160,22 +159,16 @@ const TeacherLayout = () => {
       match: /^\/teacher\/dashboard/,
     },
     {
-      to: "/teacher/courses",
-      label: "Courses",
+      to: "/teacher/classes",
+      label: "Classes",
       icon: <FaBook className="text-xl" />,
-      match: /^\/teacher\/courses/,
+      match: /^\/teacher\/classes/,
     },
     {
       to: "/teacher/exams",
       label: "Exams",
       icon: <FaClipboardList className="text-xl" />,
       match: /^\/teacher\/exams/,
-    },
-    {
-      to: "/teacher/students",
-      label: "Students",
-      icon: <FaUsers className="text-xl" />,
-      match: /^\/teacher\/students/,
     },
     {
       to: "/teacher/profile",

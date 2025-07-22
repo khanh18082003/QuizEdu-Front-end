@@ -15,7 +15,13 @@ export interface ErrorApiResponse extends ApiResponse {
   path: string;
   error: string;
 }
-
+export interface PaginationResponse<T> {
+  page: number;
+  page_size: number;  // API của bạn dùng page_size
+  pages: number;
+  total: number;
+  data: Array<T>;
+}
 export interface StudentProfileResponse extends RegisterResponse {
   level: string;
   school_name: string;

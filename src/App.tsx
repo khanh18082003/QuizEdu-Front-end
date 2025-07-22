@@ -17,6 +17,8 @@ import ForgotPassword from "./pages/auth/ForgotPassword";
 import ResetPassword from "./pages/auth/ResetPassword";
 import StudentHome from "./pages/student/StudentHome";
 import TeacherHome from "./pages/teacher/TeacherHome";
+import Class from "./pages/teacher/Class";
+import ClassDetail from "./pages/teacher/ClassDetail";
 import { Oauth2Authentication } from "./pages/auth/Oauth2Authentication";
 import { StudentProfile } from "./pages/student/StudentProfile";
 import { TeacherProfile } from "./pages/teacher/TeacherProfile";
@@ -58,10 +60,11 @@ function App() {
         <Route path="/teacher" element={<TeacherLayout />}>
           <Route path="dashboard" element={<TeacherHome />} />
           {/* Add more teacher routes as needed */}
-          <Route path="courses" element={<div>Teacher Courses</div>} />
+          <Route path="classes" element={<Class/>} />
+          <Route path="classes/:classId" element={<ClassDetail/>} />
           <Route path="exams" element={<div>Teacher Exams</div>} />
-          <Route path="students" element={<div>Teacher Students</div>} />
-          <Route path="profile" element={<TeacherProfile />} />
+          <Route path="profile" element={<div>Teacher Profile</div>} />
+
           <Route path="settings" element={<div>Teacher Settings</div>} />
         </Route>
       </Routes>
