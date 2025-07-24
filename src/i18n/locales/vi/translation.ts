@@ -59,6 +59,7 @@ export default {
     search: "Tìm kiếm lớp học...",
     noClasses: "Bạn chưa tham gia lớp học nào.",
     joinClass: "Tham gia lớp học",
+    joinSuccess: "Tham gia lớp học thành công",
     enterClassCode: "Nhập mã lớp học",
     class: "Lớp",
     subject: "Môn học",
@@ -68,6 +69,7 @@ export default {
     searchResults: "Kết quả tìm kiếm",
     noResults: "Không tìm thấy lớp học phù hợp.",
     unenroll: "Hủy đăng ký",
+    unenrollSuccess: "Đã rời khỏi lớp học thành công",
     leaveClass: "Hủy đăng ký lớp học",
     confirmLeave:
       'Bạn có chắc chắn muốn hủy đăng ký lớp học "{{className}}"? Bạn sẽ không còn quyền truy cập vào tài liệu và bài tập của lớp này.',

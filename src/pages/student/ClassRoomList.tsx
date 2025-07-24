@@ -4,7 +4,6 @@ import { Link } from "react-router-dom";
 import {
   FaSearch,
   FaPlus,
-  FaBook,
   FaUserAlt,
   FaClock,
   FaSignOutAlt,
@@ -13,34 +12,21 @@ import {
 import Button from "../../components/ui/Button";
 import SkeletonLoader from "../../components/ui/SkeletonLoader";
 import { usePageTitle, PAGE_TITLES } from "../../utils/title";
-import { getClassrooms } from "../../services/classroomService";
 
-// Define the classroom type based on API response
-interface Classroom {
-  id: string;
-  name: string;
-  description: string;
-  class_code: string;
-  teacher: {
-    email: string;
-    first_name: string;
-    last_name: string;
-    display_name: string;
-    subjects: string[];
-    experience: string;
-    school_name: string;
-    active: boolean;
-  };
-  created_at: string;
-  active: boolean;
-}
+import {
+  cancelRegisterClassroom,
+  getClassrooms,
+  joinClassroom,
+  type ClassRoomResponse,
+} from "../../services/classroomService";
+import Toast from "../../components/ui/Toast";
 
 const ClassRoomList = () => {
   const { t } = useTranslation();
   usePageTitle(PAGE_TITLES.CLASSROOM_LIST);
 
   const [searchQuery, setSearchQuery] = useState("");
-  const [classrooms, setClassrooms] = useState<Classroom[]>([]);
+  const [classrooms, setClassrooms] = useState<Array<ClassRoomResponse>>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isJoinDialogOpen, setIsJoinDialogOpen] = useState(false);
   const [classCode, setClassCode] = useState("");
@@ -54,10 +40,33 @@ const ClassRoomList = () => {
     className: "",
   });
 
-  const [pageable, setPageable] = useState({
+  const [pageable] = useState({
     page: 1,
     pageSize: 9,
   });
+
+  const [toast, setToast] = useState({
+    isVisible: false,
+    message: "",
+    type: "success" as "success" | "error" | "info",
+  });
+
+  // Show toast notification
+  const showToast = (
+    message: string,
+    type: "success" | "error" | "info" = "success",
+  ) => {
+    setToast({
+      isVisible: true,
+      message,
+      type,
+    });
+  };
+
+  // Hide toast
+  const hideToast = () => {
+    setToast((prev) => ({ ...prev, isVisible: false }));
+  };
 
   // Format date to be displayed in user's locale
   const formatDate = (dateString: string) => {
@@ -76,6 +85,7 @@ const ClassRoomList = () => {
         setClassrooms(response.data.data);
       } catch (error) {
         console.error("Error fetching classrooms:", error);
+        showToast("Failed to show classrooms", "error");
       } finally {
         setIsLoading(false);
       }
@@ -99,13 +109,34 @@ const ClassRoomList = () => {
     : classrooms;
 
   // Handle join class form submission
-  const handleJoinClass = (e: React.FormEvent) => {
+  const handleJoinClass = async (e: React.FormEvent) => {
     e.preventDefault();
-    // In a real app, you would send the class code to your API
-    console.log("Joining class with code:", classCode);
-    setClassCode("");
-    setIsJoinDialogOpen(false);
-    // Optionally add the new class to the list or refresh the list
+
+    if (!classCode.trim()) {
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      const data = await joinClassroom(classCode.trim());
+
+      if (data.code === "M000") {
+        // Clear the form and close dialog
+        setClassCode("");
+        setIsJoinDialogOpen(false);
+        showToast("Join classroom successfully", "success");
+
+        // Refresh the classroom list to include the new classroom
+        const response = await getClassrooms(pageable.page, pageable.pageSize);
+        setClassrooms(response.data.data);
+      } else {
+        console.error("Failed to join classroom:", data.message);
+      }
+    } catch (error) {
+      console.error("Error joining classroom:", error);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   // Handle unenroll/leave class
@@ -117,25 +148,36 @@ const ClassRoomList = () => {
     });
   };
 
-  const handleUnenroll = () => {
+  const handleUnenroll = async () => {
     if (!unenrollDialog.classId) return;
+    try {
+      setIsLoading(true);
+      const data = await cancelRegisterClassroom(unenrollDialog.classId);
 
-    // In a real app, you would call an API to unenroll from the class
-    console.log("Unenrolling from class:", unenrollDialog.classId);
+      if (data.code === "M000") {
+        // Remove the classroom from the list immediately for better UX
+        setClassrooms((prevClassrooms) =>
+          prevClassrooms.filter(
+            (classroom) => classroom.id !== unenrollDialog.classId,
+          ),
+        );
+        showToast("Unenrolled from classroom successfully", "success");
+      } else {
+        console.error("Failed to unenroll:", data.message);
+      }
+    } catch (error) {
+      console.error("Error unenrolling from classroom:", error);
+      showToast("Failed to unenroll from classroom", "error");
+    } finally {
+      setIsLoading(false);
 
-    // Update the UI by removing the class from the list
-    setClassrooms((prevClassrooms) =>
-      prevClassrooms.filter(
-        (classroom) => classroom.id !== unenrollDialog.classId,
-      ),
-    );
-
-    // Close the dialog
-    setUnenrollDialog({
-      isOpen: false,
-      classId: null,
-      className: "",
-    });
+      // Close the dialog regardless of success or failure
+      setUnenrollDialog({
+        isOpen: false,
+        classId: null,
+        className: "",
+      });
+    }
   };
 
   return (
@@ -259,8 +301,16 @@ const ClassRoomList = () => {
                     </div>
 
                     {/* Teacher avatar */}
-                    <div className="absolute right-4 -bottom-6 flex h-12 w-12 items-center justify-center overflow-hidden rounded-full border-2 border-white bg-orange-500 text-xl font-bold text-white shadow-md">
-                      {classroom.teacher.display_name.charAt(0)}
+                    <div className="absolute right-4 -bottom-8 flex h-18 w-18 items-center justify-center overflow-hidden rounded-full bg-orange-500 text-xl font-bold text-white shadow-md">
+                      {classroom.teacher.avatar ? (
+                        <img
+                          src={classroom.teacher.avatar}
+                          alt={classroom.teacher.display_name}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        classroom.teacher.display_name.charAt(0)
+                      )}
                     </div>
                   </div>
 
@@ -338,11 +388,17 @@ const ClassRoomList = () => {
                   variant="outline"
                   size="md"
                   onClick={() => setIsJoinDialogOpen(false)}
+                  disabled={isLoading}
                 >
                   {t("common.cancel")}
                 </Button>
-                <Button variant="primary" size="md" type="submit">
-                  {t("classroom.joinClass")}
+                <Button
+                  variant="primary"
+                  size="md"
+                  type="submit"
+                  disabled={isLoading}
+                >
+                  {isLoading ? t("common.loading") : t("classroom.joinClass")}
                 </Button>
               </div>
             </form>
@@ -371,6 +427,7 @@ const ClassRoomList = () => {
               <Button
                 variant="outline"
                 size="md"
+                className="cursor-pointer"
                 onClick={() =>
                   setUnenrollDialog({
                     isOpen: false,
@@ -382,10 +439,10 @@ const ClassRoomList = () => {
                 {t("common.cancel")}
               </Button>
               <Button
-                variant="danger"
+                variant="outline"
                 size="md"
                 onClick={handleUnenroll}
-                className="bg-red-500 hover:bg-red-600"
+                className="cursor-pointer border-red-500 bg-red-500 hover:bg-red-600"
               >
                 {t("classroom.leaveClass")}
               </Button>
@@ -393,6 +450,12 @@ const ClassRoomList = () => {
           </div>
         </div>
       )}
+      <Toast
+        message={toast.message}
+        type={toast.type}
+        isVisible={toast.isVisible}
+        onClose={hideToast}
+      />
     </div>
   );
 };

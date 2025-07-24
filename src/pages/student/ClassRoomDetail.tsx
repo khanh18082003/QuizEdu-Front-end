@@ -375,7 +375,11 @@ const ClassRoomDetail = () => {
           <p className="mb-6 text-gray-600 dark:text-gray-400">
             {t("classroom.classNotFoundDesc")}
           </p>
-          <Button variant="primary" onClick={handleGoBack}>
+          <Button
+            variant="primary"
+            className="cursor-pointer"
+            onClick={handleGoBack}
+          >
             {t("common.goBack")}
           </Button>
         </div>
@@ -388,7 +392,7 @@ const ClassRoomDetail = () => {
       {/* Back button */}
       <button
         onClick={handleGoBack}
-        className="mb-4 flex items-center gap-2 text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+        className="mb-4 flex cursor-pointer items-center gap-2 text-blue-600 duration-200 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
       >
         <FaChevronLeft className="h-3 w-3" />
         <span>{t("common.backToClasses")}</span>

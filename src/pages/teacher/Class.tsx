@@ -4,7 +4,6 @@ import { useTranslation } from "react-i18next";
 import { FaSearch, FaPlus, FaUserAlt, FaClock } from "react-icons/fa";
 import Button from "../../components/ui/Button";
 import CreateClassModal from "../../components/ui/CreateClassModal";
-import Toast from "../../components/ui/Toast";
 import SkeletonLoader from "../../components/ui/SkeletonLoader";
 import { usePageTitle, PAGE_TITLES } from "../../utils/title";
 import {
@@ -13,6 +12,7 @@ import {
   type CreateClassroomRequest,
   type ClassRoomResponse,
 } from "../../services/classroomService";
+import Toast from "../../components/ui/Toast";
 
 const Class = () => {
   const { t } = useTranslation();

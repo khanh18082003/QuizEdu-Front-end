@@ -92,13 +92,13 @@ const StudentHome = () => {
               }}
               error={error}
               icon={<FaSearch />}
-              className="mb-4"
+              className=""
               maxLength={6}
             />
             <Button
               type="submit"
               variant="primary"
-              className="w-full"
+              className="mt-8 w-full"
               disabled={!roomCode}
             >
               Join Class

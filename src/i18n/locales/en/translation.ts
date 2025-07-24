@@ -59,6 +59,7 @@ export default {
     search: "Search classes...",
     noClasses: "You haven't joined any classes yet.",
     joinClass: "Join a Class",
+    joinSuccess: "Successfully joined the class",
     enterClassCode: "Enter class code",
     class: "Class",
     subject: "Subject",
@@ -68,6 +69,7 @@ export default {
     searchResults: "Search Results",
     noResults: "No classes found matching your search.",
     unenroll: "Unenroll",
+    unenrollSuccess: "Successfully left the class",
     leaveClass: "Leave Class",
     confirmLeave:
       'Are you sure you want to leave the class "{{className}}"? You will no longer have access to this class\'s materials and assignments.',
