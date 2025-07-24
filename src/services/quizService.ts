@@ -194,3 +194,250 @@ export const getTeacherQuizzes = async (): Promise<SuccessApiResponse<Quiz[]>> =
   const response = await axiosCustom.get("/quizzes/teacher");
   return response.data;
 };
+
+// New interfaces for detailed quiz management
+export interface Answer {
+  answer_text: string;
+  correct: boolean;
+}
+
+export interface MultipleChoiceQuestion {
+  question_id: string;
+  question_text: string;
+  hint: string;
+  time_limit: number;
+  allow_multiple_answers: boolean;
+  points: number;
+  answers: Answer[];
+}
+
+export interface MultipleChoiceQuiz {
+  id: string;
+  quiz_id: string;
+  questions: MultipleChoiceQuestion[];
+}
+
+export interface MatchingItem {
+  content: string;
+  matching_type: "TEXT" | "IMAGE";
+}
+
+export interface MatchingQuestion {
+  id: string;
+  item_a: MatchingItem;
+  item_b: MatchingItem;
+  points: number;
+}
+
+export interface MatchingQuiz {
+  id: string;
+  quiz_id: string;
+  time_limit: number;
+  questions: MatchingQuestion[];
+}
+
+export interface DetailedQuiz {
+  id: string;
+  name: string;
+  description: string;
+  teacher_id: string;
+  subject_id: string;
+  class_ids: string[];
+  created_at: string;
+  updated_at: string;
+  active: boolean;
+}
+
+export interface QuizManagementItem {
+  quiz: DetailedQuiz;
+  multiple_choice_quiz: MultipleChoiceQuiz;
+  matching_quiz: MatchingQuiz;
+}
+
+export interface QuizManagementResponse {
+  page: number;
+  page_size: number;
+  pages: number;
+  total: number;
+  data: QuizManagementItem[];
+}
+
+// API function for quiz management
+export const getQuizzesForManagement = async (
+  page: number = 1,
+  pageSize: number = 9
+): Promise<SuccessApiResponse<QuizManagementResponse>> => {
+  const response = await axiosCustom.get("/quizzes", {
+    params: {
+      page,
+      page_size: pageSize,
+    },
+  });
+  return response.data;
+};
+
+// New interfaces for creating quiz with full features
+export interface CreateQuizAnswer {
+  answer_text: string;
+  correct: boolean;
+}
+
+export interface CreateMultipleChoiceQuestion {
+  question_text: string;
+  hint: string;
+  time_limit: number;
+  allow_multiple_answers: boolean;
+  points: number;
+  answers: CreateQuizAnswer[];
+}
+
+export interface CreateMultipleChoiceQuiz {
+  questions: CreateMultipleChoiceQuestion[];
+}
+
+export interface CreateMatchingQuestion {
+  content_a: string;
+  type_a: "TEXT" | "IMAGE";
+  content_b: string;
+  type_b: "TEXT" | "IMAGE";
+  points: number;
+}
+
+export interface CreateMatchingQuiz {
+  time_limit: number;
+  questions: CreateMatchingQuestion[];
+}
+
+export interface CreateFillInBlankQuestion {
+  question_text: string;
+  blank_text: string;
+  correct_answers: string[];
+  hint?: string;
+  time_limit: number;
+  points: number;
+  case_sensitive: boolean;
+}
+
+export interface CreateFillInBlankQuiz {
+  questions: CreateFillInBlankQuestion[];
+}
+
+export interface CreateTrueFalseQuestion {
+  question_text: string;
+  correct_answer: boolean;
+  hint?: string;
+  time_limit: number;
+  points: number;
+}
+
+export interface CreateTrueFalseQuiz {
+  questions: CreateTrueFalseQuestion[];
+}
+
+export interface CreateFullQuizRequest {
+  name: string;
+  description: string;
+  subject_id: string; // Will be updated to use actual subject ID from subjects API
+  is_active: boolean;
+  class_ids?: string[];
+  multiple_choice_quiz?: CreateMultipleChoiceQuiz;
+  matching_quiz?: CreateMatchingQuiz;
+  fill_in_blank_quiz?: CreateFillInBlankQuiz;
+  true_false_quiz?: CreateTrueFalseQuiz;
+}
+
+// API function to create a full featured quiz
+export const createFullQuiz = async (
+  quizData: CreateFullQuizRequest
+): Promise<SuccessApiResponse<QuizManagementItem>> => {
+  const response = await axiosCustom.post("/quizzes", quizData);
+  return response.data;
+};
+
+// Subject interfaces for future implementation
+export interface Subject {
+  id: string;
+  name: string;
+  code: string;
+  description?: string;
+  grade_level?: string;
+  is_active: boolean;
+}
+
+// API function to get subjects (for future implementation)
+export const getSubjects = async (): Promise<SuccessApiResponse<Subject[]>> => {
+  const response = await axiosCustom.get("/subjects");
+  return response.data;
+};
+
+// API function to get detailed quiz information by ID
+export const getQuizDetail = async (
+  quizId: string
+): Promise<SuccessApiResponse<QuizManagementItem>> => {
+  const response = await axiosCustom.get(`/quizzes/${quizId}`);
+  return response.data;
+};
+
+// Interface for adding multiple choice questions
+export interface AddMultipleChoiceAnswer {
+  answer_text: string;
+  correct: boolean;
+}
+
+export interface AddMultipleChoiceQuestion {
+  question_text: string;
+  hint?: string;
+  time_limit: number;
+  allow_multiple_answers: boolean;
+  points: number;
+  answers: AddMultipleChoiceAnswer[];
+}
+
+// API function to add multiple choice questions
+export const addMultipleChoiceQuestions = async (
+  quizId: string,
+  questions: AddMultipleChoiceQuestion[]
+): Promise<SuccessApiResponse<any>> => {
+  const response = await axiosCustom.post(
+    `/quizzes/multiple-choice-quizzes/${quizId}/questions`,
+    questions
+  );
+  return response.data;
+};
+
+// Interface for updating multiple choice questions
+export interface UpdateMultipleChoiceQuestion {
+  question_id: string;
+  question_text: string;
+  hint?: string;
+  time_limit: number;
+  allow_multiple_answers: boolean;
+  points: number;
+  answers: AddMultipleChoiceAnswer[];
+}
+
+// API function to update multiple choice questions
+export const updateMultipleChoiceQuestions = async (
+  quizId: string,
+  questions: UpdateMultipleChoiceQuestion[]
+): Promise<SuccessApiResponse<any>> => {
+  const response = await axiosCustom.put(
+    `/quizzes/multiple-choice-quizzes/${quizId}/questions`,
+    questions
+  );
+  return response.data;
+};
+
+// API function to delete multiple choice questions
+export const deleteMultipleChoiceQuestions = async (
+  quizId: string,
+  questionIds: string[]
+): Promise<SuccessApiResponse<any>> => {
+  const response = await axiosCustom.delete(
+    `/quizzes/multiple-choice-quizzes/${quizId}/questions`,
+    {
+      data: questionIds
+    }
+  );
+  return response.data;
+};
