@@ -165,10 +165,10 @@ const TeacherLayout = () => {
       match: /^\/teacher\/classes/,
     },
     {
-      to: "/teacher/exams",
-      label: "Exams",
+      to: "/teacher/quizzes",
+      label: "Quizzes",
       icon: <FaClipboardList className="text-xl" />,
-      match: /^\/teacher\/exams/,
+      match: /^\/teacher\/quizzes/,
     },
     {
       to: "/teacher/profile",
