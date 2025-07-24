@@ -42,6 +42,36 @@ export interface ClassRoomResponse {
   created_at: string;
 }
 
+// Interface for quiz in classroom detail
+export interface ClassroomQuiz {
+  id: string;
+  name: string;
+  description: string;
+  active: boolean;
+}
+
+// Interface for student in classroom detail
+export interface ClassroomStudent {
+  id: string;
+  email: string;
+  first_name: string;
+  last_name: string;
+  display_name: string;
+  avatar?: string;
+  active: boolean;
+}
+
+// Interface for classroom detail response data
+export interface ClassroomDetailData {
+  id: string;
+  name: string;
+  description: string;
+  class_code: string;
+  created_at: string;
+  quiz: ClassroomQuiz[];
+  students: ClassroomStudent[];
+}
+
 /**
  * Get all classrooms for the current teacher with pagination
  */
@@ -144,6 +174,22 @@ export const joinClassroom = async (
     return response.data;
   } catch (error) {
     console.error("Error joining classroom:", error);
+  }
+}
+
+/**
+ * Get classroom detail with students and quizzes
+ */
+export const getClassroomDetail = async (
+  classRoomId: string,
+): Promise<SuccessApiResponse<ClassroomDetailData>> => {
+  try {
+    const response = await api.get<SuccessApiResponse<ClassroomDetailData>>(
+      `/classrooms/${classRoomId}`,
+    );
+    return response.data;
+  } catch (error) {
+    console.error("Error fetching classroom detail:", error);
     throw error;
   }
 };

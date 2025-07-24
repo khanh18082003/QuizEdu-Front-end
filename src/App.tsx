@@ -24,6 +24,9 @@ import ClassRoomList from "./pages/student/ClassRoomList";
 import ClassRoomDetail from "./pages/student/ClassRoomDetail";
 import ClassDetail from "./pages/teacher/ClassDetail";
 import Class from "./pages/teacher/Class";
+import QuizManagement from "./pages/teacher/QuizManagement";
+import CreateQuiz from "./pages/teacher/CreateQuiz";
+import QuizDetail from "./pages/teacher/QuizDetail";
 
 function App() {
   return (
@@ -65,7 +68,9 @@ function App() {
           {/* Add more teacher routes as needed */}
           <Route path="classes" element={<Class />} />
           <Route path="classes/:classId" element={<ClassDetail />} />
-          <Route path="exams" element={<div>Teacher Exams</div>} />
+          <Route path="quizzes" element={<QuizManagement />} />
+          <Route path="quizzes/create" element={<CreateQuiz />} />
+          <Route path="quizzes/:id" element={<QuizDetail />} />
           <Route path="profile" element={<TeacherProfile />} />
 
           <Route path="settings" element={<div>Teacher Settings</div>} />
