@@ -51,7 +51,7 @@ const InputField = ({
       </label>
       <div className="relative">
         {icon && (
-          <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+          <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 dark:text-[var(--color-gradient-to)]">
             {icon}
           </div>
         )}
@@ -59,7 +59,7 @@ const InputField = ({
           id={inputId}
           className={`w-full rounded-lg border border-gray-300 bg-white px-4 py-2 text-gray-700 ${
             icon ? "pl-10" : ""
-          } ${isPassword ? "pr-10" : ""} focus:border-[var(--color-gradient-from)] focus:ring-2 focus:ring-[var(--color-gradient-from)]/20 focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 ${
+          } ${isPassword ? "pr-10" : ""} focus:border-[var(--color-gradient-from)] focus:ring-2 focus:ring-[var(--color-gradient-to)]/50 focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 ${
             showError
               ? "border-red-500 focus:border-red-500 focus:ring-red-500/20"
               : ""

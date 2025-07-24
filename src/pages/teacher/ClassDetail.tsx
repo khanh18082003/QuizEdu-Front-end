@@ -8,6 +8,7 @@ import {
   type ClassroomStudent,
   type ClassroomQuiz 
 } from "../../services/classroomService";
+
 import {
   type QuizSession,
 } from "../../services/quizService";
@@ -87,7 +88,6 @@ const ClassDetailPage = () => {
       if (!classId) return;
 
       showToast("Tính năng xóa học sinh đang được phát triển", "info");
-
     } catch (error) {
       console.error("Error removing student:", error);
       showToast("Không thể xóa học sinh. Vui lòng thử lại!", "error");
@@ -97,7 +97,6 @@ const ClassDetailPage = () => {
   const handleDeleteSession = async (_sessionId: string) => {
     try {
       showToast("Tính năng xóa session đang được phát triển", "info");
-
     } catch (error) {
       console.error("Error deleting session:", error);
       showToast("Không thể xóa session. Vui lòng thử lại!", "error");
@@ -161,7 +160,6 @@ const ClassDetailPage = () => {
             </div>
           </div>
         </div>
-
         {/* Tabs */}
         <div className="mb-6">
           <div className="border-b border-gray-200 dark:border-gray-700">
@@ -199,7 +197,6 @@ const ClassDetailPage = () => {
             </nav>
           </div>
         </div>
-
         {/* Tab Content */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
           {/* Students Tab */}
@@ -361,7 +358,6 @@ const ClassDetailPage = () => {
                     </div>
                   </div>
                 ))}
-
                 {quizSessions.length === 0 && (
                   <div className="text-center py-8">
                     <p className="text-gray-500 dark:text-gray-400">Chưa có session nào được tạo</p>
