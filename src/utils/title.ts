@@ -31,6 +31,7 @@ export const PAGE_TITLES = {
   REGISTER: "pageTitle.register",
   FORGOT_PASSWORD: "pageTitle.forgotPassword",
   RESET_PASSWORD: "pageTitle.resetPassword",
+  PASSWORD_CREATION: "pageTitle.passwordCreation",
   VERIFICATION: "pageTitle.verification",
   STUDENT_HOME: "pageTitle.studentHome",
   STUDENT_PROFILE: "pageTitle.studentProfile",
