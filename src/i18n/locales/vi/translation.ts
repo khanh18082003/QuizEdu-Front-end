@@ -6,6 +6,7 @@ export default {
     register: "Đăng ký",
     forgotPassword: "Quên mật khẩu",
     resetPassword: "Đặt lại mật khẩu",
+    passwordCreation: "Tạo mật khẩu",
     verification: "Xác thực tài khoản",
     studentHome: "Trang chủ học sinh",
     studentProfile: "Hồ sơ học sinh",

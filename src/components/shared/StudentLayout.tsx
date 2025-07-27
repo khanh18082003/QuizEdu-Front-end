@@ -5,10 +5,11 @@ import SkeletonDashboard from "../ui/SkeletonDashboard";
 import {
   FaHome,
   FaBook,
-  FaClipboardList,
   FaUserGraduate,
   FaCog,
   FaSignOutAlt,
+  FaBars,
+  FaTimes,
 } from "react-icons/fa";
 import { useDispatch, useSelector } from "react-redux";
 import {
@@ -31,6 +32,8 @@ const StudentLayout = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(true);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const user = useSelector(
     (state: {
       user: RegisterResponse | StudentProfileResponse | TeacherProfileResponse;
@@ -63,9 +66,17 @@ const StudentLayout = () => {
             // Lưu profile vào Redux store
             dispatch(myProfile(response.data));
             console.log("User profile loaded:", response.data);
+
             // Kiểm tra role, nếu không phải student thì chuyển hướng
             if (response.data.role.toLowerCase() !== "student") {
               navigate("/teacher/dashboard");
+              return;
+            }
+
+            // Kiểm tra nếu user cần tạo password
+            if (response.data.no_password) {
+              navigate("/authentication/create-password");
+              return;
             }
           }
         }
@@ -161,14 +172,9 @@ const StudentLayout = () => {
       to: "/student/classrooms",
       label: "Classrooms",
       icon: <FaBook className="text-xl" />,
-      match: /^\/student\/courses/,
+      match: /^\/student\/classrooms/,
     },
-    {
-      to: "/student/exams",
-      label: "Exams",
-      icon: <FaClipboardList className="text-xl" />,
-      match: /^\/student\/exams/,
-    },
+
     {
       to: "/student/profile",
       label: "Profile",
@@ -209,40 +215,81 @@ const StudentLayout = () => {
 
   return (
     <div className="flex min-h-screen bg-gray-50 dark:bg-gray-900">
+      {/* Mobile overlay */}
+      {isMobileMenuOpen && (
+        <div
+          className="bg-opacity-50 fixed inset-0 z-40 bg-black lg:hidden"
+          onClick={() => setIsMobileMenuOpen(false)}
+        />
+      )}
+
       {/* Sidebar */}
-      <aside className="fixed inset-y-0 left-0 z-50 flex w-72 flex-col border-r border-gray-100/40 bg-white shadow-lg transition-transform lg:static lg:translate-x-0 dark:border-gray-700/40 dark:bg-gray-800">
+      <aside
+        className={`fixed inset-y-0 left-0 z-50 flex flex-col border-r border-gray-100/40 bg-white shadow-lg transition-all duration-300 lg:static lg:translate-x-0 dark:border-gray-700/40 dark:bg-gray-800 ${
+          isSidebarCollapsed ? "w-16" : "w-72"
+        } ${
+          isMobileMenuOpen
+            ? "translate-x-0"
+            : "-translate-x-full lg:translate-x-0"
+        }`}
+      >
         {/* Logo */}
         <div className="flex h-16 items-center border-b border-gray-100/40 px-6 dark:border-gray-700/40">
           <Link to="/student/dashboard" className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-r from-[var(--color-gradient-from)] to-[var(--color-gradient-to)] text-xl text-white shadow-md">
               🎓
             </div>
-            <h1 className="bg-gradient-to-r from-[var(--color-gradient-from)] to-[var(--color-gradient-to)] bg-clip-text text-2xl font-bold tracking-tight text-transparent">
-              Quiz Edu
-            </h1>
+            {!isSidebarCollapsed && (
+              <h1 className="bg-gradient-to-r from-[var(--color-gradient-from)] to-[var(--color-gradient-to)] bg-clip-text text-2xl font-bold tracking-tight text-transparent">
+                Quiz Edu
+              </h1>
+            )}
           </Link>
         </div>
 
+        {/* Collapse toggle button */}
+        <div className="hidden justify-end p-2 lg:flex">
+          <button
+            onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+            className="rounded-lg p-2 text-gray-600 transition-colors hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700"
+            aria-label={
+              isSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"
+            }
+          >
+            {isSidebarCollapsed ? (
+              <FaBars className="h-4 w-4" />
+            ) : (
+              <FaTimes className="h-4 w-4" />
+            )}
+          </button>
+        </div>
+
         {/* Nav links */}
-        <nav className="flex-1 space-y-2 px-3 py-5">
+        <nav className="flex-1 space-y-2 px-3 py-2">
           {navItems.map((item) => {
             const isActive = item.match.test(location.pathname);
             return (
               <Link
                 key={item.to}
                 to={item.to}
-                className={`flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium transition-all ${
+                className={`group flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium transition-all ${
                   isActive
                     ? "bg-gradient-to-r from-[var(--color-gradient-from)] to-[var(--color-gradient-to)] text-white shadow-md"
                     : "text-gray-700 hover:bg-gray-100/60 dark:text-gray-300 dark:hover:bg-gray-700/60"
-                }`}
+                } ${isSidebarCollapsed ? "justify-center" : ""}`}
+                title={isSidebarCollapsed ? item.label : ""}
               >
                 <span
-                  className={`${isActive ? "text-white" : "text-[var(--color-gradient-from)]"}`}
+                  className={`${isActive ? "text-white" : "text-[var(--color-gradient-to)]"} ${isSidebarCollapsed ? "text-lg" : ""}`}
                 >
                   {item.icon}
                 </span>
-                {item.label}
+                {!isSidebarCollapsed && item.label}
+                {isSidebarCollapsed && (
+                  <span className="absolute left-full z-50 ml-2 rounded bg-gray-900 px-2 py-1 text-xs whitespace-nowrap text-white opacity-0 transition-opacity group-hover:opacity-100">
+                    {item.label}
+                  </span>
+                )}
               </Link>
             );
           })}
@@ -251,16 +298,24 @@ const StudentLayout = () => {
         {/* Bottom section */}
         <div className="mt-auto border-t border-gray-100/40 p-3 dark:border-gray-700/40">
           <button
-            className="flex w-full items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium text-red-600 transition-all hover:bg-red-50/80 dark:text-red-400 dark:hover:bg-red-900/20"
+            className={`group flex w-full cursor-pointer items-center gap-3 rounded-lg text-sm font-medium text-red-600 transition-all hover:bg-red-100 dark:text-red-400 dark:hover:bg-red-900/20 ${isSidebarCollapsed ? "justify-center px-1 py-1" : "px-4 py-3"}`}
             onClick={handleLogout}
+            title={isSidebarCollapsed ? "Logout" : ""}
           >
-            <FaSignOutAlt className="text-xl" />
-            Logout
+            <FaSignOutAlt size={20} />
+            {!isSidebarCollapsed && "Logout"}
+            {isSidebarCollapsed && (
+              <span className="absolute left-full z-50 ml-2 rounded bg-gray-900 px-2 py-1 text-xs whitespace-nowrap text-white opacity-0 transition-opacity group-hover:opacity-100">
+                Logout
+              </span>
+            )}
           </button>
-          <div className="mt-5 flex justify-between px-2">
-            <ThemeToggle />
-            <LanguageSwitcher />
-          </div>
+          {!isSidebarCollapsed && (
+            <div className="mt-5 flex justify-between px-2">
+              <ThemeToggle />
+              <LanguageSwitcher />
+            </div>
+          )}
         </div>
       </aside>
 
@@ -269,9 +324,19 @@ const StudentLayout = () => {
         {/* Top header */}
         <header className="sticky top-0 z-40 border-b border-gray-100/40 bg-white/80 px-5 py-4 shadow-sm backdrop-blur-sm dark:border-gray-700/40 dark:bg-gray-800/80">
           <div className="flex items-center justify-between">
-            <h2 className="text-2xl font-bold text-gray-800 dark:text-white">
-              Student Dashboard
-            </h2>
+            <div className="flex items-center gap-4">
+              {/* Mobile menu button */}
+              <button
+                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                className="rounded-lg p-2 text-gray-600 transition-colors hover:bg-gray-100 lg:hidden dark:text-gray-400 dark:hover:bg-gray-700"
+                aria-label="Toggle mobile menu"
+              >
+                <FaBars className="h-5 w-5" />
+              </button>
+              <h2 className="text-2xl font-bold text-gray-800 dark:text-white">
+                Student Dashboard
+              </h2>
+            </div>
             <div className="flex items-center gap-3">
               <div className="group relative">
                 <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-gradient-to-r from-[var(--color-gradient-from)] to-[var(--color-gradient-to)] text-white shadow-md transition-transform group-hover:scale-105">

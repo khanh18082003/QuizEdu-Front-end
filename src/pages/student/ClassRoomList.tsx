@@ -345,7 +345,10 @@ const ClassRoomList = () => {
                         <span>{t("classroom.unenroll")}</span>
                       </Button>
 
-                      <Link to={`/student/classroom/${classroom.id}`}>
+                      <Link
+                        to={`/student/classroom/${classroom.id}`}
+                        state={{ teacher: classroom.teacher }}
+                      >
                         <Button variant="primary" size="sm">
                           {t("classroom.viewClass")}
                         </Button>

@@ -1,0 +1,98 @@
+import type { SuccessApiResponse } from "../types/response";
+import api from "../utils/axiosCustom";
+
+// Interface for quiz session response
+export interface QuizSessionResponse {
+  id: string;
+  name: string;
+  description: string;
+  quiz_session_id: string;
+  start_time: string;
+  end_time: string;
+  status: string;
+}
+
+// Interface for quiz data
+export interface QuizData {
+  id: string;
+  name: string;
+  description: string;
+  questions: Array<{
+    id: string;
+    question: string;
+    type: "multiple_choice" | "true_false" | "essay";
+    options?: string[];
+    correct_answer?: string;
+    points: number;
+  }>;
+  total_points: number;
+  time_limit?: number;
+}
+
+// Interface for join quiz session response
+export interface JoinQuizSessionResponse {
+  sessionToken: string;
+  participant_id: string;
+  quiz: QuizData;
+}
+
+/**
+ * Join a quiz session with access code
+ */
+export const joinQuizSession = async (
+  accessCode: string,
+): Promise<SuccessApiResponse<void>> => {
+  try {
+    const response = await api.post<SuccessApiResponse<void>>(
+      `/quiz-sessions/joinQuizSession`,
+      {
+        access_code: accessCode,
+      },
+    );
+    return response.data;
+  } catch (error) {
+    console.error("Error joining quiz session:", error);
+    throw error;
+  }
+};
+
+/**
+ * Get quiz session details for taking quiz
+ */
+export const getQuizSessionDetails = async (
+  quizSessionId: string,
+): Promise<SuccessApiResponse<QuizSessionResponse & { quiz: QuizData }>> => {
+  try {
+    const response = await api.get<
+      SuccessApiResponse<QuizSessionResponse & { quiz: QuizData }>
+    >(`/quiz-sessions/${quizSessionId}`);
+    return response.data;
+  } catch (error) {
+    console.error("Error fetching quiz session details:", error);
+    throw error;
+  }
+};
+
+/**
+ * Get quiz session status for waiting room polling
+ */
+export const getQuizSessionStatus = async (
+  quizSessionId: string,
+  sessionToken: string,
+): Promise<
+  SuccessApiResponse<{ status: string; participantCount: number }>
+> => {
+  try {
+    const response = await api.get<
+      SuccessApiResponse<{ status: string; participantCount: number }>
+    >(`/quiz-sessions/${quizSessionId}/status`, {
+      headers: {
+        Authorization: `Bearer ${sessionToken}`,
+      },
+    });
+    return response.data;
+  } catch (error) {
+    console.error("Error fetching quiz session status:", error);
+    throw error;
+  }
+};
