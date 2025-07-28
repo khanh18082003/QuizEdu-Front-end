@@ -165,29 +165,31 @@ const QuizManagement = () => {
           {quizzes.map((item) => (
             <div 
               key={item.quiz.id} 
-              className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden hover:shadow-md transition-all duration-200 flex flex-col"
+              className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden hover:shadow-md transition-all duration-200 flex flex-col h-full"
             >
               {/* Quiz Header */}
               <div className="p-6 flex-1">
                 <div className="mb-4">
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white line-clamp-2">
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white line-clamp-2 min-h-[56px]">
                     {item.quiz.name}
                   </h3>
                 </div>
                 
-                <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-3 mb-4 min-h-[60px]">
-                  {item.quiz.description}
+                <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2 mb-4 h-[40px] overflow-hidden">
+                  {item.quiz.description && item.quiz.description.length > 80 
+                    ? `${item.quiz.description.substring(0, 80)}...` 
+                    : item.quiz.description || "Không có mô tả"}
                 </p>
 
                 {/* Quiz Type Badges */}
-                <div className="flex flex-wrap gap-2 mb-4">
+                <div className="flex flex-wrap gap-2 mb-4 min-h-[32px]">
                   {getQuizTypesBadges(item)}
                 </div>
 
                 {/* Quiz Stats */}
-                <div className="grid grid-cols-3 gap-3">
-                  <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3 text-center">
-                    <div className="flex items-center justify-center text-blue-500 mb-2">
+                <div className="grid grid-cols-3 gap-3 mb-4">
+                  <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3 text-center min-h-[80px] flex flex-col justify-center">
+                    <div className="flex items-center justify-center text-blue-500 mb-1">
                       <FaQuestionCircle className="text-lg" />
                     </div>
                     <div className="text-xs text-gray-600 dark:text-gray-400 mb-1">Câu hỏi</div>
@@ -196,8 +198,8 @@ const QuizManagement = () => {
                     </div>
                   </div>
                   
-                  <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-3 text-center">
-                    <div className="flex items-center justify-center text-green-500 mb-2">
+                  <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-3 text-center min-h-[80px] flex flex-col justify-center">
+                    <div className="flex items-center justify-center text-green-500 mb-1">
                       <FaClock className="text-lg" />
                     </div>
                     <div className="text-xs text-gray-600 dark:text-gray-400 mb-1">Điểm</div>
@@ -206,8 +208,8 @@ const QuizManagement = () => {
                     </div>
                   </div>
                   
-                  <div className="bg-purple-50 dark:bg-purple-900/20 rounded-lg p-3 text-center">
-                    <div className="flex items-center justify-center text-purple-500 mb-2">
+                  <div className="bg-purple-50 dark:bg-purple-900/20 rounded-lg p-3 text-center min-h-[80px] flex flex-col justify-center">
+                    <div className="flex items-center justify-center text-purple-500 mb-1">
                       <FaUsers className="text-lg" />
                     </div>
                     <div className="text-xs text-gray-600 dark:text-gray-400 mb-1">Lớp</div>
@@ -219,18 +221,27 @@ const QuizManagement = () => {
               </div>
 
               {/* Quiz Actions */}
-              <div className="p-4 bg-gray-50 dark:bg-gray-700/50 border-t border-gray-200 dark:border-gray-600 mt-auto">
-                <div className="flex items-center justify-between mb-4">
-                  <span className="text-xs text-gray-500 dark:text-gray-400">
-                    Tạo: {formatDate(item.quiz.created_at)}
+              <div className="p-4 bg-gray-50 dark:bg-gray-700/50 border-t border-gray-200 dark:border-gray-600">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                    {formatDate(item.quiz.created_at)}
                   </span>
-                  <span className={`text-xs px-3 py-1 rounded-full font-medium ${
-                    item.quiz.active 
-                      ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' 
-                      : 'bg-gray-100 text-gray-800 dark:bg-gray-600 dark:text-gray-300'
-                  }`}>
-                    {item.quiz.active ? 'Hoạt động' : 'Tạm dừng'}
-                  </span>
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    <span className={`text-xs px-2 py-1 rounded-full font-medium whitespace-nowrap ${
+                      item.quiz.active 
+                        ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' 
+                        : 'bg-gray-100 text-gray-800 dark:bg-gray-600 dark:text-gray-300'
+                    }`}>
+                      {item.quiz.active ? 'Hoạt động' : 'Tạm dừng'}
+                    </span>
+                    <span className={`text-xs px-2 py-1 rounded-full font-medium whitespace-nowrap ${
+                      item.quiz.is_public 
+                        ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200' 
+                        : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
+                    }`}>
+                      {item.quiz.is_public ? 'Công khai' : 'Riêng tư'}
+                    </span>
+                  </div>
                 </div>
                 
                 <div className="grid grid-cols-3 gap-2">

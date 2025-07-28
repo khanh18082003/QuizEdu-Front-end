@@ -174,6 +174,7 @@ export const joinClassroom = async (
     return response.data;
   } catch (error) {
     console.error("Error joining classroom:", error);
+    throw error;
   }
 }
 
@@ -190,6 +191,30 @@ export const getClassroomDetail = async (
     return response.data;
   } catch (error) {
     console.error("Error fetching classroom detail:", error);
+    throw error;
+  }
+};
+
+// Interface for assign quiz request
+export interface AssignQuizToClassroomRequest {
+  class_room_id: string;
+  quiz_id: string;
+}
+
+/**
+ * Assign quiz to classroom
+ */
+export const assignQuizToClassroom = async (
+  data: AssignQuizToClassroomRequest,
+): Promise<SuccessApiResponse<any>> => {
+  try {
+    const response = await api.post<SuccessApiResponse<any>>(
+      `/classrooms/assignQuizToClassroom`,
+      data
+    );
+    return response.data;
+  } catch (error) {
+    console.error("Error assigning quiz to classroom:", error);
     throw error;
   }
 };
