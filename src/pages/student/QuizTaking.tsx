@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import {
   FaClock,
   FaChevronLeft,
@@ -10,13 +11,17 @@ import {
 } from "react-icons/fa";
 import Button from "../../components/ui/Button";
 import LoadingOverlay from "../../components/ui/LoadingOverlay";
+import { usePageTitle, PAGE_TITLES } from "../../utils/title";
 import type { QuizData } from "../../services/quizSessionService";
 
 // Interface for quiz taking state
 interface QuizTakingState {
   accessCode: string;
-  quiz: QuizData;
+  quiz?: QuizData;
   sessionData?: Record<string, unknown>; // Additional session data if needed
+  quizSessionId?: string;
+  quizSessionName?: string;
+  isWaitingForTeacher?: boolean;
 }
 
 // Interface for user answers
@@ -27,6 +32,9 @@ interface UserAnswer {
 }
 
 const QuizTaking = () => {
+  const { t } = useTranslation();
+  usePageTitle(PAGE_TITLES.QUIZ_TAKING);
+
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -34,6 +42,9 @@ const QuizTaking = () => {
   const quizState = location.state as QuizTakingState | null;
 
   const [quiz] = useState<QuizData | null>(quizState?.quiz || null);
+  const [isWaitingForTeacher, setIsWaitingForTeacher] = useState(
+    quizState?.isWaitingForTeacher || false,
+  );
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, UserAnswer>>({});
   const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
@@ -102,10 +113,10 @@ const QuizTaking = () => {
 
   // Redirect if no quiz data
   useEffect(() => {
-    if (!quizState || !quiz) {
+    if (!quizState) {
       navigate("/student/classrooms");
     }
-  }, [quizState, quiz, navigate]);
+  }, [quizState, navigate]);
 
   // Prevent accidental page exit
   useEffect(() => {
@@ -257,11 +268,132 @@ const QuizTaking = () => {
     }
   };
 
-  if (!quiz || !quizState) {
+  if (!quizState) {
     return (
       <LoadingOverlay
         show={true}
         message="Loading quiz..."
+        variant="fullscreen"
+      />
+    );
+  }
+
+  // Show waiting for teacher screen if quiz hasn't started yet
+  if (isWaitingForTeacher || !quiz) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+        {/* Header */}
+        <div className="border-b border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
+          <div className="mx-auto max-w-7xl px-4 py-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={() => navigate(-1)}
+                  className="flex items-center gap-2 text-blue-600 transition-colors hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                >
+                  <FaChevronLeft className="h-4 w-4" />
+                  <span>{t("quizTaking.back")}</span>
+                </button>
+                <h1 className="text-lg font-bold text-gray-900 lg:text-xl dark:text-white">
+                  {quizState?.quizSessionName || t("quizTaking.quizSession")}
+                </h1>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Waiting Content */}
+        <div className="mx-auto max-w-4xl px-4 py-12">
+          <div className="text-center">
+            {/* Status icon */}
+            <div className="mx-auto mb-8 flex h-24 w-24 items-center justify-center rounded-full bg-orange-100 dark:bg-orange-900/30">
+              <FaPause className="h-12 w-12 text-orange-600 dark:text-orange-400" />
+            </div>
+
+            {/* Main message */}
+            <h2 className="mb-4 text-3xl font-bold text-gray-900 dark:text-white">
+              {t("quizTaking.waitingForTeacher")}
+            </h2>
+            <p className="mb-8 text-lg text-gray-600 dark:text-gray-400">
+              {t("quizTaking.waitingMessage")}
+            </p>
+
+            {/* Status info */}
+            <div className="mx-auto mb-8 max-w-md rounded-lg border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-800">
+              <h3 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">
+                {t("quizTaking.quizStatus")}
+              </h3>
+              <div className="space-y-3 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-gray-600 dark:text-gray-400">
+                    {t("quizTaking.accessCode")}:
+                  </span>
+                  <span className="font-mono font-bold text-gray-900 dark:text-white">
+                    {quizState?.accessCode}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600 dark:text-gray-400">
+                    {t("quizTaking.status")}:
+                  </span>
+                  <span className="inline-flex items-center gap-1 rounded-full bg-orange-100 px-2 py-1 text-xs font-medium text-orange-700 dark:bg-orange-900/30 dark:text-orange-300">
+                    <FaPause className="h-3 w-3" />
+                    {t("quizTaking.waitingForTeacher")}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Instructions */}
+            <div className="mx-auto mb-8 max-w-2xl rounded-lg bg-blue-50 p-6 dark:bg-blue-900/20">
+              <div className="flex items-start gap-3">
+                <FaExclamationTriangle className="mt-1 h-5 w-5 text-blue-600 dark:text-blue-400" />
+                <div className="text-left">
+                  <h4 className="font-semibold text-blue-900 dark:text-blue-200">
+                    {t("quizTaking.waitingInstructions")}
+                  </h4>
+                  <ul className="mt-2 space-y-1 text-sm text-blue-800 dark:text-blue-300">
+                    <li>• {t("quizTaking.waitingRules.stayOnTab")}</li>
+                    <li>• {t("quizTaking.waitingRules.stableConnection")}</li>
+                    <li>• {t("quizTaking.waitingRules.autoStart")}</li>
+                    <li>• {t("quizTaking.waitingRules.reviewRules")}</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            {/* Test button to simulate teacher starting quiz */}
+            <div className="flex justify-center gap-4">
+              <Button variant="secondary" onClick={() => navigate(-1)}>
+                {t("quizTaking.leaveQuizRoom")}
+              </Button>
+
+              {/* Test button - remove in production */}
+              <Button
+                variant="primary"
+                onClick={() => {
+                  setIsWaitingForTeacher(false);
+                  // Simulate getting quiz data from API
+                  // In real implementation, this would come from polling or websocket
+                }}
+                className="bg-green-600 hover:bg-green-700"
+              >
+                <FaPlay className="mr-2 h-4 w-4" />
+                {t("quizTaking.startQuizTest")}
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // If no quiz data is available, show loading
+  if (!quiz) {
+    return (
+      <LoadingOverlay
+        show={true}
+        message={t("quizTaking.loadingQuizData")}
         variant="fullscreen"
       />
     );

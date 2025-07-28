@@ -17,6 +17,8 @@ export default {
     aboutUs: "Về chúng tôi",
     contact: "Liên hệ",
     notFound: "Không tìm thấy trang",
+    quizWaitingRoom: "Phòng chờ làm bài",
+    quizTaking: "Làm bài thi",
   },
 
   // Common UI Elements
@@ -159,4 +161,107 @@ export default {
     english: "English",
     vietnamese: "Tiếng Việt",
   },
+
+  // Quiz Waiting Room
+  quizWaitingRoom: {
+    pageTitle: "Phòng chờ làm bài",
+    reviewInfo:
+      "Xem lại thông tin bài kiểm tra và các quy tắc trước khi bắt đầu phiên làm bài.",
+    sessionInfo: "Thông tin phiên",
+    accessCode: "Mã truy cập",
+    teacher: "Giáo viên",
+    totalQuestions: "Tổng số câu hỏi",
+    status: "Trạng thái",
+    estimatedStart: "Thời gian dự kiến",
+    readyToStart: "Sẵn sàng bắt đầu",
+    waitingRoom: "Phòng chờ",
+    quizRules: "Quy tắc & Hướng dẫn",
+    rules: {
+      timeLimit: "Mỗi câu hỏi có thời gian giới hạn riêng",
+      completionTime:
+        "Thời gian hoàn thành bài thi phụ thuộc vào tốc độ trả lời của bạn",
+      noGoBack: "Bạn không thể quay lại sau khi đã nộp câu trả lời",
+      integrity: "Duy trì tính trung thực trong suốt bài kiểm tra",
+      connection: "Giữ kết nối internet ổn định",
+    },
+    importantInstructions: "Hướng dẫn quan trọng:",
+    instructions: {
+      readRules: "Đọc kỹ tất cả các quy tắc trước khi bắt đầu",
+      waitForTeacher:
+        "Sau khi bắt đầu, bạn phải đợi giáo viên khởi động bài thi",
+      stableConnection: "Đảm bảo kết nối internet ổn định trong suốt quá trình",
+      noPause: "Bạn không thể tạm dừng sau khi bài thi bắt đầu",
+    },
+    leave: "Rời khỏi",
+    leaveSession: "Rời khỏi phiên",
+    enterQuizRoom: "Vào phòng thi",
+    confirmLeave: "Bạn có chắc chắn muốn rời khỏi phòng chờ?",
+    loadFailed: "Không thể tải thông tin phiên thi. Vui lòng thử lại.",
+    loadingWaitingRoom: "Đang tải phòng chờ...",
+    checkingSessionStatus: "Đang kiểm tra trạng thái phiên...",
+  },
+
+  // Quiz Taking
+  quizTaking: {
+    pageTitle: "Làm bài thi",
+    back: "Quay lại",
+    pause: "Tạm dừng",
+    resume: "Tiếp tục",
+    submit: "Nộp bài",
+    submitQuiz: "Nộp bài thi",
+    question: "Câu hỏi",
+    of: "của",
+    answered: "đã trả lời",
+    points: "điểm",
+    point: "điểm",
+    previous: "Trước",
+    next: "Tiếp theo",
+    questions: "Các câu hỏi",
+    quizSession: "Phiên thi",
+    accessCode: "Mã truy cập",
+    status: "Trạng thái",
+    keyboardShortcuts: "Phím tắt:",
+    navigateQuestions: "← → Điều hướng câu hỏi",
+    submitShortcut: "Shift+Enter Nộp bài",
+    typeAnswer: "Nhập câu trả lời của bạn tại đây...",
+    unsupportedType: "Loại câu hỏi không được hỗ trợ:",
+    unsavedChanges:
+      "Bạn có thay đổi chưa được lưu. Bạn có chắc chắn muốn thoát?",
+    loadingQuizData: "Đang tải dữ liệu bài thi...",
+
+    // Waiting for teacher
+    waitingForTeacher: "Đang chờ giáo viên",
+    waitingMessage:
+      "Bạn đã vào phòng thi thành công. Vui lòng đợi giáo viên bắt đầu bài thi.",
+    quizStatus: "Trạng thái bài thi",
+    waitingInstructions: "Trong khi chờ đợi:",
+    waitingRules: {
+      stayOnTab: "Giữ tab này mở và không điều hướng đi nơi khác",
+      stableConnection: "Đảm bảo kết nối internet ổn định",
+      autoStart: "Bài thi sẽ tự động bắt đầu khi giáo viên khởi động",
+      reviewRules: "Xem lại các quy tắc bài thi nếu cần",
+    },
+    leaveQuizRoom: "Rời khỏi phòng thi",
+    startQuizTest: "Bắt đầu thi (Test)",
+
+    // Submit confirmation
+    submitConfirmation: "Nộp bài thi?",
+    submitMessage:
+      "Bạn đã trả lời {{answered}} trong tổng số {{total}} câu hỏi. Bạn có chắc chắn muốn nộp bài? Thao tác này không thể hoàn tác.",
+    submitting: "Đang nộp bài...",
+    submittingMessage: "Đang nộp bài thi của bạn...",
+
+    // Time display
+    timeRemaining: "Thời gian còn lại:",
+    timeUp: "Hết giờ!",
+
+    // Question types
+    multipleChoice: "Trả lời trắc nghiệm",
+    trueFalse: "Đúng/Sai",
+    essay: "Tự luận",
+    true: "Đúng",
+    false: "Sai",
+  },
+  true: "Đúng",
+  false: "Sai",
 };

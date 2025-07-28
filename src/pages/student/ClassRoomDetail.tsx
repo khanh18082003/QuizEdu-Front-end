@@ -24,7 +24,6 @@ import type { RegisterResponse } from "../../services/userService";
 import type { PaginationResponse } from "../../types/response";
 import {
   joinQuizSession,
-  getQuizSessionDetails,
   type QuizSessionResponse,
 } from "../../services/quizSessionService";
 
@@ -262,29 +261,17 @@ const ClassRoomDetail = () => {
             },
           );
         } else {
-          // For ACTIVE/PAUSED status, we need to get quiz session details first
-          try {
-            const detailsResponse = await getQuizSessionDetails(
-              selectedQuizSession.quiz_session_id,
-            );
-            if (detailsResponse.code === "M000" && detailsResponse.data) {
-              navigate(
-                `/student/quiz-session/${selectedQuizSession.quiz_session_id}/take`,
-                {
-                  state: {
-                    accessCode,
-                    quiz: detailsResponse.data.quiz,
-                    sessionData: detailsResponse.data,
-                  },
-                },
-              );
-            } else {
-              throw new Error("Failed to get quiz session details");
-            }
-          } catch (detailError) {
-            console.error("Error getting quiz session details:", detailError);
-            throw new Error("Failed to load quiz details");
-          }
+          // For ACTIVE/PAUSED status, navigate directly to take quiz
+          navigate(
+            `/student/quiz-session/${selectedQuizSession.quiz_session_id}/take`,
+            {
+              state: {
+                accessCode,
+                quizSessionId: selectedQuizSession.quiz_session_id,
+                quizSessionName: selectedQuizSession.title,
+              },
+            },
+          );
         }
       } else {
         throw new Error(response.message || "Failed to join quiz session");
@@ -497,21 +484,6 @@ const ClassRoomDetail = () => {
                     <div className="flex flex-row gap-2 sm:flex-col sm:self-start">
                       {assignment.status === "LOBBY" && (
                         <div className="flex flex-col gap-2 sm:gap-1">
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={() =>
-                              navigate(
-                                `/student/classroom/${id}/quiz/${assignment.id}`,
-                                { state: { activeTab: "classwork" } },
-                              )
-                            }
-                            className="flex-1 sm:flex-none"
-                          >
-                            <FaClock className="mr-1 h-3 w-3 sm:mr-2" />
-                            <span className="hidden sm:inline">Prepare</span>
-                            <span className="sm:hidden">Prep</span>
-                          </Button>
                           <Button
                             variant="primary"
                             size="sm"

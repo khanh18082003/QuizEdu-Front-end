@@ -1,5 +1,6 @@
 import type { SuccessApiResponse } from "../types/response";
 import api from "../utils/axiosCustom";
+import type { RegisterResponse } from "./userService";
 
 // Interface for quiz session response
 export interface QuizSessionResponse {
@@ -27,6 +28,13 @@ export interface QuizData {
   }>;
   total_points: number;
   time_limit?: number;
+}
+
+export interface QuizSessionDetail {
+  id: string;
+  teacher: RegisterResponse;
+  total_questions: number;
+  status: string;
 }
 
 // Interface for join quiz session response
@@ -57,23 +65,6 @@ export const joinQuizSession = async (
 };
 
 /**
- * Get quiz session details for taking quiz
- */
-export const getQuizSessionDetails = async (
-  quizSessionId: string,
-): Promise<SuccessApiResponse<QuizSessionResponse & { quiz: QuizData }>> => {
-  try {
-    const response = await api.get<
-      SuccessApiResponse<QuizSessionResponse & { quiz: QuizData }>
-    >(`/quiz-sessions/${quizSessionId}`);
-    return response.data;
-  } catch (error) {
-    console.error("Error fetching quiz session details:", error);
-    throw error;
-  }
-};
-
-/**
  * Get quiz session status for waiting room polling
  */
 export const getQuizSessionStatus = async (
@@ -93,6 +84,20 @@ export const getQuizSessionStatus = async (
     return response.data;
   } catch (error) {
     console.error("Error fetching quiz session status:", error);
+    throw error;
+  }
+};
+
+export const getQuizSessionDetail = async (
+  quizSessionId: string,
+): Promise<SuccessApiResponse<QuizSessionDetail>> => {
+  try {
+    const response = await api.get<SuccessApiResponse<QuizSessionDetail>>(
+      `/quiz-sessions/${quizSessionId}`,
+    );
+    return response.data;
+  } catch (error) {
+    console.error("Error fetching quiz session details:", error);
     throw error;
   }
 };

@@ -17,6 +17,8 @@ export default {
     aboutUs: "About Us",
     contact: "Contact",
     notFound: "Page Not Found",
+    quizWaitingRoom: "Quiz Waiting Room",
+    quizTaking: "Quiz Taking",
   },
 
   // Common UI Elements
@@ -160,5 +162,104 @@ export default {
   language: {
     english: "English",
     vietnamese: "Vietnamese",
+  },
+
+  // Quiz Waiting Room
+  quizWaitingRoom: {
+    pageTitle: "Quiz Waiting Room",
+    reviewInfo:
+      "Review the quiz information and rules before starting your quiz session.",
+    sessionInfo: "Session Information",
+    accessCode: "Access Code",
+    teacher: "Teacher",
+    totalQuestions: "Total Questions",
+    status: "Status",
+    estimatedStart: "Estimated Start",
+    readyToStart: "Ready to Start",
+    waitingRoom: "Waiting Room",
+    quizRules: "Quiz Rules & Guidelines",
+    rules: {
+      timeLimit: "Each question has a specific time limit",
+      completionTime: "Quiz completion time depends on your answer speed",
+      noGoBack: "You cannot go back once you submit an answer",
+      integrity: "Maintain academic integrity throughout the quiz",
+      connection: "Keep your internet connection stable",
+    },
+    importantInstructions: "Important Instructions:",
+    instructions: {
+      readRules: "Read all rules carefully before starting",
+      waitForTeacher:
+        "Once you start, you must wait for teacher to begin the quiz",
+      stableConnection: "Ensure stable internet connection throughout",
+      noPause: "You cannot pause once the quiz begins",
+    },
+    leave: "Leave",
+    leaveSession: "Leave Session",
+    enterQuizRoom: "Enter Quiz Room",
+    confirmLeave: "Are you sure you want to leave the waiting room?",
+    loadFailed: "Failed to load quiz session details. Please try again.",
+    loadingWaitingRoom: "Loading waiting room...",
+    checkingSessionStatus: "Checking session status...",
+  },
+
+  // Quiz Taking
+  quizTaking: {
+    pageTitle: "Quiz Taking",
+    back: "Back",
+    pause: "Pause",
+    resume: "Resume",
+    submit: "Submit",
+    submitQuiz: "Submit Quiz",
+    question: "Question",
+    of: "of",
+    answered: "answered",
+    points: "points",
+    point: "point",
+    previous: "Previous",
+    next: "Next",
+    questions: "Questions",
+    quizSession: "Quiz Session",
+    accessCode: "Access Code",
+    status: "Status",
+    keyboardShortcuts: "Keyboard shortcuts:",
+    navigateQuestions: "← → Navigate questions",
+    submitShortcut: "Shift+Enter Submit quiz",
+    typeAnswer: "Type your answer here...",
+    unsupportedType: "Unsupported question type:",
+    unsavedChanges: "You have unsaved changes. Are you sure you want to leave?",
+    loadingQuizData: "Loading quiz data...",
+
+    // Waiting for teacher
+    waitingForTeacher: "Waiting for Teacher",
+    waitingMessage:
+      "You have successfully entered the quiz room. Please wait for your teacher to start the quiz.",
+    quizStatus: "Quiz Status",
+    waitingInstructions: "While you wait:",
+    waitingRules: {
+      stayOnTab: "Keep this tab open and do not navigate away",
+      stableConnection: "Ensure your internet connection is stable",
+      autoStart: "The quiz will start automatically when the teacher begins",
+      reviewRules: "Review quiz rules if needed",
+    },
+    leaveQuizRoom: "Leave Quiz Room",
+    startQuizTest: "Start Quiz (Test)",
+
+    // Submit confirmation
+    submitConfirmation: "Submit Quiz?",
+    submitMessage:
+      "You have answered {{answered}} out of {{total}} questions. Are you sure you want to submit your quiz? This action cannot be undone.",
+    submitting: "Submitting...",
+    submittingMessage: "Submitting your quiz...",
+
+    // Time display
+    timeRemaining: "Time remaining:",
+    timeUp: "Time's up!",
+
+    // Question types
+    multipleChoice: "Multiple Choice",
+    trueFalse: "True/False",
+    essay: "Essay",
+    true: "True",
+    false: "False",
   },
 };
