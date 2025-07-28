@@ -206,6 +206,10 @@ export const assignQuizToClassroom = async (
     return response.data;
   } catch (error) {
     console.error("Error assigning quiz to classroom:", error);
+    throw error;
+  }
+};
+
 /**
  * Get classroom basic information
  */
