@@ -19,6 +19,7 @@ const DeleteMultipleChoiceModal = ({
   isLoading = false 
 }: DeleteMultipleChoiceModalProps) => {
   const [selectedQuestions, setSelectedQuestions] = useState<string[]>([]);
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
 
   const handleQuestionToggle = (questionId: string) => {
     setSelectedQuestions(prev => 
@@ -41,7 +42,16 @@ const DeleteMultipleChoiceModal = ({
       alert("Vui lòng chọn ít nhất một câu hỏi để xóa!");
       return;
     }
+    setShowConfirmDialog(true);
+  };
+
+  const handleConfirmDelete = () => {
+    setShowConfirmDialog(false);
     onSubmit(selectedQuestions);
+  };
+
+  const handleCancelDelete = () => {
+    setShowConfirmDialog(false);
   };
 
   const resetForm = () => {
@@ -50,14 +60,15 @@ const DeleteMultipleChoiceModal = ({
 
   const handleClose = () => {
     resetForm();
+    setShowConfirmDialog(false);
     onClose();
   };
 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-gray-900 bg-opacity-50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-4xl w-full max-h-[80vh] overflow-hidden">
+    <div className="fixed inset-0 bg-transparent bg-opacity-30 flex items-center justify-center z-50 p-4">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-7xl w-full max-h-[90vh] overflow-hidden">
         {/* Header */}
         <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
@@ -72,7 +83,7 @@ const DeleteMultipleChoiceModal = ({
         </div>
 
         {/* Content */}
-        <div className="p-6 overflow-y-auto max-h-[calc(80vh-8rem)]">
+        <div className="p-6 overflow-y-auto max-h-[calc(90vh-8rem)]">
           <div className="mb-6">
             <p className="text-gray-600 dark:text-gray-400 mb-4">
               Chọn các câu hỏi bạn muốn xóa. Hành động này không thể hoàn tác.
@@ -204,6 +215,72 @@ const DeleteMultipleChoiceModal = ({
           </Button>
         </div>
       </div>
+
+      {/* Confirmation Dialog */}
+      {showConfirmDialog && (
+        <div className="fixed inset-0 bg-transparent bg-opacity-30 flex items-center justify-center z-[60] p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-md border border-gray-200 dark:border-gray-700">
+            {/* Confirm Header */}
+            <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-red-500 rounded-lg flex items-center justify-center">
+                  <FaTrash className="text-white text-lg" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                    Xác nhận xóa
+                  </h3>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    Hành động này không thể hoàn tác
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Confirm Content */}
+            <div className="p-6">
+              <p className="text-gray-700 dark:text-gray-300 mb-4">
+                Bạn có chắc chắn muốn xóa <span className="font-semibold text-red-600 dark:text-red-400">{selectedQuestions.length} câu hỏi trắc nghiệm</span> đã chọn không?
+              </p>
+              <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3">
+                <p className="text-sm text-red-800 dark:text-red-200 font-medium">
+                  ⚠️ Cảnh báo: Dữ liệu sẽ bị xóa vĩnh viễn và không thể khôi phục!
+                </p>
+              </div>
+            </div>
+
+            {/* Confirm Footer */}
+            <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50">
+              <Button
+                variant="secondary"
+                onClick={handleCancelDelete}
+                disabled={isLoading}
+                className="px-6"
+              >
+                Hủy bỏ
+              </Button>
+              <Button
+                variant="primary"
+                onClick={handleConfirmDelete}
+                disabled={isLoading}
+                className="px-6 bg-red-500 hover:bg-red-600 text-white border-red-500 hover:border-red-600"
+              >
+                {isLoading ? (
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    Đang xóa...
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <FaTrash />
+                    Xác nhận xóa
+                  </div>
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

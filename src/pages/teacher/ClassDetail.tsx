@@ -2,6 +2,9 @@ import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import Button from "../../components/ui/Button";
 import Toast from "../../components/ui/Toast";
+import SelectQuizModal from "../../components/modals/SelectQuizModal";
+import QuizPracticeModal from "../../components/modals/QuizPracticeModal";
+import AddQuizToClassModal from "../../components/modals/AddQuizToClassModal";
 import { 
   getClassroomDetail,
   type ClassroomDetailData,
@@ -11,6 +14,8 @@ import {
 
 import {
   type QuizSession,
+  getQuizForPractice,
+  type QuizManagementItem
 } from "../../services/quizService";
 
 const ClassDetailPage = () => {
@@ -24,6 +29,15 @@ const ClassDetailPage = () => {
   
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"students" | "quizzes" | "sessions">("students");
+  
+  // Practice mode states
+  const [isSelectQuizModalOpen, setIsSelectQuizModalOpen] = useState(false);
+  const [isPracticeModalOpen, setIsPracticeModalOpen] = useState(false);
+  const [selectedQuizForPractice, setSelectedQuizForPractice] = useState<QuizManagementItem | null>(null);
+  const [isLoadingQuizDetails, setIsLoadingQuizDetails] = useState(false);
+  
+  // Add quiz modal state
+  const [isAddQuizModalOpen, setIsAddQuizModalOpen] = useState(false);
   
   // Toast state
   const [toast, setToast] = useState<{
@@ -76,11 +90,50 @@ const ClassDetailPage = () => {
   };
 
   const handleAddQuiz = () => {
-    showToast("Tính năng thêm quiz đang được phát triển", "info");
+    setIsAddQuizModalOpen(true);
+  };
+
+  const handleQuizAdded = async () => {
+    // Refresh class data after adding a quiz
+    if (classId) {
+      try {
+        const response = await getClassroomDetail(classId);
+        const data = response.data;
+        setClassDetail(data);
+        setQuizzes(data.quiz);
+        showToast("Đã thêm quiz vào lớp học thành công!", "success");
+      } catch (error) {
+        console.error("Error refreshing class data:", error);
+        showToast("Không thể tải lại dữ liệu lớp học", "error");
+      }
+    }
   };
 
   const handleCreateSession = () => {
     showToast("Tính năng tạo session đang được phát triển", "info");
+  };
+
+  const handleStartPractice = () => {
+    setIsSelectQuizModalOpen(true);
+  };
+
+  const handleSelectQuizForPractice = async (quiz: ClassroomQuiz) => {
+    try {
+      setIsLoadingQuizDetails(true);
+      const response = await getQuizForPractice(quiz.id);
+      setSelectedQuizForPractice(response.data);
+      setIsPracticeModalOpen(true);
+    } catch (error) {
+      console.error("Error loading quiz details:", error);
+      showToast("Không thể tải chi tiết quiz. Vui lòng thử lại!", "error");
+    } finally {
+      setIsLoadingQuizDetails(false);
+    }
+  };
+
+  const handleClosePracticeModal = () => {
+    setIsPracticeModalOpen(false);
+    setSelectedQuizForPractice(null);
   };
 
   const handleRemoveStudent = async (_studentId: string) => {
@@ -270,19 +323,31 @@ const ClassDetailPage = () => {
                 <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
                   Danh sách Quiz
                 </h2>
-                <Button onClick={handleAddQuiz}>
-                  Thêm Quiz
-                </Button>
+                <div className="flex items-center gap-3">
+                  <Button 
+                    variant="outline"
+                    onClick={handleStartPractice}
+                    className="flex items-center gap-2 text-blue-600 hover:text-blue-700 border-blue-300 hover:border-blue-400"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Kiểm tra bài cũ
+                  </Button>
+                  <Button onClick={handleAddQuiz}>
+                    Thêm Quiz
+                  </Button>
+                </div>
               </div>
 
-              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+              <div className="grid gap-6 md:grid-cols-1 lg:grid-cols-2 xl:grid-cols-3">
                 {quizzes.map((quiz: ClassroomQuiz) => (
-                  <div key={quiz.id} className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
-                    <div className="flex items-start justify-between mb-4">
-                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  <div key={quiz.id} className="bg-white dark:bg-gray-800 rounded-xl p-8 border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-md transition-all duration-200 h-full flex flex-col">
+                    <div className="flex items-start justify-between mb-6">
+                      <h3 className="text-xl font-semibold text-gray-900 dark:text-white pr-3 flex-1 leading-relaxed">
                         {quiz.name}
                       </h3>
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                      <span className={`px-4 py-2 rounded-full text-sm font-medium flex-shrink-0 ${
                         quiz.active 
                           ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' 
                           : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
@@ -291,18 +356,20 @@ const ClassDetailPage = () => {
                       </span>
                     </div>
                     
-                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                      {quiz.description}
+                    <p className="text-base text-gray-600 dark:text-gray-400 mb-8 line-clamp-3 leading-relaxed flex-grow">
+                      {quiz.description && quiz.description.length > 120 
+                        ? `${quiz.description.substring(0, 120)}...` 
+                        : quiz.description || "Không có mô tả"}
                     </p>
                     
-                    <div className="flex gap-2">
-                      <Button variant="outline" size="sm" className="flex-1">
+                    <div className="flex gap-3 mt-auto">
+                      <Button variant="outline" size="md" className="flex-1 py-3">
                         Sửa
                       </Button>
                       <Button 
                         variant="primary" 
-                        size="sm" 
-                        className="flex-1"
+                        size="md" 
+                        className="flex-1 py-3"
                         onClick={handleCreateSession}
                       >
                         Tạo Session
@@ -312,8 +379,25 @@ const ClassDetailPage = () => {
                 ))}
 
                 {quizzes.length === 0 && (
-                  <div className="col-span-full text-center py-8">
-                    <p className="text-gray-500 dark:text-gray-400">Chưa có quiz nào được tạo</p>
+                  <div className="col-span-full text-center py-16">
+                    <div className="text-gray-400 text-7xl mb-6">
+                      <svg className="mx-auto w-16 h-16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                    </div>
+                    <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-3">
+                      Chưa có quiz nào được thêm
+                    </h3>
+                    <p className="text-gray-600 dark:text-gray-400 mb-8 max-w-md mx-auto">
+                      Bắt đầu thêm quiz vào lớp học để tạo bài kiểm tra cho học sinh. 
+                      Bạn có thể thêm quiz từ danh sách quiz đã tạo.
+                    </p>
+                    <Button onClick={handleAddQuiz} className="px-6 py-3">
+                      <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                      </svg>
+                      Thêm Quiz Đầu Tiên
+                    </Button>
                   </div>
                 )}
               </div>
@@ -376,6 +460,41 @@ const ClassDetailPage = () => {
         isVisible={toast.isVisible}
         onClose={() => setToast({ ...toast, isVisible: false })}
       />
+
+      {/* Select Quiz Modal */}
+      <SelectQuizModal
+        isOpen={isSelectQuizModalOpen}
+        onClose={() => setIsSelectQuizModalOpen(false)}
+        onSelectQuiz={handleSelectQuizForPractice}
+        quizzes={quizzes}
+      />
+
+      {/* Quiz Practice Modal */}
+      <QuizPracticeModal
+        isOpen={isPracticeModalOpen}
+        onClose={handleClosePracticeModal}
+        quiz={selectedQuizForPractice}
+      />
+
+      {/* Add Quiz to Class Modal */}
+      <AddQuizToClassModal
+        isOpen={isAddQuizModalOpen}
+        onClose={() => setIsAddQuizModalOpen(false)}
+        classRoomId={classId || ""}
+        assignedQuizIds={quizzes.map(quiz => quiz.id)}
+        onQuizAdded={handleQuizAdded}
+        onShowToast={showToast}
+      />
+
+      {/* Loading Overlay for Quiz Details */}
+      {isLoadingQuizDetails && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <p className="text-gray-600 dark:text-gray-400">Đang tải chi tiết quiz...</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

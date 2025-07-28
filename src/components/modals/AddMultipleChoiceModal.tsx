@@ -164,8 +164,8 @@ const AddMultipleChoiceModal = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-gray-900 bg-opacity-50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
+    <div className="fixed inset-0 bg-transparent bg-opacity-30 flex items-center justify-center z-50 p-4">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-7xl w-full max-h-[95vh] overflow-hidden">
         {/* Header */}
         <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
@@ -180,7 +180,7 @@ const AddMultipleChoiceModal = ({
         </div>
 
         {/* Content */}
-        <div className="p-6 overflow-y-auto max-h-[calc(90vh-8rem)]">
+        <div className="p-6 overflow-y-auto max-h-[calc(95vh-8rem)]">
           <div className="space-y-8">
             {questions.map((question, questionIndex) => (
               <div key={questionIndex} className="border border-gray-200 dark:border-gray-600 rounded-lg p-6 bg-gray-50 dark:bg-gray-700/50">
@@ -236,13 +236,27 @@ const AddMultipleChoiceModal = ({
                     />
                   </div>
                   <div>
-                    <InputField
-                      label="Điểm số"
-                      type="number"
-                      value={question.points}
-                      onChange={(e) => updateQuestion(questionIndex, 'points', parseInt(e.target.value) || 1)}
-                      min={1}
-                      max={100}
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Điểm số
+                    </label>
+                    <input
+                      type="text"
+                      value={question.points.toString()}
+                      onChange={(e) => {
+                        const value = e.target.value.replace(/[^0-9]/g, ''); // Chỉ cho phép số
+                        const numValue = value === '' ? 1 : parseInt(value, 10);
+                        if (numValue >= 1 && numValue <= 100) {
+                          updateQuestion(questionIndex, 'points', numValue);
+                        }
+                      }}
+                      onBlur={(e) => {
+                        // Đảm bảo có giá trị hợp lệ khi blur
+                        if (e.target.value === '' || parseInt(e.target.value) < 1) {
+                          updateQuestion(questionIndex, 'points', 1);
+                        }
+                      }}
+                      placeholder="1-100"
+                      className="w-32 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                     />
                   </div>
                   <div className="flex items-center">

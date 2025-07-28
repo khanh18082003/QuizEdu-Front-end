@@ -133,8 +133,8 @@ const EditMultipleChoiceModal = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-gray-900 bg-opacity-50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-5xl w-full max-h-[90vh] overflow-hidden">
+    <div className="fixed inset-0 bg-transparent bg-opacity-30 flex items-center justify-center z-50 p-4">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-7xl w-full max-h-[95vh] overflow-hidden">
         {/* Header */}
         <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
@@ -149,7 +149,7 @@ const EditMultipleChoiceModal = ({
         </div>
 
         {/* Content */}
-        <div className="p-6 overflow-y-auto max-h-[calc(90vh-8rem)]">
+        <div className="p-6 overflow-y-auto max-h-[calc(95vh-8rem)]">
           <div className="space-y-8">
             {questions.map((question, questionIndex) => (
               <div key={question.question_id} className="border border-gray-200 dark:border-gray-600 rounded-lg p-6 bg-gray-50 dark:bg-gray-700/50">

@@ -186,7 +186,26 @@ export const getClassroomDetail = async (
     throw error;
   }
 };
+// Interface for assign quiz request
+export interface AssignQuizToClassroomRequest {
+  class_room_id: string;
+  quiz_id: string;
+}
 
+/**
+ * Assign quiz to classroom
+ */
+export const assignQuizToClassroom = async (
+  data: AssignQuizToClassroomRequest,
+): Promise<SuccessApiResponse<any>> => {
+  try {
+    const response = await api.post<SuccessApiResponse<any>>(
+      `/classrooms/assignQuizToClassroom`,
+      data
+    );
+    return response.data;
+  } catch (error) {
+    console.error("Error assigning quiz to classroom:", error);
 /**
  * Get classroom basic information
  */

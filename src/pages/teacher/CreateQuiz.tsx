@@ -52,8 +52,8 @@ const CreateQuiz = () => {
   const [basicInfo, setBasicInfo] = useState({
     name: "",
     description: "",
-    subject_id: "",
     is_active: true,
+    is_public: false,
   });
 
   // Multiple Choice Questions
@@ -154,7 +154,7 @@ const CreateQuiz = () => {
       setIsLoading(true);
 
       // Validate basic info
-      if (!basicInfo.name.trim() || !basicInfo.description.trim() || !basicInfo.subject_id.trim()) {
+      if (!basicInfo.name.trim() || !basicInfo.description.trim()) {
         showToast("Vui lòng điền đầy đủ thông tin cơ bản", "error");
         setActiveTab("basic");
         return;
@@ -165,8 +165,8 @@ const CreateQuiz = () => {
       const quizData: CreateFullQuizRequest = {
         name: basicInfo.name,
         description: basicInfo.description,
-        subject_id: basicInfo.subject_id,
         is_active: basicInfo.is_active,
+        is_public: basicInfo.is_public,
       };
 
       // Add question types if they exist
@@ -258,7 +258,7 @@ const CreateQuiz = () => {
             <Button 
               onClick={handleSubmit}
               className="flex items-center gap-2"
-              disabled={!basicInfo.name.trim() || !basicInfo.description.trim() || !basicInfo.subject_id.trim()}
+              disabled={!basicInfo.name.trim() || !basicInfo.description.trim()}
             >
               <FaSave />
               Lưu Quiz
@@ -368,18 +368,6 @@ const CreateQuiz = () => {
                 />
               </div>
               
-              <InputField
-                label="Môn học"
-                type="text"
-                value={basicInfo.subject_id}
-                onChange={(e) => handleInputChange("subject_id", e.target.value)}
-                placeholder="Ví dụ: Sinh học lớp 10, Toán lớp 9"
-                required
-              />
-              <p className="text-sm text-gray-500 dark:text-gray-400 -mt-4">
-                Chọn môn học từ danh sách có sẵn (sẽ được cập nhật thành dropdown)
-              </p>
-              
               <div className="flex items-center gap-3">
                 <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
                   Trạng thái hoạt động
@@ -396,6 +384,26 @@ const CreateQuiz = () => {
                   )}
                   <span className="text-sm text-gray-600 dark:text-gray-400">
                     {basicInfo.is_active ? "Hoạt động" : "Tạm dừng"}
+                  </span>
+                </button>
+              </div>
+              
+              <div className="flex items-center gap-3">
+                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Chế độ công khai
+                </label>
+                <button
+                  type="button"
+                  onClick={() => handleInputChange("is_public", !basicInfo.is_public)}
+                  className="flex items-center gap-2"
+                >
+                  {basicInfo.is_public ? (
+                    <FaToggleOn className="text-2xl text-blue-500" />
+                  ) : (
+                    <FaToggleOff className="text-2xl text-gray-400" />
+                  )}
+                  <span className="text-sm text-gray-600 dark:text-gray-400">
+                    {basicInfo.is_public ? "Công khai" : "Riêng tư"}
                   </span>
                 </button>
               </div>
