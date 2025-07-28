@@ -4,6 +4,8 @@ import type {
   TeacherProfileResponse,
 } from "../types/response";
 import api from "../utils/axiosCustom";
+import type { QuizSessionResponse } from "./quizSessionService";
+import type { RegisterResponse } from "./userService";
 
 // Interface for classroom data
 export interface Classroom {
@@ -50,17 +52,6 @@ export interface ClassroomQuiz {
   active: boolean;
 }
 
-// Interface for student in classroom detail
-export interface ClassroomStudent {
-  id: string;
-  email: string;
-  first_name: string;
-  last_name: string;
-  display_name: string;
-  avatar?: string;
-  active: boolean;
-}
-
 // Interface for classroom detail response data
 export interface ClassroomDetailData {
   id: string;
@@ -68,8 +59,9 @@ export interface ClassroomDetailData {
   description: string;
   class_code: string;
   created_at: string;
+  teacher: RegisterResponse;
   quiz: ClassroomQuiz[];
-  students: ClassroomStudent[];
+  students: RegisterResponse[];
 }
 
 /**
@@ -176,7 +168,7 @@ export const joinClassroom = async (
     console.error("Error joining classroom:", error);
     throw error;
   }
-}
+};
 
 /**
  * Get classroom detail with students and quizzes
@@ -194,7 +186,6 @@ export const getClassroomDetail = async (
     throw error;
   }
 };
-
 // Interface for assign quiz request
 export interface AssignQuizToClassroomRequest {
   class_room_id: string;
@@ -215,6 +206,61 @@ export const assignQuizToClassroom = async (
     return response.data;
   } catch (error) {
     console.error("Error assigning quiz to classroom:", error);
+/**
+ * Get classroom basic information
+ */
+export const getClassroomInfo = async (
+  classroomId: string,
+): Promise<SuccessApiResponse<ClassRoomResponse>> => {
+  try {
+    const response = await api.get<SuccessApiResponse<ClassRoomResponse>>(
+      `/users/classrooms/${classroomId}`,
+    );
+    return response.data;
+  } catch (error) {
+    console.error("Error fetching classroom info:", error);
+    throw error;
+  }
+};
+
+/**
+ * Get all students in a classroom
+ */
+export const getClassroomStudents = async (
+  classroomId: string,
+  page: number = 1,
+  pageSize: number = 20,
+): Promise<SuccessApiResponse<PaginationResponse<RegisterResponse>>> => {
+  try {
+    const response = await api.get<
+      SuccessApiResponse<PaginationResponse<RegisterResponse>>
+    >(
+      `/classrooms/${classroomId}/students/all?page=${page}&pageSize=${pageSize}`,
+    );
+    return response.data;
+  } catch (error) {
+    console.error("Error fetching classroom students:", error);
+    throw error;
+  }
+};
+
+/**
+ * Get all quiz sessions for a classroom
+ */
+export const getQuizSessionsInClassroom = async (
+  classroomId: string,
+  page: number = 1,
+  pageSize: number = 10,
+): Promise<SuccessApiResponse<PaginationResponse<QuizSessionResponse>>> => {
+  try {
+    const response = await api.get<
+      SuccessApiResponse<PaginationResponse<QuizSessionResponse>>
+    >(
+      `/classrooms/${classroomId}/quizSessions?page=${page}&pageSize=${pageSize}`,
+    );
+    return response.data;
+  } catch (error) {
+    console.error("Error fetching quiz sessions:", error);
     throw error;
   }
 };

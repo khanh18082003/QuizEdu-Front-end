@@ -15,6 +15,7 @@ import TeacherRegister from "./pages/auth/TeacherRegister";
 import Verification from "./pages/auth/Verification";
 import ForgotPassword from "./pages/auth/ForgotPassword";
 import ResetPassword from "./pages/auth/ResetPassword";
+import PasswordCreation from "./pages/auth/PasswordCreation";
 import StudentHome from "./pages/student/StudentHome";
 import TeacherHome from "./pages/teacher/TeacherHome";
 import { StudentProfile } from "./pages/student/StudentProfile";
@@ -22,6 +23,11 @@ import { TeacherProfile } from "./pages/teacher/TeacherProfile";
 import { Oauth2Authentication } from "./pages/auth/Oauth2Authentication";
 import ClassRoomList from "./pages/student/ClassRoomList";
 import ClassRoomDetail from "./pages/student/ClassRoomDetail";
+import QuizPreparation from "./pages/student/QuizPreparation";
+import QuizTaking from "./pages/student/QuizTaking";
+import QuizWaitingRoom from "./pages/student/QuizWaitingRoom";
+import Settings from "./pages/student/Settings";
+import TeacherSettings from "./pages/teacher/Settings";
 import ClassDetail from "./pages/teacher/ClassDetail";
 import Class from "./pages/teacher/Class";
 import QuizManagement from "./pages/teacher/QuizManagement";
@@ -49,6 +55,7 @@ function App() {
           <Route path="verification" element={<Verification />} />
           <Route path="forgot-password" element={<ForgotPassword />} />
           <Route path="reset-password" element={<ResetPassword />} />
+          <Route path="create-password" element={<PasswordCreation />} />
         </Route>
 
         {/* Student Dashboard Routes */}
@@ -57,9 +64,20 @@ function App() {
           {/* Add more student routes as needed */}
           <Route path="classrooms" element={<ClassRoomList />} />
           <Route path="classroom/:id" element={<ClassRoomDetail />} />
-          <Route path="exams" element={<div>Student Exams</div>} />
+          <Route
+            path="classroom/:classroomId/quiz/:quizId"
+            element={<QuizPreparation />}
+          />
+          <Route
+            path="quiz-session/:quizSessionId/waiting"
+            element={<QuizWaitingRoom />}
+          />
+          <Route
+            path="quiz-session/:quizSessionId/take"
+            element={<QuizTaking />}
+          />
           <Route path="profile" element={<StudentProfile />} />
-          <Route path="settings" element={<div>Student Settings</div>} />
+          <Route path="settings" element={<Settings />} />
         </Route>
 
         {/* Teacher Dashboard Routes */}
@@ -72,8 +90,7 @@ function App() {
           <Route path="quizzes/create" element={<CreateQuiz />} />
           <Route path="quizzes/:id" element={<QuizDetail />} />
           <Route path="profile" element={<TeacherProfile />} />
-
-          <Route path="settings" element={<div>Teacher Settings</div>} />
+          <Route path="settings" element={<TeacherSettings />} />
         </Route>
       </Routes>
     </BrowserRouter>

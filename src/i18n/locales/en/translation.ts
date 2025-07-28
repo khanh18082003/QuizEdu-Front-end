@@ -6,6 +6,7 @@ export default {
     register: "Register",
     forgotPassword: "Forgot Password",
     resetPassword: "Reset Password",
+    passwordCreation: "Create Password",
     verification: "Account Verification",
     studentHome: "Student Home",
     studentProfile: "Student Profile",

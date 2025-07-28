@@ -13,6 +13,7 @@ export interface RegisterResponse {
   last_name: string;
   display_name: string;
   avatar: string | null;
+  no_password: boolean;
   is_active: boolean;
   role: string;
   created_at: string;
@@ -44,6 +45,12 @@ export interface TeacherRegistrationData {
   subjects: string[];
   experience: string;
   school_name: string;
+}
+
+// Interface for password creation request
+export interface PasswordCreationData {
+  password: string;
+  confirm_password: string;
 }
 
 /**
@@ -119,6 +126,26 @@ export const resetPassword = async (
     return response.data;
   } catch (error) {
     console.error("Password reset failed:", error);
+    throw error;
+  }
+};
+
+/**
+ * Create password for users with no_password=true
+ * @param data Password creation data
+ * @returns Promise with success response
+ */
+export const createPassword = async (
+  data: PasswordCreationData,
+): Promise<SuccessApiResponse<void>> => {
+  try {
+    const response = await api.post<SuccessApiResponse<void>>(
+      "/auth/creation-password",
+      data,
+    );
+    return response.data;
+  } catch (error) {
+    console.error("Password creation failed:", error);
     throw error;
   }
 };
