@@ -38,7 +38,7 @@ export const Oauth2Authentication = () => {
             } else {
               navigate("/student/dashboard");
             }
-          }, 2000);
+          }, 500);
         }
       } catch (error: unknown) {
         console.error("Authentication error:", error);

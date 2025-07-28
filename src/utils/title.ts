@@ -42,4 +42,6 @@ export const PAGE_TITLES = {
   ABOUT_US: "pageTitle.aboutUs",
   CONTACT: "pageTitle.contact",
   NOT_FOUND: "pageTitle.notFound",
+  QUIZ_WAITING_ROOM: "pageTitle.quizWaitingRoom",
+  QUIZ_TAKING: "pageTitle.quizTaking",
 } as const;

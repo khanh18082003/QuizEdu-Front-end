@@ -23,7 +23,6 @@ import { TeacherProfile } from "./pages/teacher/TeacherProfile";
 import { Oauth2Authentication } from "./pages/auth/Oauth2Authentication";
 import ClassRoomList from "./pages/student/ClassRoomList";
 import ClassRoomDetail from "./pages/student/ClassRoomDetail";
-import QuizPreparation from "./pages/student/QuizPreparation";
 import QuizTaking from "./pages/student/QuizTaking";
 import QuizWaitingRoom from "./pages/student/QuizWaitingRoom";
 import Settings from "./pages/student/Settings";
@@ -64,10 +63,6 @@ function App() {
           {/* Add more student routes as needed */}
           <Route path="classrooms" element={<ClassRoomList />} />
           <Route path="classroom/:id" element={<ClassRoomDetail />} />
-          <Route
-            path="classroom/:classroomId/quiz/:quizId"
-            element={<QuizPreparation />}
-          />
           <Route
             path="quiz-session/:quizSessionId/waiting"
             element={<QuizWaitingRoom />}
