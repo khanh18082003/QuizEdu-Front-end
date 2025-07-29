@@ -431,11 +431,72 @@ const QuizPracticeModal = ({ isOpen, onClose, quiz }: QuizPracticeModalProps) =>
     return 'text-blue-600';
   };
 
-  const getCorrectAnswersCount = () => results.filter(result => result.isCorrect).length;
+  const getCorrectAnswersCount = () => {
+    // Only count correct answers for scoreable questions (exclude intro)
+    return results.filter(result => {
+      if (!result.isCorrect) return false;
+      
+      // Check if this result belongs to a scoreable question
+      const question = allQuestions.find(q => {
+        const questionId = 'question_text' in q ? q.question_id : q.id;
+        return questionId === result.questionId;
+      });
+      
+      return question && (question as any).type !== 'matching_intro';
+    }).length;
+  };
+  
+  // Helper function to get only scoreable questions (exclude intro)
+  const getScoreableQuestions = () => {
+    return allQuestions.filter(q => (q as any).type !== 'matching_intro');
+  };
+
+  // Helper function to get current question display info
+  const getCurrentQuestionDisplayInfo = () => {
+    const scoreableQuestions = getScoreableQuestions();
+    const currentIsScoreable = currentQuestion && (currentQuestion as any).type !== 'matching_intro';
+    
+    if (!currentIsScoreable) {
+      // For intro questions, show as "Giới thiệu"
+      return {
+        current: 'Giới thiệu',
+        total: scoreableQuestions.length,
+        isIntro: true
+      };
+    }
+    
+    // For scoreable questions, find its position among scoreable questions
+    const scoreableIndex = scoreableQuestions.findIndex(q => {
+      const questionId = 'question_text' in q ? q.question_id : q.id;
+      const currentId = 'question_text' in currentQuestion ? currentQuestion.question_id : currentQuestion.id;
+      return questionId === currentId;
+    });
+    
+    return {
+      current: scoreableIndex + 1,
+      total: scoreableQuestions.length,
+      isIntro: false
+    };
+  };
   
   const getScorePercentage = () => {
-    if (allQuestions.length === 0) return 0;
-    return Math.round((getCorrectAnswersCount() / allQuestions.length) * 100);
+    const scoreableQuestions = getScoreableQuestions();
+    if (scoreableQuestions.length === 0) return 0;
+    
+    // Count correct answers for scoreable questions only
+    const scoreableCorrectCount = results.filter(result => {
+      if (!result.isCorrect) return false;
+      
+      // Check if this result belongs to a scoreable question
+      const question = allQuestions.find(q => {
+        const questionId = 'question_text' in q ? q.question_id : q.id;
+        return questionId === result.questionId;
+      });
+      
+      return question && (question as any).type !== 'matching_intro';
+    }).length;
+    
+    return Math.round((scoreableCorrectCount / scoreableQuestions.length) * 100);
   };
   
   const getPerformanceMessage = () => {
@@ -454,13 +515,19 @@ const QuizPracticeModal = ({ isOpen, onClose, quiz }: QuizPracticeModalProps) =>
           const questionId = 'question_text' in q ? q.question_id : q.id;
           return questionId === result.questionId;
         });
-        return total + (question?.points || 0);
+        // Only add points if it's not a matching_intro question
+        if (question && (question as any).type !== 'matching_intro') {
+          return total + (question?.points || 0);
+        }
       }
       return total;
     }, 0);
   };
 
-  const getMaxScore = () => allQuestions.reduce((total, question) => total + question.points, 0);
+  const getMaxScore = () => {
+    // Only count points from scoreable questions (exclude intro)
+    return getScoreableQuestions().reduce((total, question) => total + question.points, 0);
+  };
 
   // Handle answers
   const handleMultipleChoiceAnswer = (questionId: string, answerIndex: string, allowMultiple: boolean) => {
@@ -1553,7 +1620,7 @@ const QuizPracticeModal = ({ isOpen, onClose, quiz }: QuizPracticeModalProps) =>
             <div className="grid grid-cols-2 gap-6 mb-8">
               <div className="text-center">
                 <div className="text-3xl font-bold text-blue-600 dark:text-blue-400 mb-2">
-                  {getCorrectAnswersCount()}/{allQuestions.length}
+                  {getCorrectAnswersCount()}/{getScoreableQuestions().length}
                 </div>
                 <div className="text-sm text-gray-600 dark:text-gray-400">Câu trả lời đúng</div>
               </div>
@@ -1634,7 +1701,17 @@ const QuizPracticeModal = ({ isOpen, onClose, quiz }: QuizPracticeModalProps) =>
         <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20">
           <div>
             <h2 className="text-xl font-semibold text-gray-900 dark:text-white">{quiz.quiz.name}</h2>
-            <p className="text-sm text-gray-600 dark:text-gray-400">Câu {currentQuestionIndex + 1} / {allQuestions.length}</p>
+            {(() => {
+              const displayInfo = getCurrentQuestionDisplayInfo();
+              return (
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  {displayInfo.isIntro ? 
+                    `${displayInfo.current} | Tổng cộng: ${displayInfo.total} câu hỏi` :
+                    `Câu ${displayInfo.current} / ${displayInfo.total}`
+                  }
+                </p>
+              );
+            })()}
           </div>
           <div className="flex items-center gap-3">
             {/* Audio control button */}
@@ -1657,12 +1734,29 @@ const QuizPracticeModal = ({ isOpen, onClose, quiz }: QuizPracticeModalProps) =>
 
         {/* Progress Bar */}
         <div className="w-full bg-gray-200 dark:bg-gray-700 h-3 relative overflow-hidden">
-          <div 
-            className="bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 h-3 transition-all duration-500 ease-out relative"
-            style={{ width: `${((currentQuestionIndex + 1) / allQuestions.length) * 100}%` }}
-          >
-            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-pulse"></div>
-          </div>
+          {(() => {
+            const displayInfo = getCurrentQuestionDisplayInfo();
+            const scoreableQuestions = getScoreableQuestions();
+            let progressPercentage = 0;
+            
+            if (displayInfo.isIntro) {
+              // For intro, show minimal progress (like 5%)
+              progressPercentage = 5;
+            } else {
+              // For actual questions, calculate progress based on scoreable questions
+              const completedScoreableQuestions = currentQuestionIndex - (allQuestions.length - scoreableQuestions.length);
+              progressPercentage = (completedScoreableQuestions / scoreableQuestions.length) * 100;
+            }
+            
+            return (
+              <div 
+                className="bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 h-3 transition-all duration-500 ease-out relative"
+                style={{ width: `${Math.max(0, Math.min(100, progressPercentage))}%` }}
+              >
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-pulse"></div>
+              </div>
+            );
+          })()}
         </div>
 
         {/* Content */}
