@@ -5,10 +5,10 @@ import Toast from "../../components/ui/Toast";
 import SelectQuizModal from "../../components/modals/SelectQuizModal";
 import QuizPracticeModal from "../../components/modals/QuizPracticeModal";
 import AddQuizToClassModal from "../../components/modals/AddQuizToClassModal";
+import InviteStudentsModal from "../../components/modals/InviteStudentsModal";
 import { 
   getClassroomDetail,
   type ClassroomDetailData,
-  type ClassroomStudent,
   type ClassroomQuiz 
 } from "../../services/classroomService";
 
@@ -18,12 +18,14 @@ import {
   type QuizManagementItem
 } from "../../services/quizService";
 
+import { type RegisterResponse } from "../../services/userService";
+
 const ClassDetailPage = () => {
   const { classId } = useParams<{ classId: string }>();
   const navigate = useNavigate();
   
   const [classDetail, setClassDetail] = useState<ClassroomDetailData | null>(null);
-  const [students, setStudents] = useState<ClassroomStudent[]>([]);
+  const [students, setStudents] = useState<RegisterResponse[]>([]);
   const [quizzes, setQuizzes] = useState<ClassroomQuiz[]>([]);
   const [quizSessions] = useState<QuizSession[]>([]);
   
@@ -38,6 +40,9 @@ const ClassDetailPage = () => {
   
   // Add quiz modal state
   const [isAddQuizModalOpen, setIsAddQuizModalOpen] = useState(false);
+  
+  // Invite students modal state
+  const [isInviteStudentsModalOpen, setIsInviteStudentsModalOpen] = useState(false);
   
   // Toast state
   const [toast, setToast] = useState<{
@@ -86,7 +91,22 @@ const ClassDetailPage = () => {
   }, [classId]);
 
   const handleAddStudent = () => {
-    showToast("Tính năng thêm học sinh đang được phát triển", "info");
+    setIsInviteStudentsModalOpen(true);
+  };
+
+  const handleStudentsInvited = async () => {
+    // Refresh class data after inviting students
+    if (classId) {
+      try {
+        const response = await getClassroomDetail(classId);
+        const data = response.data;
+        setClassDetail(data);
+        setStudents(data.students);
+      } catch (error) {
+        console.error("Error refreshing class data:", error);
+        showToast("Không thể tải lại dữ liệu lớp học", "error");
+      }
+    }
   };
 
   const handleAddQuiz = () => {
@@ -265,7 +285,7 @@ const ClassDetailPage = () => {
               </div>
 
               <div className="space-y-4">
-                {students.map((student: ClassroomStudent) => (
+                {students.map((student: RegisterResponse) => (
                   <div key={student.id} className="flex items-center justify-between p-4 border border-gray-200 dark:border-gray-700 rounded-lg">
                     <div className="flex items-center">
                       <div className="flex-shrink-0 h-10 w-10">
@@ -294,7 +314,7 @@ const ClassDetailPage = () => {
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="text-xs text-gray-500">
-                        {student.active ? 'Đang hoạt động' : 'Không hoạt động'}
+                        {student.is_active ? 'Đang hoạt động' : 'Không hoạt động'}
                       </span>
                       <Button
                         variant="outline"
@@ -483,6 +503,15 @@ const ClassDetailPage = () => {
         classRoomId={classId || ""}
         assignedQuizIds={quizzes.map(quiz => quiz.id)}
         onQuizAdded={handleQuizAdded}
+        onShowToast={showToast}
+      />
+
+      {/* Invite Students Modal */}
+      <InviteStudentsModal
+        isOpen={isInviteStudentsModalOpen}
+        onClose={() => setIsInviteStudentsModalOpen(false)}
+        classRoomId={classId || ""}
+        onStudentsInvited={handleStudentsInvited}
         onShowToast={showToast}
       />
 
