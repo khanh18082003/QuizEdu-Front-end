@@ -74,7 +74,7 @@ export interface ClassDetail {
 // Quiz API functions
 export const getQuizzes = async (
   page: number = 1,
-  pageSize: number = 10
+  pageSize: number = 10,
 ): Promise<SuccessApiResponse<PaginationResponse<Quiz>>> => {
   const response = await axiosCustom.get("/quizzes", {
     params: {
@@ -86,26 +86,30 @@ export const getQuizzes = async (
 };
 
 export const createQuiz = async (
-  quizData: CreateQuizRequest
+  quizData: CreateQuizRequest,
 ): Promise<SuccessApiResponse<Quiz>> => {
   const response = await axiosCustom.post("/quizzes", quizData);
   return response.data;
 };
 
-export const getQuizById = async (quizId: string): Promise<SuccessApiResponse<Quiz>> => {
+export const getQuizById = async (
+  quizId: string,
+): Promise<SuccessApiResponse<Quiz>> => {
   const response = await axiosCustom.get(`/quizzes/${quizId}`);
   return response.data;
 };
 
 export const updateQuiz = async (
   quizId: string,
-  quizData: Partial<CreateQuizRequest>
+  quizData: Partial<CreateQuizRequest>,
 ): Promise<SuccessApiResponse<Quiz>> => {
   const response = await axiosCustom.put(`/quizzes/${quizId}`, quizData);
   return response.data;
 };
 
-export const deleteQuiz = async (quizId: string): Promise<SuccessApiResponse<null>> => {
+export const deleteQuiz = async (
+  quizId: string,
+): Promise<SuccessApiResponse<null>> => {
   const response = await axiosCustom.delete(`/quizzes/${quizId}`);
   return response.data;
 };
@@ -114,7 +118,7 @@ export const deleteQuiz = async (quizId: string): Promise<SuccessApiResponse<nul
 export const getQuizSessions = async (
   classId: string,
   page: number = 1,
-  pageSize: number = 10
+  pageSize: number = 10,
 ): Promise<SuccessApiResponse<PaginationResponse<QuizSession>>> => {
   const response = await axiosCustom.get(`/quiz-sessions`, {
     params: {
@@ -127,14 +131,14 @@ export const getQuizSessions = async (
 };
 
 export const createQuizSession = async (
-  sessionData: CreateSessionRequest
+  sessionData: CreateSessionRequest,
 ): Promise<SuccessApiResponse<QuizSession>> => {
   const response = await axiosCustom.post("/quiz-sessions", sessionData);
   return response.data;
 };
 
 export const getQuizSessionById = async (
-  sessionId: string
+  sessionId: string,
 ): Promise<SuccessApiResponse<QuizSession>> => {
   const response = await axiosCustom.get(`/quiz-sessions/${sessionId}`);
   return response.data;
@@ -142,21 +146,26 @@ export const getQuizSessionById = async (
 
 export const updateQuizSession = async (
   sessionId: string,
-  sessionData: Partial<CreateSessionRequest>
+  sessionData: Partial<CreateSessionRequest>,
 ): Promise<SuccessApiResponse<QuizSession>> => {
-  const response = await axiosCustom.put(`/quiz-sessions/${sessionId}`, sessionData);
+  const response = await axiosCustom.put(
+    `/quiz-sessions/${sessionId}`,
+    sessionData,
+  );
   return response.data;
 };
 
 export const deleteQuizSession = async (
-  sessionId: string
+  sessionId: string,
 ): Promise<SuccessApiResponse<null>> => {
   const response = await axiosCustom.delete(`/quiz-sessions/${sessionId}`);
   return response.data;
 };
 
 // Class Detail API functions
-export const getClassDetail = async (classId: string): Promise<SuccessApiResponse<ClassDetail>> => {
+export const getClassDetail = async (
+  classId: string,
+): Promise<SuccessApiResponse<ClassDetail>> => {
   const response = await axiosCustom.get(`/classrooms/${classId}`);
   return response.data;
 };
@@ -164,7 +173,7 @@ export const getClassDetail = async (classId: string): Promise<SuccessApiRespons
 export const getClassStudents = async (
   classId: string,
   page: number = 1,
-  pageSize: number = 20
+  pageSize: number = 20,
 ): Promise<SuccessApiResponse<PaginationResponse<Student>>> => {
   const response = await axiosCustom.get(`/classrooms/${classId}/students`, {
     params: {
@@ -177,22 +186,29 @@ export const getClassStudents = async (
 
 export const addStudentToClass = async (
   classId: string,
-  studentData: { email: string } | { student_id: string }
+  studentData: { email: string } | { student_id: string },
 ): Promise<SuccessApiResponse<Student>> => {
-  const response = await axiosCustom.post(`/classrooms/${classId}/students`, studentData);
+  const response = await axiosCustom.post(
+    `/classrooms/${classId}/students`,
+    studentData,
+  );
   return response.data;
 };
 
 export const removeStudentFromClass = async (
   classId: string,
-  studentId: string
+  studentId: string,
 ): Promise<SuccessApiResponse<null>> => {
-  const response = await axiosCustom.delete(`/classrooms/${classId}/students/${studentId}`);
+  const response = await axiosCustom.delete(
+    `/classrooms/${classId}/students/${studentId}`,
+  );
   return response.data;
 };
 
 // Get quizzes for a specific teacher (for dropdown in session creation)
-export const getTeacherQuizzes = async (): Promise<SuccessApiResponse<Quiz[]>> => {
+export const getTeacherQuizzes = async (): Promise<
+  SuccessApiResponse<Quiz[]>
+> => {
   const response = await axiosCustom.get("/quizzes/teacher");
   return response.data;
 };
@@ -267,7 +283,7 @@ export interface QuizManagementResponse {
 // API function for quiz management
 export const getQuizzesForManagement = async (
   page: number = 1,
-  pageSize: number = 9
+  pageSize: number = 9,
 ): Promise<SuccessApiResponse<QuizManagementResponse>> => {
   const response = await axiosCustom.get("/quizzes", {
     params: {
@@ -350,7 +366,7 @@ export interface CreateFullQuizRequest {
 
 // API function to create a full featured quiz
 export const createFullQuiz = async (
-  quizData: CreateFullQuizRequest
+  quizData: CreateFullQuizRequest,
 ): Promise<SuccessApiResponse<QuizManagementItem>> => {
   const response = await axiosCustom.post("/quizzes", quizData);
   return response.data;
@@ -374,7 +390,7 @@ export const getSubjects = async (): Promise<SuccessApiResponse<Subject[]>> => {
 
 // API function to get detailed quiz information by ID
 export const getQuizDetail = async (
-  quizId: string
+  quizId: string,
 ): Promise<SuccessApiResponse<QuizManagementItem>> => {
   const response = await axiosCustom.get(`/quizzes/${quizId}`);
   return response.data;
@@ -398,11 +414,11 @@ export interface AddMultipleChoiceQuestion {
 // API function to add multiple choice questions
 export const addMultipleChoiceQuestions = async (
   quizId: string,
-  questions: AddMultipleChoiceQuestion[]
+  questions: AddMultipleChoiceQuestion[],
 ): Promise<SuccessApiResponse<any>> => {
   const response = await axiosCustom.post(
     `/quizzes/multiple-choice-quizzes/${quizId}/questions`,
-    questions
+    questions,
   );
   return response.data;
 };
@@ -421,11 +437,11 @@ export interface UpdateMultipleChoiceQuestion {
 // API function to update multiple choice questions
 export const updateMultipleChoiceQuestions = async (
   quizId: string,
-  questions: UpdateMultipleChoiceQuestion[]
+  questions: UpdateMultipleChoiceQuestion[],
 ): Promise<SuccessApiResponse<any>> => {
   const response = await axiosCustom.put(
     `/quizzes/multiple-choice-quizzes/${quizId}/questions`,
-    questions
+    questions,
   );
   return response.data;
 };
@@ -433,13 +449,13 @@ export const updateMultipleChoiceQuestions = async (
 // API function to delete multiple choice questions
 export const deleteMultipleChoiceQuestions = async (
   quizId: string,
-  questionIds: string[]
+  questionIds: string[],
 ): Promise<SuccessApiResponse<any>> => {
   const response = await axiosCustom.delete(
     `/quizzes/multiple-choice-quizzes/${quizId}/questions`,
     {
-      data: questionIds
-    }
+      data: questionIds,
+    },
   );
   return response.data;
 };
@@ -457,25 +473,31 @@ export interface AddMatchingQuestion {
 // API function to add matching questions
 export const addMatchingQuestions = async (
   quizId: string,
-  questions: AddMatchingQuestion[]
+  questions: AddMatchingQuestion[],
 ): Promise<SuccessApiResponse<any>> => {
   const formData = new FormData();
-  
+
   questions.forEach((question, index) => {
     // Add content or file for A
     if (question.type_a === "TEXT" && question.content_a) {
       formData.append(`questions[${index}].contentA`, question.content_a);
     } else if (question.type_a === "IMAGE" && question.file_content_a) {
-      formData.append(`questions[${index}].fileContentA`, question.file_content_a);
+      formData.append(
+        `questions[${index}].fileContentA`,
+        question.file_content_a,
+      );
     }
-    
+
     // Add content or file for B
     if (question.type_b === "TEXT" && question.content_b) {
       formData.append(`questions[${index}].contentB`, question.content_b);
     } else if (question.type_b === "IMAGE" && question.file_content_b) {
-      formData.append(`questions[${index}].fileContentB`, question.file_content_b);
+      formData.append(
+        `questions[${index}].fileContentB`,
+        question.file_content_b,
+      );
     }
-    
+
     formData.append(`questions[${index}].typeA`, question.type_a);
     formData.append(`questions[${index}].typeB`, question.type_b);
     formData.append(`questions[${index}].points`, question.points.toString());
@@ -486,9 +508,9 @@ export const addMatchingQuestions = async (
     formData,
     {
       headers: {
-        'Content-Type': 'multipart/form-data',
+        "Content-Type": "multipart/form-data",
       },
-    }
+    },
   );
   return response.data;
 };
@@ -496,94 +518,111 @@ export const addMatchingQuestions = async (
 // API function to update matching questions by type
 export const updateMatchingQuestions = async (
   quizId: string,
-  request: UpdateMatchingQuestionRequest
+  request: UpdateMatchingQuestionRequest,
 ): Promise<SuccessApiResponse<any>> => {
-  console.log('=== UPDATE MATCHING QUESTIONS DEBUG ===');
-  console.log('Quiz ID:', quizId);
-  console.log('Request object:', request);
-  
+  console.log("=== UPDATE MATCHING QUESTIONS DEBUG ===");
+  console.log("Quiz ID:", quizId);
+  console.log("Request object:", request);
+
   const formData = new FormData();
-  
+
   // Add timeLimit if provided
   if (request.timeLimit) {
-    formData.append('timeLimit', request.timeLimit.toString());
-    console.log('Added timeLimit:', request.timeLimit);
+    formData.append("timeLimit", request.timeLimit.toString());
+    console.log("Added timeLimit:", request.timeLimit);
   }
-  
+
   request.questions.forEach((question, index) => {
     console.log(`Question ${index}:`, question);
-    
+
     if (question.id) {
       formData.append(`questions[${index}].id`, question.id);
       console.log(`Added questions[${index}].id:`, question.id);
     }
-    
+
     if (question.type_a === "TEXT" && question.content_a) {
       formData.append(`questions[${index}].textContentA`, question.content_a);
-      console.log(`Added questions[${index}].textContentA:`, question.content_a);
+      console.log(
+        `Added questions[${index}].textContentA:`,
+        question.content_a,
+      );
     } else if (question.type_a === "IMAGE" && question.file_content_a) {
-      formData.append(`questions[${index}].fileContentA`, question.file_content_a);
-      console.log(`Added questions[${index}].fileContentA:`, question.file_content_a);
+      formData.append(
+        `questions[${index}].fileContentA`,
+        question.file_content_a,
+      );
+      console.log(
+        `Added questions[${index}].fileContentA:`,
+        question.file_content_a,
+      );
     }
-    
+
     formData.append(`questions[${index}].typeA`, question.type_a);
     console.log(`Added questions[${index}].typeA:`, question.type_a);
-    
+
     if (question.type_b === "TEXT" && question.content_b) {
       formData.append(`questions[${index}].textContentB`, question.content_b);
-      console.log(`Added questions[${index}].textContentB:`, question.content_b);
+      console.log(
+        `Added questions[${index}].textContentB:`,
+        question.content_b,
+      );
     } else if (question.type_b === "IMAGE" && question.file_content_b) {
-      formData.append(`questions[${index}].fileContentB`, question.file_content_b);
-      console.log(`Added questions[${index}].fileContentB:`, question.file_content_b);
+      formData.append(
+        `questions[${index}].fileContentB`,
+        question.file_content_b,
+      );
+      console.log(
+        `Added questions[${index}].fileContentB:`,
+        question.file_content_b,
+      );
     }
-    
+
     formData.append(`questions[${index}].typeB`, question.type_b);
     console.log(`Added questions[${index}].typeB:`, question.type_b);
-    
+
     formData.append(`questions[${index}].points`, question.points.toString());
     console.log(`Added questions[${index}].points:`, question.points);
   });
 
   // Log tất cả FormData entries
-  console.log('=== FORM DATA ENTRIES ===');
-  for (let [key, value] of formData.entries()) {
+  console.log("=== FORM DATA ENTRIES ===");
+  for (const [key, value] of formData.entries()) {
     console.log(`${key}:`, value);
   }
-  
-  console.log('=== API CALL ===');
-  console.log('URL:', `/matching-quizzes/${quizId}/questions`);
 
-  
-  console.log('=== API CALL ===');
-  console.log('URL:', `/matching-quizzes/${quizId}/questions`);
+  console.log("=== API CALL ===");
+  console.log("URL:", `/matching-quizzes/${quizId}/questions`);
+
+  console.log("=== API CALL ===");
+  console.log("URL:", `/matching-quizzes/${quizId}/questions`);
 
   const response = await axiosCustom.put(
     `quizzes/matching-quizzes/${quizId}/questions`,
     formData,
     {
       headers: {
-        'Content-Type': 'multipart/form-data',
+        "Content-Type": "multipart/form-data",
       },
-    }
+    },
   );
-  
-  console.log('=== RESPONSE ===');
-  console.log('Response:', response.data);
-  console.log('=== END DEBUG ===');
-  
+
+  console.log("=== RESPONSE ===");
+  console.log("Response:", response.data);
+  console.log("=== END DEBUG ===");
+
   return response.data;
 };
 
 // API function to delete matching questions
 export const deleteMatchingQuestions = async (
   quizId: string,
-  questionIds: string[]
+  questionIds: string[],
 ): Promise<SuccessApiResponse<any>> => {
   const response = await axiosCustom.delete(
     `/quizzes/matching-quizzes/${quizId}/questions`,
     {
-      data: questionIds
-    }
+      data: questionIds,
+    },
   );
   return response.data;
 };
@@ -623,11 +662,11 @@ export interface UpdateMatchingQuizRequest {
 // API function to update matching quiz
 export const updateMatchingQuiz = async (
   quizId: string,
-  quizData: UpdateMatchingQuizRequest
+  quizData: UpdateMatchingQuizRequest,
 ): Promise<SuccessApiResponse<any>> => {
   const response = await axiosCustom.put(
     `/quizzes/matching-quizzes/${quizId}/questions`,
-    quizData
+    quizData,
   );
   return response.data;
 };
@@ -635,7 +674,11 @@ export const updateMatchingQuiz = async (
 // Interface for creating quiz types
 export interface CreateQuizTypeRequest {
   type: "MATCHING" | "MULTIPLE_CHOICE" | "TRUE_FALSE" | "FILL_IN_BLANK";
-  data: CreateMatchingQuizData | CreateMultipleChoiceQuizData | CreateTrueFalseQuizData | CreateFillInBlankQuizData;
+  data:
+    | CreateMatchingQuizData
+    | CreateMultipleChoiceQuizData
+    | CreateTrueFalseQuizData
+    | CreateFillInBlankQuizData;
 }
 
 export interface CreateMatchingQuizData {
@@ -698,18 +741,18 @@ export interface CreateFillInBlankQuestionData {
 // API function to create quiz type
 export const createQuizType = async (
   quizId: string,
-  quizTypeData: CreateQuizTypeRequest
+  quizTypeData: CreateQuizTypeRequest,
 ): Promise<SuccessApiResponse<any>> => {
   const response = await axiosCustom.post(
     `/quizzes/${quizId}/add`,
-    quizTypeData
+    quizTypeData,
   );
   return response.data;
 };
 
 // API function to get quiz detail for classroom (for practice mode)
 export const getQuizForPractice = async (
-  quizId: string
+  quizId: string,
 ): Promise<SuccessApiResponse<QuizManagementItem>> => {
   const response = await axiosCustom.get(`/quizzes/${quizId}`);
   return response.data;

@@ -27,7 +27,8 @@
 }
 
 @keyframes error-shake {
-  0%, 100% {
+  0%,
+  100% {
     transform: translateX(0);
   }
   25% {
@@ -39,7 +40,8 @@
 }
 
 @keyframes floating {
-  0%, 100% {
+  0%,
+  100% {
     transform: translateY(0px);
   }
   50% {
@@ -59,6 +61,40 @@
   }
   100% {
     box-shadow: 0 0 20px rgba(59, 130, 246, 0.5);
+  }
+}
+
+/* Matching Quiz Animations */
+@keyframes connection-draw {
+  0% {
+    stroke-dashoffset: 100%;
+  }
+  100% {
+    stroke-dashoffset: 0%;
+  }
+}
+
+@keyframes match-success {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes pulse-dot {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(1.2);
   }
 }
 
@@ -83,6 +119,28 @@
   animation: rainbow-glow 3s ease-in-out infinite;
 }
 
+.matching-connection-line {
+  stroke-dasharray: 200;
+  animation: connection-draw 0.8s ease-in-out;
+}
+
+.matching-item-hover {
+  transition: all 0.2s ease-in-out;
+}
+
+.matching-item-hover:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.matching-item-selected {
+  animation: match-success 0.3s ease-in-out;
+}
+
+.matching-connection-dot {
+  animation: pulse-dot 2s infinite;
+}
+
 /* Timer warning styles */
 .timer-warning {
   animation: pulse 1s ease-in-out infinite;
@@ -102,13 +160,18 @@
 }
 
 .progress-shimmer::after {
-  content: '';
+  content: "";
   position: absolute;
   top: 0;
   left: -100%;
   width: 100%;
   height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.4),
+    transparent
+  );
   animation: shimmer 2s infinite;
 }
 
@@ -119,4 +182,24 @@
   100% {
     left: 100%;
   }
+}
+
+/* Hover colors that maintain text readability */
+.matching-item-a-hover:hover {
+  background-color: rgba(59, 130, 246, 0.1) !important;
+  border-color: #3b82f6 !important;
+}
+
+.matching-item-b-hover:hover {
+  background-color: rgba(139, 92, 246, 0.1) !important;
+  border-color: #8b5cf6 !important;
+}
+
+/* Dark mode hover colors */
+.dark .matching-item-a-hover:hover {
+  background-color: rgba(59, 130, 246, 0.15) !important;
+}
+
+.dark .matching-item-b-hover:hover {
+  background-color: rgba(139, 92, 246, 0.15) !important;
 }

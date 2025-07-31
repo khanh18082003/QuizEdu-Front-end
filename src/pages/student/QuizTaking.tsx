@@ -1,660 +1,1297 @@
-import { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import {
-  FaClock,
-  FaChevronLeft,
-  FaPlay,
-  FaPause,
-  FaFlag,
-  FaExclamationTriangle,
-} from "react-icons/fa";
-import Button from "../../components/ui/Button";
-import LoadingOverlay from "../../components/ui/LoadingOverlay";
+import { FaChevronLeft, FaClock, FaFlag, FaArrowRight } from "react-icons/fa";
+
 import { usePageTitle, PAGE_TITLES } from "../../utils/title";
-import type { QuizData } from "../../services/quizSessionService";
+import {
+  getQuizDetail,
+  type QuizManagementItem,
+  type MultipleChoiceQuestion,
+  type MatchingQuestion,
+  type Answer,
+} from "../../services/quizService";
+import {
+  submitQuizAnswer,
+  type QuizSubmissionRequest,
+  type MultipleChoiceAnswerSubmission,
+  type MatchingAnswerSubmission,
+} from "../../services/quizSessionService";
+import LoadingOverlay from "../../components/ui/LoadingOverlay";
+import Button from "../../components/ui/Button";
+import Toast from "../../components/ui/Toast";
+import "../../styles/quiz-animations.css";
 
 // Interface for quiz taking state
 interface QuizTakingState {
   accessCode: string;
-  quiz?: QuizData;
-  sessionData?: Record<string, unknown>; // Additional session data if needed
   quizSessionId?: string;
   quizSessionName?: string;
+  quizId?: string;
+  classroomId?: string;
   isWaitingForTeacher?: boolean;
 }
 
-// Interface for user answers
+// Combined question type for easy handling
+interface CombinedQuestion {
+  id: string;
+  type: "multiple_choice" | "matching";
+  question: string;
+  points: number;
+  time_limit?: number;
+  hint?: string;
+  // For multiple choice
+  answers?: Answer[];
+  allow_multiple_answers?: boolean;
+  // For matching
+  matching_pairs?: MatchingQuestion[];
+}
+
+// User answer interface
 interface UserAnswer {
   questionId: string;
-  answer: string | string[];
+  answer: string | string[] | Array<{ itemA: string; itemB: string }>;
   timeSpent: number;
 }
 
-const QuizTaking = () => {
-  const { t } = useTranslation();
-  usePageTitle(PAGE_TITLES.QUIZ_TAKING);
-
+const QuizTaking: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { t } = useTranslation();
 
-  // Get quiz data from navigation state
-  const quizState = location.state as QuizTakingState | null;
-
-  const [quiz] = useState<QuizData | null>(quizState?.quiz || null);
-  const [isWaitingForTeacher, setIsWaitingForTeacher] = useState(
-    quizState?.isWaitingForTeacher || false,
-  );
+  // State management
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [quiz, setQuiz] = useState<QuizManagementItem | null>(null);
+  const [allQuestions, setAllQuestions] = useState<CombinedQuestion[]>([]);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const [answers, setAnswers] = useState<Record<string, UserAnswer>>({});
-  const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
+  const [userAnswers, setUserAnswers] = useState<Record<string, UserAnswer>>(
+    {},
+  );
+  const [isQuizStarted, setIsQuizStarted] = useState(false);
+  const [matchingSelections, setMatchingSelections] = useState<{
+    itemA?: string;
+    itemB?: string;
+  }>({});
+  const [matchingPairs, setMatchingPairs] = useState<
+    Array<{ itemA: string; itemB: string }>
+  >([]);
+  const [showHints, setShowHints] = useState<Record<string, boolean>>({});
+  const [timeLeft, setTimeLeft] = useState<number | null>(null);
+  const [timerActive, setTimerActive] = useState(false);
+  const [timerStartTime, setTimerStartTime] = useState<number | null>(null);
+  const [lowTimeWarningPlayed, setLowTimeWarningPlayed] = useState(false);
+  const [showTimeWarning, setShowTimeWarning] = useState(false);
+  const [connectionPoints, setConnectionPoints] = useState<
+    Array<{
+      startX: number;
+      startY: number;
+      endX: number;
+      endY: number;
+      itemAIndex: number;
+      itemBIndex: number;
+    }>
+  >([]);
+
+  // Quiz submission state
+  const [showResultsModal, setShowResultsModal] = useState(false);
+  const [quizScore, setQuizScore] = useState<number | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
-  const [isPaused, setIsPaused] = useState(false);
-  const [questionStartTime, setQuestionStartTime] = useState(Date.now());
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
-  // Initialize timer
-  useEffect(() => {
-    if (quiz?.time_limit && timeRemaining === null) {
-      setTimeRemaining(quiz.time_limit * 60); // Convert minutes to seconds
-    }
-  }, [quiz, timeRemaining]);
+  // Get state from navigation
+  const state = location.state as QuizTakingState | null;
+  const accessCode = state?.accessCode || "";
+  const quizId = state?.quizId || "";
+  const quizSessionId = state?.quizSessionId || "";
+  const classroomId = state?.classroomId || "";
 
-  // Handle quiz submission
-  const handleSubmitQuiz = useCallback(async () => {
-    if (!quiz || !quizState) return;
+  usePageTitle(PAGE_TITLES.QUIZ_TAKING);
+
+  // Callback functions
+
+  // Function to format and submit quiz answers
+  const submitQuiz = useCallback(async () => {
+    if (!quizSessionId || isSubmitting) return;
+
+    setIsSubmitting(true);
+    setLoading(true);
 
     try {
-      setIsSubmitting(true);
+      // Format multiple choice answers
+      const multipleChoiceAnswers = allQuestions
+        .filter((q) => q.type === "multiple_choice")
+        .map((question) => {
+          const userAnswer = userAnswers[question.id];
+          if (!userAnswer) return null;
 
-      // TODO: Call API to submit quiz answers
-      // const response = await submitQuizAnswers(quizState.sessionToken, answers);
+          return {
+            question_id: question.id,
+            answer_participant: [
+              {
+                user_id: "current_user", // This should come from auth context
+                answer: Array.isArray(userAnswer.answer)
+                  ? userAnswer.answer.join(",")
+                  : String(userAnswer.answer),
+                correct: false, // This will be calculated by the backend
+              },
+            ],
+          };
+        })
+        .filter(Boolean);
 
-      // For now, simulate submission
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+      // Format matching answers
+      const matchingAnswers = allQuestions
+        .filter((q) => q.type === "matching")
+        .flatMap((question) => {
+          const userAnswer = userAnswers[question.id];
+          if (!userAnswer || !Array.isArray(userAnswer.answer)) return [];
 
-      // Navigate to results page (temporary - just go back for now)
-      navigate("/student/classrooms", {
-        replace: true,
-      });
-    } catch (error) {
-      console.error("Error submitting quiz:", error);
-      // Handle error
+          return (userAnswer.answer as Array<{ itemA: string; itemB: string }>)
+            .map((pair) => {
+              // Find the matching question that corresponds to this pair
+              const matchingPair = question.matching_pairs?.find(
+                (mp) =>
+                  mp.item_a.content === pair.itemA &&
+                  mp.item_b.content === pair.itemB,
+              );
+
+              if (!matchingPair) {
+                console.warn("Could not find matching pair for:", pair);
+                return null;
+              }
+
+              return {
+                match_pair_id: matchingPair.id, // Use the actual matching pair ID
+                item_a: {
+                  content: pair.itemA,
+                  matching_type: matchingPair.item_a.matching_type,
+                },
+                item_b: {
+                  content: pair.itemB,
+                  matching_type: matchingPair.item_b.matching_type,
+                },
+              };
+            })
+            .filter(Boolean); // Remove null values
+        });
+
+      const submissionData: QuizSubmissionRequest = {
+        quiz_session_id: quizSessionId,
+        multiple_choice_answers:
+          multipleChoiceAnswers as MultipleChoiceAnswerSubmission[],
+        matching_answers: matchingAnswers as MatchingAnswerSubmission[],
+      };
+
+      console.log("Submitting quiz answers:");
+      console.log("Multiple choice answers:", multipleChoiceAnswers);
+      console.log("Matching answers:", matchingAnswers);
+      console.log("Full submission data:", submissionData);
+
+      const score = await submitQuizAnswer(submissionData);
+
+      if (typeof score.data === "number") {
+        setQuizScore(score.data);
+        setShowResultsModal(true);
+        setTimerActive(false); // Stop the timer
+      } else {
+        setError("Có lỗi xảy ra khi nộp bài. Vui lòng thử lại.");
+      }
+    } catch (err) {
+      console.error("Quiz submission error:", err);
+      setError("Có lỗi xảy ra khi nộp bài. Vui lòng thử lại.");
     } finally {
       setIsSubmitting(false);
-      setShowSubmitConfirm(false);
-      setHasUnsavedChanges(false);
+      setLoading(false);
     }
-  }, [quiz, quizState, navigate]);
+  }, [quizSessionId, allQuestions, userAnswers, isSubmitting]);
 
-  // Timer countdown
+  const handleNextQuestion = useCallback(async () => {
+    if (currentQuestionIndex < allQuestions.length - 1) {
+      setCurrentQuestionIndex((prev) => prev + 1);
+      // Reset matching state when moving to next question
+      setMatchingSelections({});
+      if (allQuestions[currentQuestionIndex + 1]?.type === "matching") {
+        setMatchingPairs([]);
+      }
+    } else {
+      // Last question - submit the quiz
+      await submitQuiz();
+    }
+  }, [currentQuestionIndex, allQuestions, submitQuiz]);
+
+  const handleTimeUp = useCallback(async () => {
+    // Auto-advance to next question when time runs out
+    if (currentQuestionIndex < allQuestions.length - 1) {
+      handleNextQuestion();
+    } else {
+      // Quiz finished, handle submission
+      console.log("Quiz time up, auto-submitting...");
+      await submitQuiz();
+    }
+  }, [
+    currentQuestionIndex,
+    allQuestions.length,
+    handleNextQuestion,
+    submitQuiz,
+  ]);
+
+  // Effect to sync matching pairs with current question
   useEffect(() => {
-    if (timeRemaining === null || timeRemaining <= 0 || isPaused) return;
+    const currentQuestion = allQuestions[currentQuestionIndex];
+    if (currentQuestion?.type === "matching") {
+      const existingAnswer = userAnswers[currentQuestion.id];
+      if (existingAnswer && Array.isArray(existingAnswer.answer)) {
+        setMatchingPairs(
+          existingAnswer.answer as Array<{ itemA: string; itemB: string }>,
+        );
+      } else {
+        setMatchingPairs([]);
+      }
+    }
+  }, [currentQuestionIndex, allQuestions, userAnswers]);
 
-    const timer = setInterval(() => {
-      setTimeRemaining((prev) => {
+  // Calculate connection points for SVG lines
+  useEffect(() => {
+    const updateConnectionPoints = () => {
+      if (matchingPairs.length === 0) {
+        setConnectionPoints([]);
+        return;
+      }
+
+      const newConnectionPoints: Array<{
+        startX: number;
+        startY: number;
+        endX: number;
+        endY: number;
+        itemAIndex: number;
+        itemBIndex: number;
+      }> = [];
+
+      const container = document.querySelector(".matching-container");
+      if (!container) return;
+
+      const containerRect = container.getBoundingClientRect();
+
+      matchingPairs.forEach((pair) => {
+        const currentQuestion = allQuestions[currentQuestionIndex];
+        if (!currentQuestion?.matching_pairs) return;
+
+        const itemAIndex = currentQuestion.matching_pairs.findIndex(
+          (q) => q.item_a.content === pair.itemA,
+        );
+        const itemBIndex = currentQuestion.matching_pairs.findIndex(
+          (q) => q.item_b.content === pair.itemB,
+        );
+
+        if (itemAIndex === -1 || itemBIndex === -1) return;
+
+        const itemAElement = document.getElementById(`item-a-${itemAIndex}`);
+        const itemBElement = document.getElementById(`item-b-${itemBIndex}`);
+
+        if (itemAElement && itemBElement) {
+          const itemARect = itemAElement.getBoundingClientRect();
+          const itemBRect = itemBElement.getBoundingClientRect();
+
+          // Calculate relative positions within the container
+          const startX = itemARect.right - containerRect.left;
+          const startY =
+            itemARect.top + itemARect.height / 2 - containerRect.top;
+          const endX = itemBRect.left - containerRect.left;
+          const endY = itemBRect.top + itemBRect.height / 2 - containerRect.top;
+
+          newConnectionPoints.push({
+            startX,
+            startY,
+            endX,
+            endY,
+            itemAIndex,
+            itemBIndex,
+          });
+        }
+      });
+
+      setConnectionPoints(newConnectionPoints);
+    };
+
+    // Delay to ensure DOM elements are rendered
+    const timeout = setTimeout(updateConnectionPoints, 100);
+
+    window.addEventListener("resize", updateConnectionPoints);
+    return () => {
+      clearTimeout(timeout);
+      window.removeEventListener("resize", updateConnectionPoints);
+    };
+  }, [matchingPairs, allQuestions, currentQuestionIndex]);
+
+  // Update connections when matching pairs change and DOM is ready
+  useEffect(() => {
+    if (matchingPairs.length > 0) {
+      const timer = setTimeout(() => {
+        // Force re-calculation of connection points
+        const updateEvent = new Event("resize");
+        window.dispatchEvent(updateEvent);
+      }, 50);
+
+      return () => clearTimeout(timer);
+    }
+  }, [matchingPairs]);
+
+  // Timer management effect
+  useEffect(() => {
+    if (!isQuizStarted || allQuestions.length === 0) return;
+
+    const currentQuestion = allQuestions[currentQuestionIndex];
+    if (!currentQuestion?.time_limit) {
+      setTimeLeft(null);
+      setTimerActive(false);
+      return;
+    }
+
+    // Start timer for current question
+    setTimeLeft(currentQuestion.time_limit);
+    setTimerActive(true);
+    setTimerStartTime(Date.now());
+    setLowTimeWarningPlayed(false); // Reset warning for new question
+    setShowTimeWarning(false); // Hide any existing warning
+  }, [currentQuestionIndex, isQuizStarted, allQuestions]);
+
+  // Countdown timer effect
+  useEffect(() => {
+    if (!timerActive || timeLeft === null || timeLeft <= 0) return;
+
+    const interval = setInterval(() => {
+      setTimeLeft((prev) => {
         if (prev === null || prev <= 1) {
-          // Auto submit when time is up
-          handleSubmitQuiz();
+          setTimerActive(false);
+          // Auto-advance to next question when time runs out
+          handleTimeUp();
           return 0;
         }
+
+        // Play warning sound when 10 seconds left
+        if (prev === 11 && !lowTimeWarningPlayed) {
+          setLowTimeWarningPlayed(true);
+          setShowTimeWarning(true);
+
+          try {
+            const audio = new Audio("/audio/ticking.mp3");
+            audio.volume = 0.3;
+            audio.play().catch(() => {
+              // Ignore audio play errors (e.g., no user interaction yet)
+            });
+          } catch (error) {
+            console.warn("Could not play warning sound:", error);
+          }
+
+          // Hide warning after 3 seconds
+          setTimeout(() => setShowTimeWarning(false), 3000);
+        }
+
         return prev - 1;
       });
     }, 1000);
 
-    return () => clearInterval(timer);
-  }, [timeRemaining, isPaused, handleSubmitQuiz]);
+    return () => clearInterval(interval);
+  }, [timerActive, timeLeft, handleTimeUp, lowTimeWarningPlayed]);
 
-  // Track time spent on current question
+  // Load quiz data on component mount
   useEffect(() => {
-    setQuestionStartTime(Date.now());
-  }, [currentQuestionIndex]);
+    const loadQuizData = async () => {
+      if (!quizId) {
+        setError("Quiz ID is required");
+        return;
+      }
 
-  // Redirect if no quiz data
-  useEffect(() => {
-    if (!quizState) {
-      navigate("/student/classrooms");
-    }
-  }, [quizState, navigate]);
+      setLoading(true);
+      setError(null);
 
-  // Prevent accidental page exit
-  useEffect(() => {
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (hasUnsavedChanges && !isSubmitting) {
-        e.preventDefault();
-        e.returnValue = "";
+      try {
+        const quizData = await getQuizDetail(quizId);
+        setQuiz(quizData.data);
+        console.log("Loaded quiz data:", quizData.data);
+        // Combine multiple choice and matching questions into a single array
+        const combinedQuestions: CombinedQuestion[] = [];
+
+        // Process multiple choice questions
+        if (quizData.data.multiple_choice_quiz?.questions) {
+          quizData.data.multiple_choice_quiz.questions.forEach(
+            (mcq: MultipleChoiceQuestion) => {
+              combinedQuestions.push({
+                id: mcq.question_id,
+                type: "multiple_choice",
+                question: mcq.question_text,
+                points: mcq.points,
+                time_limit: mcq.time_limit,
+                hint: mcq.hint,
+                answers: mcq.answers,
+                allow_multiple_answers: mcq.allow_multiple_answers,
+              });
+            },
+          );
+        }
+
+        // Process matching questions - treat entire matching quiz as one question
+        if (
+          quizData.data.matching_quiz?.questions &&
+          quizData.data.matching_quiz.questions.length > 0
+        ) {
+          combinedQuestions.push({
+            id: "matching_quiz",
+            type: "matching",
+            question: "Ghép các cặp phù hợp",
+            points: quizData.data.matching_quiz.questions.reduce(
+              (sum, q) => sum + q.points,
+              0,
+            ),
+            time_limit: quizData.data.matching_quiz.time_limit,
+            matching_pairs: quizData.data.matching_quiz.questions,
+          });
+        }
+
+        setAllQuestions(combinedQuestions);
+      } catch (err) {
+        console.error("Error loading quiz:", err);
+        setError("Failed to load quiz data");
+      } finally {
+        setLoading(false);
       }
     };
 
-    window.addEventListener("beforeunload", handleBeforeUnload);
-    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
-  }, [hasUnsavedChanges, isSubmitting]);
+    loadQuizData();
+  }, [quizId]);
 
-  // Navigate to question
-  const goToQuestion = useCallback(
-    (index: number) => {
-      if (index >= 0 && index < (quiz?.questions.length || 0)) {
-        setCurrentQuestionIndex(index);
-      }
-    },
-    [quiz?.questions.length],
-  );
-
-  // Keyboard navigation
-  useEffect(() => {
-    const handleKeyPress = (e: KeyboardEvent) => {
-      if (e.ctrlKey || e.metaKey) return; // Don't interfere with browser shortcuts
-
-      switch (e.key) {
-        case "ArrowLeft":
-          if (currentQuestionIndex > 0) {
-            goToQuestion(currentQuestionIndex - 1);
-          }
-          break;
-        case "ArrowRight":
-          if (currentQuestionIndex < (quiz?.questions.length || 0) - 1) {
-            goToQuestion(currentQuestionIndex + 1);
-          }
-          break;
-        case "Enter":
-          if (e.shiftKey) {
-            // Shift+Enter to submit
-            setShowSubmitConfirm(true);
-          }
-          break;
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyPress);
-    return () => window.removeEventListener("keydown", handleKeyPress);
-  }, [currentQuestionIndex, quiz?.questions.length, goToQuestion]);
-
-  // Format time display
-  const formatTime = (seconds: number) => {
-    const minutes = Math.floor(seconds / 60);
-    const remainingSeconds = seconds % 60;
-    return `${minutes.toString().padStart(2, "0")}:${remainingSeconds.toString().padStart(2, "0")}`;
+  const handleBackToLobby = () => {
+    navigate(`/student/quiz-session/${quizSessionId}/waiting`, {
+      state: { accessCode },
+    });
   };
 
-  // Handle answer change
+  const handleStartQuiz = () => {
+    setIsQuizStarted(true);
+  };
+
   const handleAnswerChange = (
     questionId: string,
-    answer: string | string[],
+    answer: string | string[] | Array<{ itemA: string; itemB: string }>,
   ) => {
-    const timeSpent = Date.now() - questionStartTime;
-    setAnswers((prev) => ({
+    // Calculate time spent on this question
+    const timeSpent = timerStartTime
+      ? Math.floor((Date.now() - timerStartTime) / 1000)
+      : 0;
+
+    setUserAnswers((prev) => ({
       ...prev,
       [questionId]: {
         questionId,
         answer,
-        timeSpent: (prev[questionId]?.timeSpent || 0) + timeSpent,
+        timeSpent,
       },
     }));
-    setQuestionStartTime(Date.now());
-    setHasUnsavedChanges(true);
   };
 
-  // Render question based on type
-  const renderQuestion = (question: QuizData["questions"][0]) => {
-    const currentAnswer = answers[question.id]?.answer;
-
-    switch (question.type) {
-      case "multiple_choice":
-        return (
-          <div className="space-y-3">
-            {question.options?.map((option, index) => (
-              <label
-                key={index}
-                className="flex cursor-pointer items-center space-x-3 rounded-lg border border-gray-200 p-4 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700"
-              >
-                <input
-                  type="radio"
-                  name={question.id}
-                  value={option}
-                  checked={currentAnswer === option}
-                  onChange={(e) =>
-                    handleAnswerChange(question.id, e.target.value)
-                  }
-                  className="h-4 w-4 border-gray-300 text-blue-600 focus:ring-blue-500"
-                />
-                <span className="text-gray-900 dark:text-white">{option}</span>
-              </label>
-            ))}
-          </div>
-        );
-
-      case "true_false":
-        return (
-          <div className="space-y-3">
-            {["True", "False"].map((option) => (
-              <label
-                key={option}
-                className="flex cursor-pointer items-center space-x-3 rounded-lg border border-gray-200 p-4 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700"
-              >
-                <input
-                  type="radio"
-                  name={question.id}
-                  value={option}
-                  checked={currentAnswer === option}
-                  onChange={(e) =>
-                    handleAnswerChange(question.id, e.target.value)
-                  }
-                  className="h-4 w-4 border-gray-300 text-blue-600 focus:ring-blue-500"
-                />
-                <span className="text-gray-900 dark:text-white">{option}</span>
-              </label>
-            ))}
-          </div>
-        );
-
-      case "essay":
-        return (
-          <textarea
-            value={typeof currentAnswer === "string" ? currentAnswer : ""}
-            onChange={(e) => handleAnswerChange(question.id, e.target.value)}
-            rows={6}
-            className="w-full rounded-md border border-gray-300 px-3 py-2 transition-colors focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-            placeholder="Type your answer here..."
-          />
-        );
-
-      default:
-        return (
-          <div className="text-center text-gray-500 dark:text-gray-400">
-            Unsupported question type: {question.type}
-          </div>
-        );
+  const handleMatchingSelection = (item: string, type: "itemA" | "itemB") => {
+    if (type === "itemA") {
+      if (matchingSelections.itemA === item) {
+        // Deselect if already selected
+        setMatchingSelections((prev) => ({ ...prev, itemA: undefined }));
+      } else {
+        setMatchingSelections((prev) => ({ ...prev, itemA: item }));
+        // If both are selected, create a pair
+        if (matchingSelections.itemB) {
+          const newPair = { itemA: item, itemB: matchingSelections.itemB };
+          setMatchingPairs((prev) => [...prev, newPair]);
+          setMatchingSelections({});
+          // Update answer
+          handleAnswerChange("matching_quiz", matchingPairs.concat(newPair));
+        }
+      }
+    } else {
+      if (matchingSelections.itemB === item) {
+        setMatchingSelections((prev) => ({ ...prev, itemB: undefined }));
+      } else {
+        setMatchingSelections((prev) => ({ ...prev, itemB: item }));
+        if (matchingSelections.itemA) {
+          const newPair = { itemA: matchingSelections.itemA, itemB: item };
+          setMatchingPairs((prev) => [...prev, newPair]);
+          setMatchingSelections({});
+          handleAnswerChange("matching_quiz", matchingPairs.concat(newPair));
+        }
+      }
     }
   };
 
-  if (!quizState) {
-    return (
-      <LoadingOverlay
-        show={true}
-        message="Loading quiz..."
-        variant="fullscreen"
-      />
-    );
-  }
+  // Function to check if current question is answered
+  const isCurrentQuestionAnswered = () => {
+    const currentQuestion = allQuestions[currentQuestionIndex];
+    if (!currentQuestion) return false;
 
-  // Show waiting for teacher screen if quiz hasn't started yet
-  if (isWaitingForTeacher || !quiz) {
-    return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-        {/* Header */}
-        <div className="border-b border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
-          <div className="mx-auto max-w-7xl px-4 py-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <button
-                  onClick={() => navigate(-1)}
-                  className="flex items-center gap-2 text-blue-600 transition-colors hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
-                >
-                  <FaChevronLeft className="h-4 w-4" />
-                  <span>{t("quizTaking.back")}</span>
-                </button>
-                <h1 className="text-lg font-bold text-gray-900 lg:text-xl dark:text-white">
-                  {quizState?.quizSessionName || t("quizTaking.quizSession")}
-                </h1>
-              </div>
-            </div>
-          </div>
-        </div>
+    const answer = userAnswers[currentQuestion.id];
+    if (!answer) return false;
 
-        {/* Waiting Content */}
-        <div className="mx-auto max-w-4xl px-4 py-12">
-          <div className="text-center">
-            {/* Status icon */}
-            <div className="mx-auto mb-8 flex h-24 w-24 items-center justify-center rounded-full bg-orange-100 dark:bg-orange-900/30">
-              <FaPause className="h-12 w-12 text-orange-600 dark:text-orange-400" />
-            </div>
+    if (currentQuestion.type === "multiple_choice") {
+      return (
+        (answer.answer &&
+          typeof answer.answer === "string" &&
+          answer.answer.length > 0) ||
+        (Array.isArray(answer.answer) && answer.answer.length > 0)
+      );
+    }
 
-            {/* Main message */}
-            <h2 className="mb-4 text-3xl font-bold text-gray-900 dark:text-white">
-              {t("quizTaking.waitingForTeacher")}
-            </h2>
-            <p className="mb-8 text-lg text-gray-600 dark:text-gray-400">
-              {t("quizTaking.waitingMessage")}
-            </p>
+    if (currentQuestion.type === "matching") {
+      return (
+        matchingPairs.length === (currentQuestion.matching_pairs?.length || 0)
+      );
+    }
 
-            {/* Status info */}
-            <div className="mx-auto mb-8 max-w-md rounded-lg border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-800">
-              <h3 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">
-                {t("quizTaking.quizStatus")}
-              </h3>
-              <div className="space-y-3 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-gray-600 dark:text-gray-400">
-                    {t("quizTaking.accessCode")}:
-                  </span>
-                  <span className="font-mono font-bold text-gray-900 dark:text-white">
-                    {quizState?.accessCode}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600 dark:text-gray-400">
-                    {t("quizTaking.status")}:
-                  </span>
-                  <span className="inline-flex items-center gap-1 rounded-full bg-orange-100 px-2 py-1 text-xs font-medium text-orange-700 dark:bg-orange-900/30 dark:text-orange-300">
-                    <FaPause className="h-3 w-3" />
-                    {t("quizTaking.waitingForTeacher")}
-                  </span>
-                </div>
-              </div>
-            </div>
+    return false;
+  };
 
-            {/* Instructions */}
-            <div className="mx-auto mb-8 max-w-2xl rounded-lg bg-blue-50 p-6 dark:bg-blue-900/20">
-              <div className="flex items-start gap-3">
-                <FaExclamationTriangle className="mt-1 h-5 w-5 text-blue-600 dark:text-blue-400" />
-                <div className="text-left">
-                  <h4 className="font-semibold text-blue-900 dark:text-blue-200">
-                    {t("quizTaking.waitingInstructions")}
-                  </h4>
-                  <ul className="mt-2 space-y-1 text-sm text-blue-800 dark:text-blue-300">
-                    <li>• {t("quizTaking.waitingRules.stayOnTab")}</li>
-                    <li>• {t("quizTaking.waitingRules.stableConnection")}</li>
-                    <li>• {t("quizTaking.waitingRules.autoStart")}</li>
-                    <li>• {t("quizTaking.waitingRules.reviewRules")}</li>
-                  </ul>
-                </div>
-              </div>
-            </div>
+  // Function to toggle hint visibility
+  const toggleHint = (questionId: string) => {
+    setShowHints((prev) => ({
+      ...prev,
+      [questionId]: !prev[questionId],
+    }));
+  };
 
-            {/* Test button to simulate teacher starting quiz */}
-            <div className="flex justify-center gap-4">
-              <Button variant="secondary" onClick={() => navigate(-1)}>
-                {t("quizTaking.leaveQuizRoom")}
-              </Button>
+  const renderQuestion = (question: CombinedQuestion) => {
+    const currentAnswer = userAnswers[question.id]?.answer;
+    const showHint = showHints[question.id] || false;
 
-              {/* Test button - remove in production */}
+    if (question.type === "multiple_choice") {
+      return (
+        <div className="space-y-6">
+          {question.hint && (
+            <div className="space-y-3">
               <Button
-                variant="primary"
-                onClick={() => {
-                  setIsWaitingForTeacher(false);
-                  // Simulate getting quiz data from API
-                  // In real implementation, this would come from polling or websocket
-                }}
-                className="bg-green-600 hover:bg-green-700"
+                variant="outline"
+                size="sm"
+                onClick={() => toggleHint(question.id)}
+                className="flex items-center gap-2"
               >
-                <FaPlay className="mr-2 h-4 w-4" />
-                {t("quizTaking.startQuizTest")}
+                💡 {showHint ? "Ẩn gợi ý" : "Hiển thị gợi ý"}
               </Button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
-  // If no quiz data is available, show loading
-  if (!quiz) {
-    return (
-      <LoadingOverlay
-        show={true}
-        message={t("quizTaking.loadingQuizData")}
-        variant="fullscreen"
-      />
-    );
-  }
-
-  const currentQuestion = quiz.questions[currentQuestionIndex];
-  const progress = ((currentQuestionIndex + 1) / quiz.questions.length) * 100;
-  const answeredQuestions = Object.keys(answers).length;
-
-  return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      {/* Header */}
-      <div className="border-b border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
-        <div className="mx-auto max-w-7xl px-4 py-4">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex items-center gap-4">
-              <button
-                onClick={() => {
-                  if (hasUnsavedChanges) {
-                    if (
-                      window.confirm(
-                        "You have unsaved changes. Are you sure you want to leave?",
-                      )
-                    ) {
-                      navigate(-1);
-                    }
-                  } else {
-                    navigate(-1);
-                  }
-                }}
-                className="flex items-center gap-2 text-blue-600 transition-colors hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
-              >
-                <FaChevronLeft className="h-4 w-4" />
-                <span>Back</span>
-              </button>
-              <h1 className="text-lg font-bold text-gray-900 lg:text-xl dark:text-white">
-                {quiz.name}
-              </h1>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2 lg:gap-4">
-              {/* Timer */}
-              {timeRemaining !== null && (
-                <div
-                  className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm lg:text-base ${
-                    timeRemaining < 300
-                      ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300"
-                      : "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
-                  }`}
-                >
-                  <FaClock className="h-4 w-4" />
-                  <span className="font-mono font-bold">
-                    {formatTime(timeRemaining)}
-                  </span>
+              {showHint && (
+                <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-900/20">
+                  <p className="text-sm text-blue-800 dark:text-blue-200">
+                    <strong>💡 Gợi ý:</strong> {question.hint}
+                  </p>
                 </div>
               )}
+            </div>
+          )}
 
-              {/* Pause/Resume */}
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => setIsPaused(!isPaused)}
-                className="hidden lg:flex"
+          <div className="space-y-3">
+            {question.answers?.map((answer: Answer, index: number) => (
+              <label
+                key={index}
+                className="group flex cursor-pointer items-center rounded-xl border-2 border-gray-200 p-4 transition-all hover:border-blue-300 hover:bg-blue-50 dark:border-gray-700 dark:hover:border-blue-600 dark:hover:bg-blue-900/10"
               >
-                {isPaused ? (
-                  <FaPlay className="h-4 w-4" />
-                ) : (
-                  <FaPause className="h-4 w-4" />
-                )}
-                <span className="ml-2">{isPaused ? "Resume" : "Pause"}</span>
+                <input
+                  type={question.allow_multiple_answers ? "checkbox" : "radio"}
+                  name={`question-${question.id}`}
+                  value={answer.answer_text}
+                  checked={
+                    question.allow_multiple_answers
+                      ? Array.isArray(currentAnswer) &&
+                        (currentAnswer as string[]).includes(answer.answer_text)
+                      : currentAnswer === answer.answer_text
+                  }
+                  onChange={(e) => {
+                    if (question.allow_multiple_answers) {
+                      const currentAnswers = Array.isArray(currentAnswer)
+                        ? (currentAnswer as string[])
+                        : [];
+                      if (e.target.checked) {
+                        handleAnswerChange(question.id, [
+                          ...currentAnswers,
+                          answer.answer_text,
+                        ]);
+                      } else {
+                        handleAnswerChange(
+                          question.id,
+                          currentAnswers.filter(
+                            (a) => a !== answer.answer_text,
+                          ),
+                        );
+                      }
+                    } else {
+                      handleAnswerChange(question.id, answer.answer_text);
+                    }
+                  }}
+                  className="mr-4 h-4 w-4 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700"
+                />
+                <span className="text-gray-900 dark:text-white">
+                  {answer.answer_text}
+                </span>
+              </label>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    if (question.type === "matching") {
+      const itemsA =
+        question.matching_pairs?.map((pair) => pair.item_a.content) || [];
+      const itemsB =
+        question.matching_pairs?.map((pair) => pair.item_b.content) || [];
+
+      return (
+        <div className="space-y-6">
+          {/* Instructions */}
+          <div className="text-center">
+            <p className="text-lg text-gray-700 dark:text-gray-300">
+              {question.question}
+            </p>
+            <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+              Ghép {question.matching_pairs?.length || 0} cặp tương ứng
+            </p>
+          </div>
+
+          {/* Hint section */}
+          {question.hint && (
+            <div className="space-y-3">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => toggleHint(question.id)}
+                className="flex items-center gap-2"
+              >
+                💡 {showHint ? "Ẩn gợi ý" : "Hiển thị gợi ý"}
               </Button>
 
-              {/* Mobile pause button */}
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => setIsPaused(!isPaused)}
-                className="lg:hidden"
-              >
-                {isPaused ? (
-                  <FaPlay className="h-4 w-4" />
-                ) : (
-                  <FaPause className="h-4 w-4" />
-                )}
-              </Button>
+              {showHint && (
+                <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-900/20">
+                  <p className="text-sm text-blue-800 dark:text-blue-200">
+                    <strong>💡 Gợi ý:</strong> {question.hint}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
 
-              {/* Submit */}
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={() => setShowSubmitConfirm(true)}
-              >
-                <FaFlag className="mr-2 h-4 w-4" />
-                <span className="hidden lg:inline">Submit Quiz</span>
-                <span className="lg:hidden">Submit</span>
-              </Button>
+          {/* Matching Grid with Connection Lines */}
+          <div className="matching-container relative">
+            {/* SVG for connection lines */}
+            <svg
+              className="pointer-events-none absolute inset-0 z-10"
+              style={{ width: "100%", height: "100%" }}
+            >
+              {connectionPoints.map((point, index) => {
+                // Simple color scheme
+                const lineColor = "#3b82f6"; // Blue color for all connections
+
+                return (
+                  <g key={index}>
+                    {/* Simple straight line connection */}
+                    <line
+                      x1={point.startX}
+                      y1={point.startY}
+                      x2={point.endX}
+                      y2={point.endY}
+                      stroke={lineColor}
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                    />
+                    {/* Simple connection dots */}
+                    <circle
+                      cx={point.startX}
+                      cy={point.startY}
+                      r="4"
+                      fill={lineColor}
+                    />
+                    <circle
+                      cx={point.endX}
+                      cy={point.endY}
+                      r="4"
+                      fill={lineColor}
+                    />
+                  </g>
+                );
+              })}
+            </svg>
+
+            <div className="relative z-20 grid grid-cols-2 gap-8">
+              {/* Column A */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold text-blue-600 dark:text-blue-400">
+                  Cột A ({itemsA.length} Items)
+                </h3>
+                <div className="space-y-3">
+                  {itemsA.map((item, index) => {
+                    const isSelected = matchingSelections.itemA === item;
+                    const isMatched = matchingPairs.some(
+                      (pair) => pair.itemA === item,
+                    );
+
+                    return (
+                      <button
+                        key={index}
+                        id={`item-a-${index}`}
+                        onClick={() => handleMatchingSelection(item, "itemA")}
+                        disabled={isMatched}
+                        className={`matching-item-hover matching-item-a-hover w-full rounded-lg border-2 p-4 text-left transition-all duration-200 ${
+                          isMatched
+                            ? "border-blue-500 bg-blue-50 dark:border-blue-400 dark:bg-blue-900/20"
+                            : isSelected
+                              ? "border-blue-500 bg-blue-100 shadow-lg ring-2 ring-blue-200 dark:bg-blue-900/30 dark:ring-blue-400"
+                              : "border-gray-300 bg-white dark:border-gray-600 dark:bg-gray-800"
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div
+                            className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold ${
+                              isMatched
+                                ? "bg-blue-600 text-white"
+                                : isSelected
+                                  ? "bg-blue-500 text-white"
+                                  : "bg-gray-200 text-gray-700 dark:bg-gray-600 dark:text-gray-300"
+                            }`}
+                          >
+                            {index + 1}
+                          </div>
+                          <span className="flex-1 font-medium text-gray-900 dark:text-white">
+                            {item}
+                          </span>
+                          {isMatched && (
+                            <div className="flex h-6 w-6 items-center justify-center rounded-full bg-green-500">
+                              <span className="text-xs text-white">✓</span>
+                            </div>
+                          )}
+                          {isSelected && !isMatched && (
+                            <div className="h-3 w-3 rounded-full bg-blue-500"></div>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Column B */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold text-purple-600 dark:text-purple-400">
+                  Cột B ({itemsB.length} Items)
+                </h3>
+                <div className="space-y-3">
+                  {itemsB.map((item, index) => {
+                    const isSelected = matchingSelections.itemB === item;
+                    const isMatched = matchingPairs.some(
+                      (pair) => pair.itemB === item,
+                    );
+
+                    // Get the letter for this item (A, B, C, D...)
+                    const letter = String.fromCharCode(65 + index);
+
+                    return (
+                      <button
+                        key={index}
+                        id={`item-b-${index}`}
+                        onClick={() => handleMatchingSelection(item, "itemB")}
+                        disabled={isMatched}
+                        className={`matching-item-hover matching-item-b-hover w-full rounded-lg border-2 p-4 text-left transition-all duration-200 ${
+                          isMatched
+                            ? "border-purple-500 bg-purple-50 dark:border-purple-400 dark:bg-purple-900/20"
+                            : isSelected
+                              ? "border-purple-500 bg-purple-100 shadow-lg ring-2 ring-purple-200 dark:bg-purple-900/30 dark:ring-purple-400"
+                              : "border-gray-300 bg-white dark:border-gray-600 dark:bg-gray-800"
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div
+                            className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold ${
+                              isMatched
+                                ? "bg-purple-600 text-white"
+                                : isSelected
+                                  ? "bg-purple-500 text-white"
+                                  : "bg-gray-200 text-gray-700 dark:bg-gray-600 dark:text-gray-300"
+                            }`}
+                          >
+                            {letter}
+                          </div>
+                          <span className="flex-1 font-medium text-gray-900 dark:text-white">
+                            {item}
+                          </span>
+                          {isMatched && (
+                            <div className="flex h-6 w-6 items-center justify-center rounded-full bg-green-500">
+                              <span className="text-xs text-white">✓</span>
+                            </div>
+                          )}
+                          {isSelected && !isMatched && (
+                            <div className="h-3 w-3 rounded-full bg-purple-500"></div>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
           </div>
 
-          {/* Progress bar */}
-          <div className="mt-4">
-            <div className="mb-2 flex items-center justify-between text-sm">
-              <span className="text-gray-600 dark:text-gray-400">
-                Question {currentQuestionIndex + 1} of {quiz.questions.length}
+          {/* Progress indicator */}
+          <div className="rounded-xl bg-gray-50 p-4 dark:bg-gray-800">
+            <div className="mb-2 flex items-center justify-between">
+              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                Tiến độ ghép cặp: {matchingPairs.length}/
+                {question.matching_pairs?.length || 0}
               </span>
-              <span className="text-gray-600 dark:text-gray-400">
-                {answeredQuestions} answered
+              <span className="text-sm text-gray-600 dark:text-gray-400">
+                {Math.round(
+                  (matchingPairs.length /
+                    (question.matching_pairs?.length || 1)) *
+                    100,
+                )}
+                %
               </span>
             </div>
             <div className="h-2 w-full rounded-full bg-gray-200 dark:bg-gray-700">
               <div
-                className="h-2 rounded-full bg-blue-600 transition-all duration-300"
-                style={{ width: `${progress}%` }}
-              ></div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="mx-auto max-w-7xl px-4 py-8">
-        <div className="grid grid-cols-1 gap-8 lg:grid-cols-4">
-          {/* Question navigation sidebar */}
-          <div className="lg:col-span-1">
-            <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-              <h3 className="mb-4 font-semibold text-gray-900 dark:text-white">
-                Questions
-              </h3>
-              <div className="grid grid-cols-5 gap-2 lg:grid-cols-3">
-                {quiz.questions.map((_, index) => (
-                  <button
-                    key={index}
-                    onClick={() => goToQuestion(index)}
-                    className={`h-10 w-10 rounded-lg border-2 text-sm font-medium transition-colors ${
-                      index === currentQuestionIndex
-                        ? "border-blue-500 bg-blue-500 text-white"
-                        : answers[quiz.questions[index].id]
-                          ? "border-green-500 bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300"
-                          : "border-gray-300 bg-white text-gray-700 hover:border-gray-400 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300"
-                    }`}
-                  >
-                    {index + 1}
-                  </button>
-                ))}
-              </div>
-
-              {/* Keyboard shortcuts info */}
-              <div className="mt-4 hidden text-xs text-gray-500 lg:block dark:text-gray-400">
-                <p className="font-medium">Keyboard shortcuts:</p>
-                <p>← → Navigate questions</p>
-                <p>Shift+Enter Submit quiz</p>
-              </div>
+                className="h-2 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 transition-all duration-500"
+                style={{
+                  width: `${(matchingPairs.length / (question.matching_pairs?.length || 1)) * 100}%`,
+                }}
+              />
             </div>
           </div>
 
-          {/* Main question area */}
-          <div className="lg:col-span-3">
-            <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm lg:p-6 dark:border-gray-700 dark:bg-gray-800">
-              {currentQuestion && (
-                <>
-                  <div className="mb-6">
-                    <div className="mb-4 flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
-                      <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-                        Question {currentQuestionIndex + 1}
-                      </h2>
-                      <span className="text-sm text-gray-500 dark:text-gray-400">
-                        {currentQuestion.points} point
-                        {currentQuestion.points !== 1 ? "s" : ""}
-                      </span>
-                    </div>
-                    <p className="text-base text-gray-900 lg:text-lg dark:text-white">
-                      {currentQuestion.question}
-                    </p>
-                  </div>
-
-                  <div className="mb-8">{renderQuestion(currentQuestion)}</div>
-
-                  {/* Navigation buttons */}
-                  <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                    <Button
-                      variant="secondary"
-                      onClick={() => goToQuestion(currentQuestionIndex - 1)}
-                      disabled={currentQuestionIndex === 0}
-                      className="w-full lg:w-auto"
-                    >
-                      Previous
-                    </Button>
-
-                    <div className="flex gap-2">
-                      {currentQuestionIndex < quiz.questions.length - 1 ? (
-                        <Button
-                          variant="primary"
-                          onClick={() => goToQuestion(currentQuestionIndex + 1)}
-                          className="flex-1 lg:flex-none"
-                        >
-                          Next
-                        </Button>
-                      ) : (
-                        <Button
-                          variant="primary"
-                          onClick={() => setShowSubmitConfirm(true)}
-                          className="flex-1 lg:flex-none"
-                        >
-                          <FaFlag className="mr-2 h-4 w-4" />
-                          Submit Quiz
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Submit confirmation modal */}
-      {showSubmitConfirm && (
-        <div className="bg-opacity-50 fixed inset-0 z-50 flex items-center justify-center bg-black p-4">
-          <div className="w-full max-w-md rounded-lg bg-white p-6 dark:bg-gray-800">
-            <div className="mb-4 flex items-center gap-3">
-              <FaExclamationTriangle className="h-6 w-6 text-yellow-500" />
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                Submit Quiz?
-              </h3>
-            </div>
-
-            <p className="mb-6 text-gray-600 dark:text-gray-400">
-              You have answered {answeredQuestions} out of{" "}
-              {quiz.questions.length} questions. Are you sure you want to submit
-              your quiz? This action cannot be undone.
-            </p>
-
-            <div className="flex gap-3">
+          {/* Clear all pairs button */}
+          {matchingPairs.length > 0 && (
+            <div className="text-center">
               <Button
-                variant="secondary"
-                onClick={() => setShowSubmitConfirm(false)}
-                className="flex-1"
-                disabled={isSubmitting}
+                variant="outline"
+                onClick={() => {
+                  setMatchingPairs([]);
+                  setMatchingSelections({});
+                  handleAnswerChange(question.id, []);
+                }}
+                className="border-red-300 text-red-600 hover:bg-red-50 dark:border-red-600 dark:text-red-400 dark:hover:bg-red-900/20"
               >
-                Cancel
+                🗑️ Xóa tất cả cặp đã ghép
               </Button>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    return null;
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+        <LoadingOverlay show={true} message={t("quiz.loading")} />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+        <div className="mx-auto max-w-2xl px-4 py-8">
+          <div className="rounded-2xl bg-white p-8 shadow-sm ring-1 ring-gray-200 dark:bg-gray-800 dark:ring-gray-700">
+            <div className="text-center">
+              <div className="mb-6 text-lg text-red-600 dark:text-red-400">
+                {error}
+              </div>
+              <Button onClick={handleBackToLobby} variant="primary">
+                {t("common.back")}
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!quiz || allQuestions.length === 0) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+        <div className="mx-auto max-w-2xl px-4 py-8">
+          <div className="rounded-2xl bg-white p-8 shadow-sm ring-1 ring-gray-200 dark:bg-gray-800 dark:ring-gray-700">
+            <div className="text-center">
+              <div className="mb-6 text-lg text-gray-600 dark:text-gray-400">
+                No quiz data available
+              </div>
+              <Button onClick={handleBackToLobby} variant="primary">
+                {t("common.back")}
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // If quiz not started yet, show start screen
+  if (!isQuizStarted) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+        <div className="mx-auto max-w-4xl px-4 py-8">
+          {/* Header */}
+          <div className="mb-8 rounded-2xl bg-white p-6 shadow-sm ring-1 ring-gray-200 dark:bg-gray-800 dark:ring-gray-700">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <Button
+                  onClick={handleBackToLobby}
+                  variant="ghost"
+                  size="sm"
+                  className="flex items-center gap-2 text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100"
+                >
+                  <FaChevronLeft className="h-4 w-4" />
+                  {t("common.goBack")}
+                </Button>
+                <div>
+                  <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+                    {quiz.quiz.name}
+                  </h1>
+                  <p className="text-gray-600 dark:text-gray-400">
+                    {quiz.quiz.description}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Quiz Statistics */}
+          <div className="mb-8 rounded-2xl bg-white p-8 shadow-sm ring-1 ring-gray-200 dark:bg-gray-800 dark:ring-gray-700">
+            <div className="text-center">
+              <h2 className="mb-6 text-2xl font-bold text-gray-900 dark:text-white">
+                Thông tin bài quiz
+              </h2>
+              <div className="mb-8 grid grid-cols-1 gap-6 md:grid-cols-3">
+                <div className="rounded-xl bg-gradient-to-br from-blue-50 to-blue-100 p-6 dark:from-blue-900/20 dark:to-blue-800/20">
+                  <div className="text-3xl font-bold text-blue-600 dark:text-blue-400">
+                    {quiz.multiple_choice_quiz?.questions?.length || 0}
+                  </div>
+                  <div className="mt-2 text-sm font-medium text-blue-700 dark:text-blue-300">
+                    Câu trắc nghiệm
+                  </div>
+                </div>
+                <div className="rounded-xl bg-gradient-to-br from-purple-50 to-purple-100 p-6 dark:from-purple-900/20 dark:to-purple-800/20">
+                  <div className="text-3xl font-bold text-purple-600 dark:text-purple-400">
+                    {quiz.matching_quiz?.questions?.length || 0}
+                  </div>
+                  <div className="mt-2 text-sm font-medium text-purple-700 dark:text-purple-300">
+                    Câu ghép đôi
+                  </div>
+                </div>
+                <div className="rounded-xl bg-gradient-to-br from-green-50 to-green-100 p-6 dark:from-green-900/20 dark:to-green-800/20">
+                  <div className="text-3xl font-bold text-green-600 dark:text-green-400">
+                    {allQuestions.length}
+                  </div>
+                  <div className="mt-2 text-sm font-medium text-green-700 dark:text-green-300">
+                    Tổng số câu
+                  </div>
+                </div>
+              </div>
+              <Button
+                onClick={handleStartQuiz}
+                variant="primary"
+                size="lg"
+                className="px-8 py-3 text-lg"
+              >
+                Bắt đầu làm bài
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Main quiz interface
+  const currentQuestion = allQuestions[currentQuestionIndex];
+  const progress = ((currentQuestionIndex + 1) / allQuestions.length) * 100;
+
+  return (
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      {/* Fixed Header */}
+      <div className="sticky top-0 z-10 border-b border-gray-200 bg-white/95 backdrop-blur-sm dark:border-gray-700 dark:bg-gray-800/95">
+        <div className="mx-auto max-w-7xl px-4 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div>
+                <h1 className="text-lg font-bold text-gray-900 dark:text-white">
+                  {quiz.quiz.name}
+                </h1>
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  Câu {currentQuestionIndex + 1} / {allQuestions.length}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-4">
+              {/* Timer */}
+              <div
+                className={`flex items-center gap-2 rounded-lg px-3 py-2 transition-all duration-300 ${
+                  timeLeft !== null && timeLeft <= 10
+                    ? "animate-pulse bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
+                    : timeLeft !== null && timeLeft <= 30
+                      ? "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400"
+                      : "bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-300"
+                }`}
+              >
+                <FaClock className="h-4 w-4" />
+                <span className="text-sm font-medium">
+                  {timeLeft !== null
+                    ? `${Math.floor(timeLeft / 60)}:${(timeLeft % 60).toString().padStart(2, "0")}`
+                    : "∞"}
+                </span>
+                {timeLeft !== null && timeLeft <= 10 && (
+                  <span className="text-xs">⚠️</span>
+                )}
+              </div>
+
+              {/* Points */}
+              <div className="flex items-center gap-2 rounded-lg bg-green-50 px-3 py-2 text-green-700 dark:bg-green-900/20 dark:text-green-300">
+                <span className="text-sm font-medium">
+                  {currentQuestion.points} điểm
+                </span>
+              </div>
+
+              {/* Submit button */}
               <Button
                 variant="primary"
-                onClick={handleSubmitQuiz}
-                disabled={isSubmitting}
-                className="flex-1"
+                size="sm"
+                className="flex items-center gap-2"
               >
-                {isSubmitting ? "Submitting..." : "Submit Quiz"}
+                <FaFlag className="h-4 w-4" />
+                <span className="hidden sm:inline">Nộp bài</span>
               </Button>
             </div>
           </div>
-        </div>
-      )}
 
-      {/* Loading overlay for submission */}
-      {isSubmitting && (
-        <LoadingOverlay
-          show={true}
-          message="Submitting your quiz..."
-          variant="fullscreen"
-        />
+          <div className="mt-4 space-y-4">
+            {/* Quiz Progress bar */}
+            <div>
+              <div className="mb-2 flex items-center justify-between text-sm">
+                <span className="text-gray-600 dark:text-gray-400">
+                  Tiến độ làm bài
+                </span>
+                <span className="text-gray-600 dark:text-gray-400">
+                  {Math.round(progress)}%
+                </span>
+              </div>
+              <div className="h-2 w-full rounded-full bg-gray-200 dark:bg-gray-700">
+                <div
+                  className="h-2 rounded-full bg-gradient-to-r from-blue-500 to-blue-600 transition-all duration-500"
+                  style={{ width: `${progress}%` }}
+                />
+              </div>
+            </div>
+
+            {/* Timer Progress bar */}
+            {timeLeft !== null && currentQuestion.time_limit && (
+              <div>
+                <div className="mb-2 flex items-center justify-between text-sm">
+                  <span className="text-gray-600 dark:text-gray-400">
+                    Thời gian còn lại
+                  </span>
+                  <span
+                    className={`${
+                      timeLeft <= 10
+                        ? "font-bold text-red-600 dark:text-red-400"
+                        : timeLeft <= 30
+                          ? "font-medium text-orange-600 dark:text-orange-400"
+                          : "text-gray-600 dark:text-gray-400"
+                    }`}
+                  >
+                    {Math.floor(timeLeft / 60)}:
+                    {(timeLeft % 60).toString().padStart(2, "0")}
+                  </span>
+                </div>
+                <div className="h-2 w-full rounded-full bg-gray-200 dark:bg-gray-700">
+                  <div
+                    className={`h-2 rounded-full transition-all duration-1000 ${
+                      timeLeft <= 10
+                        ? "bg-gradient-to-r from-red-500 to-red-600"
+                        : timeLeft <= 30
+                          ? "bg-gradient-to-r from-orange-500 to-orange-600"
+                          : "bg-gradient-to-r from-green-500 to-green-600"
+                    }`}
+                    style={{
+                      width: `${Math.max(0, (timeLeft / currentQuestion.time_limit) * 100)}%`,
+                    }}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Question Navigation */}
+      <div className="border-b border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800">
+        <div className="mx-auto max-w-7xl px-4 py-3">
+          <div className="flex items-center gap-2 overflow-x-auto pb-2">
+            <span className="mr-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+              Câu hỏi:
+            </span>
+            {allQuestions.map((_, index) => {
+              const isAnswered = !!userAnswers[allQuestions[index].id];
+              const isCurrent = index === currentQuestionIndex;
+
+              return (
+                <button
+                  key={index}
+                  disabled={
+                    index > currentQuestionIndex && !isCurrentQuestionAnswered()
+                  }
+                  className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg text-sm font-medium transition-all ${
+                    isCurrent
+                      ? "bg-blue-600 text-white shadow-lg ring-2 ring-blue-300 dark:ring-blue-500"
+                      : isAnswered
+                        ? "bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-900/30 dark:text-green-400 dark:hover:bg-green-900/50"
+                        : index > currentQuestionIndex &&
+                            !isCurrentQuestionAnswered()
+                          ? "cursor-not-allowed bg-gray-100 text-gray-400 dark:bg-gray-700 dark:text-gray-500"
+                          : "bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+                  }`}
+                >
+                  {index + 1}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* Main Content */}
+      <div className="mx-auto max-w-4xl px-4 py-8">
+        <div className="rounded-2xl bg-white shadow-sm ring-1 ring-gray-200 dark:bg-gray-800 dark:ring-gray-700">
+          {/* Question Header */}
+          <div className="border-b border-gray-200 px-6 py-4 dark:border-gray-700">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-100 text-sm font-bold text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">
+                  {currentQuestionIndex + 1}
+                </span>
+                <span
+                  className={`rounded-full px-3 py-1 text-sm font-medium ${
+                    currentQuestion.type === "multiple_choice"
+                      ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
+                      : "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300"
+                  }`}
+                >
+                  {currentQuestion.type === "multiple_choice"
+                    ? "Trắc nghiệm"
+                    : "Ghép đôi"}
+                </span>
+              </div>
+              <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                <span>{currentQuestion.points} điểm</span>
+              </div>
+            </div>
+            <h2 className="mt-4 text-xl font-semibold text-gray-900 dark:text-white">
+              {currentQuestion.question}
+            </h2>
+          </div>
+
+          {/* Question Content */}
+          <div className="p-6">{renderQuestion(currentQuestion)}</div>
+
+          {/* Navigation Footer */}
+          <div className="border-t border-gray-200 px-6 py-4 dark:border-gray-700">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                <span>
+                  Câu {currentQuestionIndex + 1} / {allQuestions.length}
+                </span>
+              </div>
+
+              <div className="flex items-center gap-4">
+                {/* Warning when not answered */}
+                {!isCurrentQuestionAnswered() && (
+                  <div className="flex items-center gap-2 text-sm text-amber-600 dark:text-amber-400">
+                    <span>⚠️ Vui lòng chọn đáp án để tiếp tục</span>
+                  </div>
+                )}
+
+                <Button
+                  onClick={handleNextQuestion}
+                  disabled={!isCurrentQuestionAnswered() || isSubmitting}
+                  variant="primary"
+                  className="flex items-center gap-2"
+                >
+                  {isSubmitting ? (
+                    <>
+                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
+                      Đang nộp bài...
+                    </>
+                  ) : (
+                    <>
+                      {currentQuestionIndex === allQuestions.length - 1
+                        ? "Hoàn thành"
+                        : "Câu tiếp theo"}
+                      <FaArrowRight className="h-4 w-4" />
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Time Warning Toast */}
+      <Toast
+        isVisible={showTimeWarning}
+        type="error"
+        message="⏰ Chỉ còn 10 giây để hoàn thành câu hỏi này!"
+        onClose={() => setShowTimeWarning(false)}
+      />
+
+      {/* Simple Score Modal */}
+      {showResultsModal && quizScore !== null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="relative mx-4 w-full max-w-md rounded-2xl bg-white shadow-2xl ring-1 ring-gray-200 dark:bg-gray-800 dark:ring-gray-700">
+            <div className="p-8 text-center">
+              <div className="mb-6">
+                <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/30">
+                  <span className="text-2xl">🎉</span>
+                </div>
+                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+                  Hoàn thành bài quiz!
+                </h2>
+                <p className="mt-2 text-gray-600 dark:text-gray-400">
+                  {quiz?.quiz?.name}
+                </p>
+              </div>
+
+              <div className="mb-6 rounded-xl bg-gradient-to-br from-blue-50 to-blue-100 p-6 dark:from-blue-900/20 dark:to-blue-800/20">
+                <div className="text-4xl font-bold text-blue-600 dark:text-blue-400">
+                  {quizScore}
+                </div>
+                <div className="mt-2 text-sm font-medium text-blue-700 dark:text-blue-300">
+                  Điểm số của bạn
+                </div>
+              </div>
+
+              <div className="flex gap-4">
+                <Button
+                  onClick={() => {
+                    setShowResultsModal(false);
+                    if (classroomId) {
+                      navigate(
+                        `/student/classroom/${classroomId}?tab=classwork`,
+                      );
+                    } else {
+                      navigate("/student/classrooms/");
+                    }
+                  }}
+                  variant="outline"
+                  className="flex-1"
+                >
+                  Về trang chủ
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
