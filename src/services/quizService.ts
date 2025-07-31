@@ -130,13 +130,6 @@ export const getQuizSessions = async (
   return response.data;
 };
 
-export const createQuizSession = async (
-  sessionData: CreateSessionRequest,
-): Promise<SuccessApiResponse<QuizSession>> => {
-  const response = await axiosCustom.post("/quiz-sessions", sessionData);
-  return response.data;
-};
-
 export const getQuizSessionById = async (
   sessionId: string,
 ): Promise<SuccessApiResponse<QuizSession>> => {
@@ -408,7 +401,7 @@ export interface QuizSessionResponse {
 
 // API function to create quiz session
 export const createQuizSession = async (
-  sessionData: QuizSessionRequest
+  sessionData: QuizSessionRequest,
 ): Promise<SuccessApiResponse<QuizSessionResponse>> => {
   const response = await axiosCustom.post("/quiz-sessions", sessionData);
   return response.data;

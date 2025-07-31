@@ -4,9 +4,8 @@ import type { SuccessApiResponse } from "../types/response";
 
 // Base axios instance configuration
 const axiosInstance = axios.create({
-  baseURL: "http://localhost:8080/api/v1.0",
+  baseURL: import.meta.env.VITE_BASE_URL || "http://localhost:8080/api/v1.0",
   withCredentials: true, // Include cookies with requests
-  timeout: 10000, // 10 seconds timeout
   headers: {
     "Content-Type": "application/json",
   },
