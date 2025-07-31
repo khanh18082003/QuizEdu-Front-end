@@ -32,6 +32,7 @@ export interface QuizData {
 
 export interface QuizSessionDetail {
   id: string;
+  quiz_id: string; // Add quiz_id to reference the quiz
   teacher: RegisterResponse;
   total_questions: number;
   status: string;
@@ -98,6 +99,50 @@ export const getQuizSessionDetail = async (
     return response.data;
   } catch (error) {
     console.error("Error fetching quiz session details:", error);
+    throw error;
+  }
+};
+
+// Quiz submission interfaces
+export interface QuizSubmissionRequest {
+  quiz_session_id: string;
+  multiple_choice_answers: MultipleChoiceAnswerSubmission[];
+  matching_answers: MatchingAnswerSubmission[];
+}
+
+export interface MultipleChoiceAnswerSubmission {
+  question_id: string;
+  answer_participant: {
+    user_id: string;
+    answer: string;
+    correct: boolean;
+  }[];
+}
+
+export interface MatchingAnswerSubmission {
+  match_pair_id: string;
+  item_a: {
+    content: string;
+    matching_type: string;
+  };
+  item_b: {
+    content: string;
+    matching_type: string;
+  };
+}
+
+// API function to submit quiz answers
+export const submitQuizAnswer = async (
+  submissionData: QuizSubmissionRequest,
+): Promise<SuccessApiResponse<number>> => {
+  try {
+    const response = await api.post<SuccessApiResponse<number>>(
+      `/quiz-sessions/submitQuizSession`,
+      submissionData,
+    );
+    return response.data;
+  } catch (error) {
+    console.error("Error submitting quiz answer:", error);
     throw error;
   }
 };

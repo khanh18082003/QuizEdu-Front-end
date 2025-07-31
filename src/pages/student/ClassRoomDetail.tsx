@@ -193,9 +193,11 @@ const ClassRoomDetail = () => {
   const navigate = useNavigate();
   const { t } = useTranslation();
 
-  // Get activeTab from location.state or default to "stream"
-  const initialTab =
-    (location.state as { activeTab?: TabType })?.activeTab || "stream";
+  // Get activeTab from URL query parameter or location.state, default to "stream"
+  const searchParams = new URLSearchParams(location.search);
+  const tabFromQuery = searchParams.get("tab") as TabType | null;
+  const tabFromState = (location.state as { activeTab?: TabType })?.activeTab;
+  const initialTab = tabFromQuery || tabFromState || "stream";
   const [activeTab, setActiveTab] = useState<TabType>(initialTab);
 
   const [classroom, setClassroom] = useState<ProcessedClassroomData | null>(
@@ -210,6 +212,19 @@ const ClassRoomDetail = () => {
     ProcessedClassroomData["assignments"][0] | null
   >(null);
   const [isJoiningSession, setIsJoiningSession] = useState(false);
+
+  // Update URL when tab changes
+  useEffect(() => {
+    const searchParams = new URLSearchParams(location.search);
+    const currentTab = searchParams.get("tab");
+
+    if (currentTab !== activeTab) {
+      searchParams.set("tab", activeTab);
+      navigate(`${location.pathname}?${searchParams.toString()}`, {
+        replace: true,
+      });
+    }
+  }, [activeTab, location.pathname, location.search, navigate]);
 
   // Format date to be displayed in user's locale
   const formatDate = (date: Date) => {
@@ -255,6 +270,7 @@ const ClassRoomDetail = () => {
             {
               state: {
                 accessCode,
+                classroomId: id,
                 quizSessionId: selectedQuizSession.quiz_session_id,
                 quizSessionName: selectedQuizSession.title,
               },
@@ -269,6 +285,7 @@ const ClassRoomDetail = () => {
                 accessCode,
                 quizSessionId: selectedQuizSession.quiz_session_id,
                 quizSessionName: selectedQuizSession.title,
+                classroomId: id,
               },
             },
           );

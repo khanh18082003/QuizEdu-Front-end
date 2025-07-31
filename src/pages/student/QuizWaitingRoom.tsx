@@ -18,6 +18,7 @@ interface WaitingRoomState {
   accessCode: string;
   quizSessionId: string;
   quizSessionName: string;
+  classroomId: string;
 }
 
 // Interface for waiting room info
@@ -27,6 +28,7 @@ interface WaitingRoomInfo {
   totalQuestions?: number;
   teacherName?: string;
   estimatedStartTime?: string;
+  quizId?: string; // Add quizId to store for navigation
 }
 
 const QuizWaitingRoom = () => {
@@ -73,6 +75,7 @@ const QuizWaitingRoom = () => {
               | "PAUSED",
             totalQuestions: response.data.total_questions,
             teacherName: response.data.teacher.display_name,
+            quizId: response.data.quiz_id, // Store quiz_id for later use
           }));
 
           // If status is already "ACTIVE", redirect to quiz taking immediately
@@ -82,7 +85,9 @@ const QuizWaitingRoom = () => {
                 accessCode: waitingRoomState.accessCode,
                 quizSessionId: quizSessionId,
                 quizSessionName: waitingRoomState.quizSessionName,
+                quizId: response.data.quiz_id, // Pass quiz_id for detailed quiz loading
                 sessionData: response.data,
+                classrooomId: waitingRoomState.classroomId, // Pass classroomId if needed
               },
             });
           }
@@ -527,7 +532,9 @@ const QuizWaitingRoom = () => {
                     accessCode: waitingRoomState.accessCode,
                     quizSessionId: quizSessionId,
                     quizSessionName: waitingRoomState.quizSessionName,
+                    quizId: waitingRoomInfo.quizId, // Pass the quiz_id from session detail
                     isWaitingForTeacher: true,
+                    classroomId: waitingRoomState.classroomId, // Pass classroomId if needed
                   },
                 });
               }}
