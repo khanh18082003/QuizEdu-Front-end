@@ -388,6 +388,32 @@ export const getSubjects = async (): Promise<SuccessApiResponse<Subject[]>> => {
   return response.data;
 };
 
+// Quiz Session interfaces and API
+export interface QuizSessionRequest {
+  quiz_id: string;
+  class_id: string;
+  teacher_id: string;
+}
+
+export interface QuizSessionResponse {
+  id: string;
+  quiz_id: string;
+  class_id: string;
+  teacher_id: string;
+  status: string;
+  access_code: string;
+  start_time: string;
+  end_time: string;
+}
+
+// API function to create quiz session
+export const createQuizSession = async (
+  sessionData: QuizSessionRequest
+): Promise<SuccessApiResponse<QuizSessionResponse>> => {
+  const response = await axiosCustom.post("/quiz-sessions", sessionData);
+  return response.data;
+};
+
 // API function to get detailed quiz information by ID
 export const getQuizDetail = async (
   quizId: string,

@@ -268,3 +268,51 @@ export const getQuizSessionsInClassroom = async (
     throw error;
   }
 };
+
+// Interface for inviting students
+export interface InviteStudentsRequest {
+  student_emails: string[];
+  class_room_id: string;
+}
+
+/**
+ * Invite students to a classroom by email
+ */
+export const inviteStudents = async (
+  classroomId: string,
+  studentEmails: string[]
+): Promise<SuccessApiResponse<any>> => {
+  try {
+    const requestData: InviteStudentsRequest = {
+      student_emails: studentEmails,
+      class_room_id: classroomId
+    };
+
+    const response = await api.post<SuccessApiResponse<any>>(
+      '/classrooms/invited-students',
+      requestData
+    );
+    return response.data;
+  } catch (error) {
+    console.error("Error inviting students:", error);
+    throw error;
+  }
+};
+
+/**
+ * Remove a student from a classroom
+ */
+export const removeStudentFromClassroom = async (
+  classroomId: string,
+  studentId: string
+): Promise<SuccessApiResponse<void>> => {
+  try {
+    const response = await api.delete<SuccessApiResponse<void>>(
+      `/classrooms/${classroomId}/students/${studentId}`
+    );
+    return response.data;
+  } catch (error) {
+    console.error("Error removing student from classroom:", error);
+    throw error;
+  }
+};
