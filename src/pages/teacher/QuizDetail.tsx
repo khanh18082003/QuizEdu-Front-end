@@ -1377,6 +1377,14 @@ const QuizDetail = () => {
         availableTypes={getAvailableQuizTypes()}
         isLoading={isCreatingQuizType}
       />
+
+      {/* Toast */}
+      <Toast
+        message={toast.message}
+        type={toast.type}
+        isVisible={toast.isVisible}
+        onClose={() => setToast({ ...toast, isVisible: false })}
+      />
     </div>
   );
 };

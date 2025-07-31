@@ -1,49 +1,72 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import { useSelector } from "react-redux";
 import Button from "../../components/ui/Button";
 import Toast from "../../components/ui/Toast";
 import SelectQuizModal from "../../components/modals/SelectQuizModal";
 import QuizPracticeModal from "../../components/modals/QuizPracticeModal";
 import AddQuizToClassModal from "../../components/modals/AddQuizToClassModal";
 import InviteStudentsModal from "../../components/modals/InviteStudentsModal";
-import { 
+import {
   getClassroomDetail,
   type ClassroomDetailData,
-  type ClassroomQuiz 
+  type ClassroomQuiz,
+  removeStudentFromClassroom
 } from "../../services/classroomService";
 
 import {
-  type QuizSession,
   getQuizForPractice,
-  type QuizManagementItem
+  type QuizManagementItem,
+  createQuizSession,
+  type QuizSessionRequest,
+  type QuizSessionResponse
 } from "../../services/quizService";
 
 import { type RegisterResponse } from "../../services/userService";
+import ConfirmRemoveStudentModal from "../../components/modals/ConfirmRemoveStudentModal";
+import type {
+  StudentProfileResponse,
+  TeacherProfileResponse,
+} from "../../types/response";
 
 const ClassDetailPage = () => {
   const { classId } = useParams<{ classId: string }>();
   const navigate = useNavigate();
-  
+
   const [classDetail, setClassDetail] = useState<ClassroomDetailData | null>(null);
   const [students, setStudents] = useState<RegisterResponse[]>([]);
   const [quizzes, setQuizzes] = useState<ClassroomQuiz[]>([]);
-  const [quizSessions] = useState<QuizSession[]>([]);
-  
+  const [quizSessions, setQuizSessions] = useState<QuizSessionResponse[]>([]);
+
+  // Get user from Redux store
+  const user = useSelector(
+    (state: {
+      user: RegisterResponse | StudentProfileResponse | TeacherProfileResponse;
+    }) => state.user,
+  );
+
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"students" | "quizzes" | "sessions">("students");
-  
+
   // Practice mode states
   const [isSelectQuizModalOpen, setIsSelectQuizModalOpen] = useState(false);
   const [isPracticeModalOpen, setIsPracticeModalOpen] = useState(false);
   const [selectedQuizForPractice, setSelectedQuizForPractice] = useState<QuizManagementItem | null>(null);
   const [isLoadingQuizDetails, setIsLoadingQuizDetails] = useState(false);
-  
+
   // Add quiz modal state
   const [isAddQuizModalOpen, setIsAddQuizModalOpen] = useState(false);
-  
+
+  // Student removal modal state
+  const [isRemoveStudentModalOpen, setIsRemoveStudentModalOpen] = useState(false);
+  const [selectedStudentToRemove, setSelectedStudentToRemove] = useState<RegisterResponse | null>(null);
+
   // Invite students modal state
   const [isInviteStudentsModalOpen, setIsInviteStudentsModalOpen] = useState(false);
-  
+
+  // Quiz Session states
+  const [isCreatingSession, setIsCreatingSession] = useState(false);
+
   // Toast state
   const [toast, setToast] = useState<{
     message: string;
@@ -68,11 +91,11 @@ const ClassDetailPage = () => {
 
       try {
         setIsLoading(true);
-        
+
         // Use real API
         const response = await getClassroomDetail(classId);
         const data = response.data;
-        
+
         setClassDetail(data);
         setStudents(data.students);
         setQuizzes(data.quiz);
@@ -129,8 +152,39 @@ const ClassDetailPage = () => {
     }
   };
 
-  const handleCreateSession = () => {
-    showToast("Tính năng tạo session đang được phát triển", "info");
+  const handleCreateSession = async (quiz: ClassroomQuiz) => {
+    // Call create session immediately
+    if (!user?.id || !classId) return;
+
+    try {
+      setIsCreatingSession(true);
+
+      const sessionData: QuizSessionRequest = {
+        quiz_id: quiz.id,
+        class_id: classId,
+        teacher_id: user.id
+      };
+
+      const response = await createQuizSession(sessionData);
+      setQuizSessions(prev => [...prev, response.data]);
+      showToast("Phiên quiz đã được tạo thành công!", "success");
+
+      // Navigate to waiting room page
+      navigate(`/teacher/quiz-waiting-room`, {
+        state: {
+          session: response.data,
+          quiz: quiz,
+          students: students,
+          classId: classId
+        }
+      });
+
+    } catch (error) {
+      console.error("Error creating quiz session:", error);
+      showToast("Không thể tạo phiên quiz. Vui lòng thử lại!", "error");
+    } finally {
+      setIsCreatingSession(false);
+    }
   };
 
   const handleStartPractice = () => {
@@ -156,11 +210,26 @@ const ClassDetailPage = () => {
     setSelectedQuizForPractice(null);
   };
 
-  const handleRemoveStudent = async (_studentId: string) => {
-    try {
-      if (!classId) return;
+  const handleRemoveStudent = (studentId: string) => {
+    const student = students.find(s => s.id === studentId);
+    if (student) {
+      setSelectedStudentToRemove(student);
+      setIsRemoveStudentModalOpen(true);
+    }
+  };
 
-      showToast("Tính năng xóa học sinh đang được phát triển", "info");
+  const confirmRemoveStudent = async () => {
+    try {
+      if (!classId || !selectedStudentToRemove) return;
+
+      await removeStudentFromClassroom(classId, selectedStudentToRemove.id);
+
+      // Remove student from local state
+      setStudents(prev => prev.filter(s => s.id !== selectedStudentToRemove.id));
+
+      showToast("Đã xóa học sinh khỏi lớp học thành công", "success");
+      setIsRemoveStudentModalOpen(false);
+      setSelectedStudentToRemove(null);
     } catch (error) {
       console.error("Error removing student:", error);
       showToast("Không thể xóa học sinh. Vui lòng thử lại!", "error");
@@ -239,31 +308,28 @@ const ClassDetailPage = () => {
             <nav className="-mb-px flex space-x-8">
               <button
                 onClick={() => setActiveTab("students")}
-                className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                  activeTab === "students"
+                className={`py-2 px-1 border-b-2 font-medium text-sm ${activeTab === "students"
                     ? "border-blue-500 text-blue-600"
                     : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-                }`}
+                  }`}
               >
                 Học sinh ({students.length})
               </button>
               <button
                 onClick={() => setActiveTab("quizzes")}
-                className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                  activeTab === "quizzes"
+                className={`py-2 px-1 border-b-2 font-medium text-sm ${activeTab === "quizzes"
                     ? "border-blue-500 text-blue-600"
                     : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-                }`}
+                  }`}
               >
                 Quiz ({quizzes.length})
               </button>
               <button
                 onClick={() => setActiveTab("sessions")}
-                className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                  activeTab === "sessions"
+                className={`py-2 px-1 border-b-2 font-medium text-sm ${activeTab === "sessions"
                     ? "border-blue-500 text-blue-600"
                     : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-                }`}
+                  }`}
               >
                 Sessions ({quizSessions.length})
               </button>
@@ -344,7 +410,7 @@ const ClassDetailPage = () => {
                   Danh sách Quiz
                 </h2>
                 <div className="flex items-center gap-3">
-                  <Button 
+                  <Button
                     variant="outline"
                     onClick={handleStartPractice}
                     className="flex items-center gap-2 text-blue-600 hover:text-blue-700 border-blue-300 hover:border-blue-400"
@@ -367,30 +433,29 @@ const ClassDetailPage = () => {
                       <h3 className="text-xl font-semibold text-gray-900 dark:text-white pr-3 flex-1 leading-relaxed">
                         {quiz.name}
                       </h3>
-                      <span className={`px-4 py-2 rounded-full text-sm font-medium flex-shrink-0 ${
-                        quiz.active 
-                          ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' 
+                      <span className={`px-4 py-2 rounded-full text-sm font-medium flex-shrink-0 ${quiz.active
+                          ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
                           : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
-                      }`}>
+                        }`}>
                         {quiz.active ? 'Hoạt động' : 'Tạm dừng'}
                       </span>
                     </div>
-                    
+
                     <p className="text-base text-gray-600 dark:text-gray-400 mb-8 line-clamp-3 leading-relaxed flex-grow">
-                      {quiz.description && quiz.description.length > 120 
-                        ? `${quiz.description.substring(0, 120)}...` 
+                      {quiz.description && quiz.description.length > 120
+                        ? `${quiz.description.substring(0, 120)}...`
                         : quiz.description || "Không có mô tả"}
                     </p>
-                    
+
                     <div className="flex gap-3 mt-auto">
                       <Button variant="outline" size="md" className="flex-1 py-3">
                         Sửa
                       </Button>
-                      <Button 
-                        variant="primary" 
-                        size="md" 
+                      <Button
+                        variant="primary"
+                        size="md"
                         className="flex-1 py-3"
-                        onClick={handleCreateSession}
+                        onClick={() => handleCreateSession(quiz)}
                       >
                         Tạo Session
                       </Button>
@@ -409,7 +474,7 @@ const ClassDetailPage = () => {
                       Chưa có quiz nào được thêm
                     </h3>
                     <p className="text-gray-600 dark:text-gray-400 mb-8 max-w-md mx-auto">
-                      Bắt đầu thêm quiz vào lớp học để tạo bài kiểm tra cho học sinh. 
+                      Bắt đầu thêm quiz vào lớp học để tạo bài kiểm tra cho học sinh.
                       Bạn có thể thêm quiz từ danh sách quiz đã tạo.
                     </p>
                     <Button onClick={handleAddQuiz} className="px-6 py-3">
@@ -434,23 +499,22 @@ const ClassDetailPage = () => {
               </div>
 
               <div className="space-y-4">
-                {quizSessions.map((session: QuizSession) => (
+                {quizSessions.map((session: QuizSessionResponse) => (
                   <div key={session.id} className="flex items-center justify-between p-4 border border-gray-200 dark:border-gray-700 rounded-lg">
                     <div>
                       <div className="text-sm font-medium text-gray-900 dark:text-white">
-                        {session.title}
+                        Session {session.id.slice(-6)}
                       </div>
                       <div className="text-sm text-gray-500 dark:text-gray-400">
                         {new Date(session.start_time).toLocaleString("vi-VN")} - {new Date(session.end_time).toLocaleString("vi-VN")}
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                        session.is_active 
-                          ? 'bg-green-100 text-green-800' 
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${session.status === 'ACTIVE'
+                          ? 'bg-green-100 text-green-800'
                           : 'bg-gray-100 text-gray-800'
-                      }`}>
-                        {session.is_active ? 'Đang diễn ra' : 'Đã kết thúc'}
+                        }`}>
+                        {session.status === 'ACTIVE' ? 'Đang diễn ra' : 'Đã kết thúc'}
                       </span>
                       <Button
                         variant="outline"
@@ -513,6 +577,17 @@ const ClassDetailPage = () => {
         classRoomId={classId || ""}
         onStudentsInvited={handleStudentsInvited}
         onShowToast={showToast}
+      />
+
+      {/* Confirm Remove Student Modal */}
+      <ConfirmRemoveStudentModal
+        isOpen={isRemoveStudentModalOpen}
+        onClose={() => {
+          setIsRemoveStudentModalOpen(false);
+          setSelectedStudentToRemove(null);
+        }}
+        student={selectedStudentToRemove}
+        onConfirm={confirmRemoveStudent}
       />
 
       {/* Loading Overlay for Quiz Details */}

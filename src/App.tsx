@@ -32,6 +32,7 @@ import Class from "./pages/teacher/Class";
 import QuizManagement from "./pages/teacher/QuizManagement";
 import CreateQuiz from "./pages/teacher/CreateQuiz";
 import QuizDetail from "./pages/teacher/QuizDetail";
+import TeacherQuizWaitingRoom from "./pages/teacher/QuizWaitingRoom";
 
 function App() {
   return (
@@ -81,6 +82,7 @@ function App() {
           {/* Add more teacher routes as needed */}
           <Route path="classes" element={<Class />} />
           <Route path="classes/:classId" element={<ClassDetail />} />
+          <Route path="quiz-waiting-room" element={<TeacherQuizWaitingRoom />} />
           <Route path="quizzes" element={<QuizManagement />} />
           <Route path="quizzes/create" element={<CreateQuiz />} />
           <Route path="quizzes/:id" element={<QuizDetail />} />
