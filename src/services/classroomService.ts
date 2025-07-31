@@ -298,3 +298,21 @@ export const inviteStudents = async (
     throw error;
   }
 };
+
+/**
+ * Remove a student from a classroom
+ */
+export const removeStudentFromClassroom = async (
+  classroomId: string,
+  studentId: string
+): Promise<SuccessApiResponse<void>> => {
+  try {
+    const response = await api.delete<SuccessApiResponse<void>>(
+      `/classrooms/${classroomId}/students/${studentId}`
+    );
+    return response.data;
+  } catch (error) {
+    console.error("Error removing student from classroom:", error);
+    throw error;
+  }
+};
