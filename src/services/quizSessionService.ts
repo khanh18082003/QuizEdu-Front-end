@@ -146,3 +146,31 @@ export const submitQuizAnswer = async (
     throw error;
   }
 };
+
+export const startQuizSession = async (
+  quizSessionId: string,
+): Promise<SuccessApiResponse<void>> => {
+  try {
+    const response = await api.put<SuccessApiResponse<void>>(
+      `/quiz-sessions/start/${quizSessionId}`,
+    );
+    return response.data;
+  } catch (error) {
+    console.error("Error starting quiz session:", error);
+    throw error;
+  }
+};
+
+export const endQuizSession = async (
+  quizSessionId: string,
+): Promise<SuccessApiResponse<void>> => {
+  try {
+    const response = await api.put<SuccessApiResponse<void>>(
+      `/quiz-sessions/close/${quizSessionId}`,
+    );
+    return response.data;
+  } catch (error) {
+    console.error("Error ending quiz session:", error);
+    throw error;
+  }
+};

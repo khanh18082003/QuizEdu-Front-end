@@ -1,26 +1,43 @@
-import React, { useState, useEffect, useCallback } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import React, { useState, useEffect, useCallback, useRef } from "react";
+import { useNavigate, useLocation, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { FaChevronLeft, FaClock, FaFlag, FaArrowRight } from "react-icons/fa";
+import {
+  FaChevronLeft,
+  FaClock,
+  FaFlag,
+  FaArrowRight,
+  FaPlay,
+  FaExclamationTriangle,
+} from "react-icons/fa";
 
 import { usePageTitle, PAGE_TITLES } from "../../utils/title";
 import {
-  getQuizDetail,
-  type QuizManagementItem,
-  type MultipleChoiceQuestion,
-  type MatchingQuestion,
-  type Answer,
+  getQuizQuestions,
+  type QuizQuestionsResponse,
+  type QuizQuestionMultipleChoice,
+  type QuizQuestionMatchingItem,
 } from "../../services/quizService";
 import {
   submitQuizAnswer,
   type QuizSubmissionRequest,
   type MultipleChoiceAnswerSubmission,
   type MatchingAnswerSubmission,
+  getQuizSessionDetail,
 } from "../../services/quizSessionService";
+import {
+  connectStartExamSocket,
+  disconnectAllSockets,
+} from "../../services/simpleJoinSocket";
 import LoadingOverlay from "../../components/ui/LoadingOverlay";
 import Button from "../../components/ui/Button";
 import Toast from "../../components/ui/Toast";
 import "../../styles/quiz-animations.css";
+import { useSelector } from "react-redux";
+import type { RegisterResponse } from "../../services/userService";
+import type {
+  StudentProfileResponse,
+  TeacherProfileResponse,
+} from "../../types/response";
 
 // Interface for quiz taking state
 interface QuizTakingState {
@@ -32,6 +49,16 @@ interface QuizTakingState {
   isWaitingForTeacher?: boolean;
 }
 
+// Interface for waiting room info
+interface WaitingRoomInfo {
+  quizSessionName: string;
+  status: "LOBBY" | "ACTIVE" | "COMPLETED" | "PAUSED";
+  totalQuestions?: number;
+  teacherName?: string;
+  estimatedStartTime?: string;
+  quizId?: string;
+}
+
 // Combined question type for easy handling
 interface CombinedQuestion {
   id: string;
@@ -41,10 +68,11 @@ interface CombinedQuestion {
   time_limit?: number;
   hint?: string;
   // For multiple choice
-  answers?: Answer[];
+  answers?: { answer_text: string }[];
   allow_multiple_answers?: boolean;
   // For matching
-  matching_pairs?: MatchingQuestion[];
+  item_a?: QuizQuestionMatchingItem[];
+  item_b?: QuizQuestionMatchingItem[];
 }
 
 // User answer interface
@@ -58,11 +86,12 @@ const QuizTaking: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { t } = useTranslation();
+  const { quizSessionId } = useParams<{ quizSessionId: string }>();
 
   // State management
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [quiz, setQuiz] = useState<QuizManagementItem | null>(null);
+  const [quiz, setQuiz] = useState<QuizQuestionsResponse | null>(null);
   const [allQuestions, setAllQuestions] = useState<CombinedQuestion[]>([]);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [userAnswers, setUserAnswers] = useState<Record<string, UserAnswer>>(
@@ -93,17 +122,33 @@ const QuizTaking: React.FC = () => {
     }>
   >([]);
 
+  const user = useSelector(
+    (state: {
+      user: RegisterResponse | StudentProfileResponse | TeacherProfileResponse;
+    }) => state.user,
+  );
+
   // Quiz submission state
   const [showResultsModal, setShowResultsModal] = useState(false);
   const [quizScore, setQuizScore] = useState<number | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Get state from navigation
-  const state = location.state as QuizTakingState | null;
-  const accessCode = state?.accessCode || "";
-  const quizId = state?.quizId || "";
-  const quizSessionId = state?.quizSessionId || "";
-  const classroomId = state?.classroomId || "";
+  const navigationState = location.state as QuizTakingState | null;
+  const sessionId = quizSessionId || navigationState?.quizSessionId || "";
+  const classroomId = navigationState?.classroomId || "";
+
+  // Waiting room state
+  const [waitingRoomInfo, setWaitingRoomInfo] = useState<WaitingRoomInfo>({
+    quizSessionName: navigationState?.quizSessionName || "Quiz Session",
+    status: "LOBBY",
+  });
+  const [isLoadingSession, setIsLoadingSession] = useState(true);
+
+  // Start exam countdown state
+  const [isStartingExam, setIsStartingExam] = useState(false);
+  const [countdown, setCountdown] = useState<number | null>(null);
+  const [isSocketConnected, setIsSocketConnected] = useState(false);
 
   usePageTitle(PAGE_TITLES.QUIZ_TAKING);
 
@@ -111,7 +156,7 @@ const QuizTaking: React.FC = () => {
 
   // Function to format and submit quiz answers
   const submitQuiz = useCallback(async () => {
-    if (!quizSessionId || isSubmitting) return;
+    if (!sessionId || isSubmitting) return;
 
     setIsSubmitting(true);
     setLoading(true);
@@ -128,11 +173,10 @@ const QuizTaking: React.FC = () => {
             question_id: question.id,
             answer_participant: [
               {
-                user_id: "current_user", // This should come from auth context
+                user_id: user.id,
                 answer: Array.isArray(userAnswer.answer)
                   ? userAnswer.answer.join(",")
                   : String(userAnswer.answer),
-                correct: false, // This will be calculated by the backend
               },
             ],
           };
@@ -148,27 +192,31 @@ const QuizTaking: React.FC = () => {
 
           return (userAnswer.answer as Array<{ itemA: string; itemB: string }>)
             .map((pair) => {
-              // Find the matching question that corresponds to this pair
-              const matchingPair = question.matching_pairs?.find(
-                (mp) =>
-                  mp.item_a.content === pair.itemA &&
-                  mp.item_b.content === pair.itemB,
+              // Find the matching items in separate arrays
+              const itemA = question.item_a?.find(
+                (item) => item.content === pair.itemA,
+              );
+              const itemB = question.item_b?.find(
+                (item) => item.content === pair.itemB,
               );
 
-              if (!matchingPair) {
-                console.warn("Could not find matching pair for:", pair);
+              if (!itemA || !itemB) {
+                console.warn("Could not find matching items for:", pair);
                 return null;
               }
 
+              // Create a simple pair ID by combining the indices or using actual IDs if available
+              const pairId = itemA.id;
+
               return {
-                match_pair_id: matchingPair.id, // Use the actual matching pair ID
+                match_pair_id: pairId,
                 item_a: {
                   content: pair.itemA,
-                  matching_type: matchingPair.item_a.matching_type,
+                  matching_type: itemA.matching_type,
                 },
                 item_b: {
                   content: pair.itemB,
-                  matching_type: matchingPair.item_b.matching_type,
+                  matching_type: itemB.matching_type,
                 },
               };
             })
@@ -176,7 +224,7 @@ const QuizTaking: React.FC = () => {
         });
 
       const submissionData: QuizSubmissionRequest = {
-        quiz_session_id: quizSessionId,
+        quiz_session_id: sessionId,
         multiple_choice_answers:
           multipleChoiceAnswers as MultipleChoiceAnswerSubmission[],
         matching_answers: matchingAnswers as MatchingAnswerSubmission[],
@@ -203,7 +251,7 @@ const QuizTaking: React.FC = () => {
       setIsSubmitting(false);
       setLoading(false);
     }
-  }, [quizSessionId, allQuestions, userAnswers, isSubmitting]);
+  }, [sessionId, allQuestions, userAnswers, isSubmitting, user.id]);
 
   const handleNextQuestion = useCallback(async () => {
     if (currentQuestionIndex < allQuestions.length - 1) {
@@ -218,6 +266,14 @@ const QuizTaking: React.FC = () => {
       await submitQuiz();
     }
   }, [currentQuestionIndex, allQuestions, submitQuiz]);
+
+  // Ref để tránh dependency issues với submitQuiz
+  const submitQuizRef = useRef<() => Promise<void>>(async () => {});
+
+  // Cập nhật ref mỗi khi submitQuiz thay đổi
+  useEffect(() => {
+    submitQuizRef.current = submitQuiz;
+  }, [submitQuiz]);
 
   const handleTimeUp = useCallback(async () => {
     // Auto-advance to next question when time runs out
@@ -274,13 +330,13 @@ const QuizTaking: React.FC = () => {
 
       matchingPairs.forEach((pair) => {
         const currentQuestion = allQuestions[currentQuestionIndex];
-        if (!currentQuestion?.matching_pairs) return;
+        if (!currentQuestion?.item_a || !currentQuestion?.item_b) return;
 
-        const itemAIndex = currentQuestion.matching_pairs.findIndex(
-          (q) => q.item_a.content === pair.itemA,
+        const itemAIndex = currentQuestion.item_a.findIndex(
+          (item) => item.content === pair.itemA,
         );
-        const itemBIndex = currentQuestion.matching_pairs.findIndex(
-          (q) => q.item_b.content === pair.itemB,
+        const itemBIndex = currentQuestion.item_b.findIndex(
+          (item) => item.content === pair.itemB,
         );
 
         if (itemAIndex === -1 || itemBIndex === -1) return;
@@ -394,11 +450,15 @@ const QuizTaking: React.FC = () => {
     return () => clearInterval(interval);
   }, [timerActive, timeLeft, handleTimeUp, lowTimeWarningPlayed]);
 
-  // Load quiz data on component mount
+  // Load quiz data when we have quizId from session details
   useEffect(() => {
     const loadQuizData = async () => {
+      const quizId = waitingRoomInfo.quizId;
       if (!quizId) {
-        setError("Quiz ID is required");
+        // Don't show error immediately, wait for session details to load
+        if (!isLoadingSession) {
+          setError("Quiz ID is required");
+        }
         return;
       }
 
@@ -406,7 +466,7 @@ const QuizTaking: React.FC = () => {
       setError(null);
 
       try {
-        const quizData = await getQuizDetail(quizId);
+        const quizData = await getQuizQuestions(quizId);
         setQuiz(quizData.data);
         console.log("Loaded quiz data:", quizData.data);
         // Combine multiple choice and matching questions into a single array
@@ -415,7 +475,7 @@ const QuizTaking: React.FC = () => {
         // Process multiple choice questions
         if (quizData.data.multiple_choice_quiz?.questions) {
           quizData.data.multiple_choice_quiz.questions.forEach(
-            (mcq: MultipleChoiceQuestion) => {
+            (mcq: QuizQuestionMultipleChoice) => {
               combinedQuestions.push({
                 id: mcq.question_id,
                 type: "multiple_choice",
@@ -432,19 +492,22 @@ const QuizTaking: React.FC = () => {
 
         // Process matching questions - treat entire matching quiz as one question
         if (
-          quizData.data.matching_quiz?.questions &&
-          quizData.data.matching_quiz.questions.length > 0
+          quizData.data.matching_quiz?.item_a &&
+          quizData.data.matching_quiz.item_a.length > 0 &&
+          quizData.data.matching_quiz?.item_b &&
+          quizData.data.matching_quiz.item_b.length > 0
         ) {
+          // Calculate total points for matching quiz
+          const totalMatchingPoints = quizData.data.matching_quiz.item_a.length; // 1 point per pair by default
+
           combinedQuestions.push({
             id: "matching_quiz",
             type: "matching",
             question: "Ghép các cặp phù hợp",
-            points: quizData.data.matching_quiz.questions.reduce(
-              (sum, q) => sum + q.points,
-              0,
-            ),
+            points: totalMatchingPoints,
             time_limit: quizData.data.matching_quiz.time_limit,
-            matching_pairs: quizData.data.matching_quiz.questions,
+            item_a: quizData.data.matching_quiz.item_a,
+            item_b: quizData.data.matching_quiz.item_b,
           });
         }
 
@@ -458,16 +521,134 @@ const QuizTaking: React.FC = () => {
     };
 
     loadQuizData();
-  }, [quizId]);
+  }, [waitingRoomInfo.quizId, isLoadingSession]);
+
+  // Load quiz session details on component mount
+  useEffect(() => {
+    if (!sessionId) {
+      navigate("/student/classrooms");
+      return;
+    }
+
+    const loadQuizSessionDetail = async () => {
+      try {
+        setIsLoadingSession(true);
+
+        const response = await getQuizSessionDetail(sessionId);
+
+        if (response.code === "M000" && response.data) {
+          // Check if session is ACTIVE and student is trying to join without access code
+          // (This prevents direct URL access to active sessions)
+          if (
+            response.data.status === "ACTIVE" &&
+            !navigationState?.accessCode
+          ) {
+            setError(
+              "Không thể tham gia: Quiz đã bắt đầu. Vui lòng chờ quiz tiếp theo.",
+            );
+            setTimeout(() => {
+              navigate("/student/classrooms");
+            }, 3000);
+            return;
+          }
+
+          // Update waiting room info with the API response
+          setWaitingRoomInfo((prev) => ({
+            ...prev,
+            status: response.data.status as
+              | "LOBBY"
+              | "ACTIVE"
+              | "COMPLETED"
+              | "PAUSED",
+            totalQuestions: response.data.total_questions,
+            teacherName: response.data.teacher.display_name,
+            quizId: response.data.quiz_id,
+          }));
+
+          // If status is already "ACTIVE" and student has access code, auto-start the quiz
+          if (
+            response.data.status === "ACTIVE" &&
+            navigationState?.accessCode
+          ) {
+            setIsQuizStarted(true);
+          }
+        }
+      } catch (error) {
+        console.error("Error loading quiz session details:", error);
+        setError(t("quizWaitingRoom.loadFailed"));
+      } finally {
+        setIsLoadingSession(false);
+      }
+    };
+
+    loadQuizSessionDetail();
+  }, [sessionId, navigate, t, navigationState?.accessCode]);
+
+  // Connect to start exam socket
+  useEffect(() => {
+    if (!sessionId) return;
+
+    console.log("🔌 Setting up socket connections for session:", sessionId);
+
+    const handleStartExamMessage = (shouldStart: boolean) => {
+      console.log("📡 Received START EXAM signal:", shouldStart);
+      if (shouldStart) {
+        setIsStartingExam(true);
+        setCountdown(10);
+
+        // Start countdown
+        let timeLeft = 10;
+        const countdownInterval = setInterval(() => {
+          timeLeft -= 1;
+          setCountdown(timeLeft);
+
+          if (timeLeft <= 0) {
+            clearInterval(countdownInterval);
+            setIsStartingExam(false);
+            setCountdown(null);
+            setIsQuizStarted(true);
+          }
+        }, 1000);
+      }
+    };
+
+    const handleConnectionChange = (connected: boolean) => {
+      console.log("🔗 Socket connection status:", connected);
+      setIsSocketConnected(connected);
+    };
+
+    // Handler for close quiz session inside useEffect to avoid dependencies issue
+    const handleCloseQuizMessageLocal = async (shouldClose: boolean) => {
+      console.log("📡 Received CLOSE QUIZ signal:", shouldClose);
+      if (shouldClose) {
+        console.log("📡 Processing quiz close signal from teacher");
+        // Auto-submit the quiz when teacher closes the session
+        setTimerActive(false); // Stop the timer
+        // Use ref to call submitQuiz
+        if (submitQuizRef.current) {
+          await submitQuizRef.current();
+        }
+      }
+    };
+
+    // Connect to start exam socket with both handlers
+    console.log("🚀 Connecting to START EXAM socket with dual subscription...");
+    connectStartExamSocket(
+      sessionId,
+      handleStartExamMessage, // Handler for start exam messages
+      handleCloseQuizMessageLocal, // Handler for close quiz messages
+      handleConnectionChange,
+    );
+
+    // Cleanup on unmount
+    return () => {
+      // Disconnect all socket connections
+      disconnectAllSockets();
+    };
+  }, [sessionId]); // Chỉ dependency sessionId
 
   const handleBackToLobby = () => {
-    navigate(`/student/quiz-session/${quizSessionId}/waiting`, {
-      state: { accessCode },
-    });
-  };
-
-  const handleStartQuiz = () => {
-    setIsQuizStarted(true);
+    navigate("/student/classrooms");
   };
 
   const handleAnswerChange = (
@@ -539,7 +720,11 @@ const QuizTaking: React.FC = () => {
 
     if (currentQuestion.type === "matching") {
       return (
-        matchingPairs.length === (currentQuestion.matching_pairs?.length || 0)
+        matchingPairs.length ===
+        Math.min(
+          currentQuestion.item_a?.length || 0,
+          currentQuestion.item_b?.length || 0,
+        )
       );
     }
 
@@ -583,7 +768,7 @@ const QuizTaking: React.FC = () => {
           )}
 
           <div className="space-y-3">
-            {question.answers?.map((answer: Answer, index: number) => (
+            {question.answers?.map((answer, index: number) => (
               <label
                 key={index}
                 className="group flex cursor-pointer items-center rounded-xl border-2 border-gray-200 p-4 transition-all hover:border-blue-300 hover:bg-blue-50 dark:border-gray-700 dark:hover:border-blue-600 dark:hover:bg-blue-900/10"
@@ -633,10 +818,8 @@ const QuizTaking: React.FC = () => {
     }
 
     if (question.type === "matching") {
-      const itemsA =
-        question.matching_pairs?.map((pair) => pair.item_a.content) || [];
-      const itemsB =
-        question.matching_pairs?.map((pair) => pair.item_b.content) || [];
+      const itemsA = question.item_a?.map((item) => item.content) || [];
+      const itemsB = question.item_b?.map((item) => item.content) || [];
 
       return (
         <div className="space-y-6">
@@ -646,7 +829,7 @@ const QuizTaking: React.FC = () => {
               {question.question}
             </p>
             <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-              Ghép {question.matching_pairs?.length || 0} cặp tương ứng
+              Ghép {Math.min(itemsA.length, itemsB.length)} cặp tương ứng
             </p>
           </div>
 
@@ -836,12 +1019,21 @@ const QuizTaking: React.FC = () => {
             <div className="mb-2 flex items-center justify-between">
               <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
                 Tiến độ ghép cặp: {matchingPairs.length}/
-                {question.matching_pairs?.length || 0}
+                {Math.min(
+                  question.item_a?.length || 0,
+                  question.item_b?.length || 0,
+                )}
               </span>
               <span className="text-sm text-gray-600 dark:text-gray-400">
                 {Math.round(
                   (matchingPairs.length /
-                    (question.matching_pairs?.length || 1)) *
+                    Math.max(
+                      1,
+                      Math.min(
+                        question.item_a?.length || 0,
+                        question.item_b?.length || 0,
+                      ),
+                    )) *
                     100,
                 )}
                 %
@@ -851,7 +1043,7 @@ const QuizTaking: React.FC = () => {
               <div
                 className="h-2 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 transition-all duration-500"
                 style={{
-                  width: `${(matchingPairs.length / (question.matching_pairs?.length || 1)) * 100}%`,
+                  width: `${(matchingPairs.length / Math.max(1, Math.min(question.item_a?.length || 0, question.item_b?.length || 0))) * 100}%`,
                 }}
               />
             </div>
@@ -926,76 +1118,267 @@ const QuizTaking: React.FC = () => {
     );
   }
 
-  // If quiz not started yet, show start screen
+  // If quiz not started yet, show waiting room screen
   if (!isQuizStarted) {
+    // Handle loading states
+    if (loading || isLoadingSession) {
+      return (
+        <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+          <LoadingOverlay show={true} message={t("quiz.loading")} />
+        </div>
+      );
+    }
+
+    // Show waiting room interface
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-        <div className="mx-auto max-w-4xl px-4 py-8">
-          {/* Header */}
-          <div className="mb-8 rounded-2xl bg-white p-6 shadow-sm ring-1 ring-gray-200 dark:bg-gray-800 dark:ring-gray-700">
+        {/* Header */}
+        <div className="border-b border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
+          <div className="mx-auto max-w-7xl px-4 py-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
-                <Button
+                <button
                   onClick={handleBackToLobby}
-                  variant="ghost"
-                  size="sm"
-                  className="flex items-center gap-2 text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100"
+                  className="flex items-center gap-2 text-blue-600 transition-colors hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
                 >
                   <FaChevronLeft className="h-4 w-4" />
-                  {t("common.goBack")}
-                </Button>
-                <div>
-                  <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-                    {quiz.quiz.name}
-                  </h1>
-                  <p className="text-gray-600 dark:text-gray-400">
-                    {quiz.quiz.description}
-                  </p>
-                </div>
+                  <span>{t("quizWaitingRoom.leave")}</span>
+                </button>
+                <h1 className="text-lg font-bold text-gray-900 lg:text-xl dark:text-white">
+                  {waitingRoomInfo.quizSessionName}
+                </h1>
               </div>
             </div>
           </div>
+        </div>
 
-          {/* Quiz Statistics */}
-          <div className="mb-8 rounded-2xl bg-white p-8 shadow-sm ring-1 ring-gray-200 dark:bg-gray-800 dark:ring-gray-700">
-            <div className="text-center">
-              <h2 className="mb-6 text-2xl font-bold text-gray-900 dark:text-white">
-                Thông tin bài quiz
-              </h2>
-              <div className="mb-8 grid grid-cols-1 gap-6 md:grid-cols-3">
-                <div className="rounded-xl bg-gradient-to-br from-blue-50 to-blue-100 p-6 dark:from-blue-900/20 dark:to-blue-800/20">
-                  <div className="text-3xl font-bold text-blue-600 dark:text-blue-400">
-                    {quiz.multiple_choice_quiz?.questions?.length || 0}
-                  </div>
-                  <div className="mt-2 text-sm font-medium text-blue-700 dark:text-blue-300">
-                    Câu trắc nghiệm
+        {/* Main content */}
+        <div className="mx-auto max-w-4xl px-4 py-12">
+          <div className="text-center">
+            {/* Status icon */}
+            <div className="mx-auto mb-8 flex h-24 w-24 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900/30">
+              {isStartingExam && countdown !== null ? (
+                <div className="text-center">
+                  <div className="text-4xl font-bold text-green-600 dark:text-green-400">
+                    {countdown}
                   </div>
                 </div>
-                <div className="rounded-xl bg-gradient-to-br from-purple-50 to-purple-100 p-6 dark:from-purple-900/20 dark:to-purple-800/20">
-                  <div className="text-3xl font-bold text-purple-600 dark:text-purple-400">
-                    {quiz.matching_quiz?.questions?.length || 0}
-                  </div>
-                  <div className="mt-2 text-sm font-medium text-purple-700 dark:text-purple-300">
-                    Câu ghép đôi
-                  </div>
-                </div>
-                <div className="rounded-xl bg-gradient-to-br from-green-50 to-green-100 p-6 dark:from-green-900/20 dark:to-green-800/20">
-                  <div className="text-3xl font-bold text-green-600 dark:text-green-400">
-                    {allQuestions.length}
-                  </div>
-                  <div className="mt-2 text-sm font-medium text-green-700 dark:text-green-300">
-                    Tổng số câu
+              ) : waitingRoomInfo.status === "LOBBY" ? (
+                <FaClock className="h-12 w-12 text-blue-600 dark:text-blue-400" />
+              ) : waitingRoomInfo.status === "ACTIVE" ? (
+                <FaPlay className="h-12 w-12 text-green-600 dark:text-green-400" />
+              ) : (
+                <FaExclamationTriangle className="h-12 w-12 text-orange-600 dark:text-orange-400" />
+              )}
+            </div>
+
+            {/* Quiz Title */}
+            <h2 className="mb-4 text-3xl font-bold text-gray-900 dark:text-white">
+              {isStartingExam && countdown !== null
+                ? "Quiz sắp bắt đầu!"
+                : waitingRoomInfo.quizSessionName}
+            </h2>
+            <p className="mb-8 text-lg text-gray-600 dark:text-gray-400">
+              {isStartingExam && countdown !== null
+                ? "Chuẩn bị tinh thần, quiz sẽ bắt đầu ngay!"
+                : waitingRoomInfo.status === "LOBBY"
+                  ? t("quizWaitingRoom.reviewInfo")
+                  : waitingRoomInfo.status === "ACTIVE"
+                    ? "Quiz đã sẵn sàng bắt đầu!"
+                    : "Đợi giáo viên bắt đầu quiz..."}
+            </p>
+
+            {/* Quiz Information Cards */}
+            <div className="mb-8 grid gap-6 md:grid-cols-2">
+              {/* Session Information */}
+              <div className="rounded-lg border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-800">
+                <h3 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">
+                  {t("quizWaitingRoom.sessionInfo")}
+                </h3>
+                <div className="space-y-3 text-sm">
+                  {navigationState?.accessCode && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-600 dark:text-gray-400">
+                        {t("quizWaitingRoom.accessCode")}:
+                      </span>
+                      <span className="font-mono font-bold text-gray-900 dark:text-white">
+                        {navigationState.accessCode}
+                      </span>
+                    </div>
+                  )}
+                  {waitingRoomInfo.teacherName && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-600 dark:text-gray-400">
+                        {t("quizWaitingRoom.teacher")}:
+                      </span>
+                      <span className="font-semibold text-gray-900 dark:text-white">
+                        {waitingRoomInfo.teacherName}
+                      </span>
+                    </div>
+                  )}
+                  {waitingRoomInfo.totalQuestions && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-600 dark:text-gray-400">
+                        {t("quizWaitingRoom.totalQuestions")}:
+                      </span>
+                      <span className="font-semibold text-gray-900 dark:text-white">
+                        {waitingRoomInfo.totalQuestions}
+                      </span>
+                    </div>
+                  )}
+                  <div className="flex justify-between">
+                    <span className="text-gray-600 dark:text-gray-400">
+                      {t("quizWaitingRoom.status")}:
+                    </span>
+                    <span
+                      className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium ${
+                        waitingRoomInfo.status === "LOBBY"
+                          ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
+                          : waitingRoomInfo.status === "ACTIVE"
+                            ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300"
+                            : "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300"
+                      }`}
+                    >
+                      {waitingRoomInfo.status === "LOBBY" ? (
+                        <>
+                          <FaClock className="h-3 w-3" />
+                          {t("quizWaitingRoom.readyToStart")}
+                        </>
+                      ) : waitingRoomInfo.status === "ACTIVE" ? (
+                        <>
+                          <FaPlay className="h-3 w-3" />
+                          Đang hoạt động
+                        </>
+                      ) : (
+                        <>
+                          <FaExclamationTriangle className="h-3 w-3" />
+                          {waitingRoomInfo.status}
+                        </>
+                      )}
+                    </span>
                   </div>
                 </div>
               </div>
-              <Button
-                onClick={handleStartQuiz}
-                variant="primary"
-                size="lg"
-                className="px-8 py-3 text-lg"
-              >
-                Bắt đầu làm bài
+
+              {/* Quiz Statistics */}
+              <div className="rounded-lg border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-800">
+                <h3 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">
+                  Thống kê bài quiz
+                </h3>
+                <div className="space-y-3 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-600 dark:text-gray-400">
+                      Câu trắc nghiệm:
+                    </span>
+                    <span className="font-semibold text-gray-900 dark:text-white">
+                      {quiz?.multiple_choice_quiz?.questions?.length || 0}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600 dark:text-gray-400">
+                      Câu ghép đôi:
+                    </span>
+                    <span className="font-semibold text-gray-900 dark:text-white">
+                      {Math.min(
+                        quiz?.matching_quiz?.item_a?.length || 0,
+                        quiz?.matching_quiz?.item_b?.length || 0,
+                      )}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600 dark:text-gray-400">
+                      Tổng số câu:
+                    </span>
+                    <span className="font-semibold text-gray-900 dark:text-white">
+                      {allQuestions.length}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Quiz Rules */}
+            <div className="mb-8 rounded-lg border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-800">
+              <h3 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">
+                {t("quizWaitingRoom.quizRules")}
+              </h3>
+              <div className="grid gap-3 text-left text-sm text-gray-600 md:grid-cols-2 dark:text-gray-400">
+                <div className="flex items-start gap-2">
+                  <span className="mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-blue-500"></span>
+                  <span>{t("quizWaitingRoom.rules.timeLimit")}</span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className="mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-blue-500"></span>
+                  <span>{t("quizWaitingRoom.rules.completionTime")}</span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className="mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-blue-500"></span>
+                  <span>{t("quizWaitingRoom.rules.noGoBack")}</span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className="mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-blue-500"></span>
+                  <span>{t("quizWaitingRoom.rules.integrity")}</span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className="mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-blue-500"></span>
+                  <span>{t("quizWaitingRoom.rules.connection")}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Important Notice */}
+            <div className="mx-auto mb-8 max-w-2xl rounded-lg bg-yellow-50 p-6 dark:bg-yellow-900/20">
+              <div className="flex items-start gap-3">
+                <FaExclamationTriangle className="mt-1 h-5 w-5 text-yellow-600 dark:text-yellow-400" />
+                <div className="text-left">
+                  <h4 className="font-semibold text-yellow-900 dark:text-yellow-200">
+                    {t("quizWaitingRoom.importantInstructions")}
+                  </h4>
+                  <ul className="mt-2 space-y-1 text-sm text-yellow-800 dark:text-yellow-300">
+                    <li>• {t("quizWaitingRoom.instructions.readRules")}</li>
+                    <li>
+                      • {t("quizWaitingRoom.instructions.waitForTeacher")}
+                    </li>
+                    <li>
+                      • {t("quizWaitingRoom.instructions.stableConnection")}
+                    </li>
+                    <li>• {t("quizWaitingRoom.instructions.noPause")}</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            {/* Action buttons */}
+            <div className="flex justify-center gap-4">
+              <Button variant="secondary" onClick={handleBackToLobby}>
+                {t("quizWaitingRoom.leaveSession")}
               </Button>
+
+              {/* Show countdown when exam is starting */}
+              {isStartingExam && countdown !== null ? (
+                <div className="flex items-center gap-4">
+                  <div className="rounded-lg bg-green-100 px-6 py-3 dark:bg-green-900/30">
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-green-600 dark:text-green-400">
+                        {countdown}
+                      </div>
+                      <div className="text-sm text-green-700 dark:text-green-300">
+                        Bắt đầu trong
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                /* Show status message when not starting */
+                <div className="flex items-center gap-2 rounded-lg bg-blue-50 px-4 py-3 dark:bg-blue-900/20">
+                  <div className="flex h-2 w-2 animate-pulse rounded-full bg-blue-500"></div>
+                  <span className="text-blue-700 dark:text-blue-300">
+                    {isSocketConnected
+                      ? "Đợi giáo viên bắt đầu quiz..."
+                      : "Đang kết nối..."}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
         </div>

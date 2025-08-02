@@ -776,3 +776,60 @@ export const getQuizForPractice = async (
   const response = await axiosCustom.get(`/quizzes/${quizId}`);
   return response.data;
 };
+
+// New interfaces for quiz questions API
+export interface QuizQuestionAnswer {
+  answer_text: string;
+}
+
+export interface QuizQuestionMultipleChoice {
+  question_id: string;
+  question_text: string;
+  hint: string;
+  time_limit: number;
+  allow_multiple_answers: boolean;
+  points: number;
+  answers: QuizQuestionAnswer[];
+}
+
+export interface QuizQuestionMultipleChoiceQuiz {
+  id: string;
+  quiz_id: string;
+  questions: QuizQuestionMultipleChoice[];
+}
+
+export interface QuizQuestionMatchingItem {
+  id?: string;
+  content: string;
+  matching_type: "TEXT" | "IMAGE";
+}
+
+export interface QuizQuestionMatchingQuiz {
+  id: string;
+  quiz_id: string;
+  time_limit: number;
+  item_a: QuizQuestionMatchingItem[];
+  item_b: QuizQuestionMatchingItem[];
+}
+
+export interface QuizQuestionQuiz {
+  id: string;
+  name: string;
+  description: string;
+  public: boolean;
+  active: boolean;
+}
+
+export interface QuizQuestionsResponse {
+  quiz: QuizQuestionQuiz;
+  multiple_choice_quiz: QuizQuestionMultipleChoiceQuiz;
+  matching_quiz: QuizQuestionMatchingQuiz;
+}
+
+// API function to get quiz questions for taking quiz
+export const getQuizQuestions = async (
+  quizId: string,
+): Promise<SuccessApiResponse<QuizQuestionsResponse>> => {
+  const response = await axiosCustom.get(`/quizzes/${quizId}/questions`);
+  return response.data;
+};

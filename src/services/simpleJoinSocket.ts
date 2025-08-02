@@ -3,7 +3,9 @@ import Stomp from "stompjs";
 import type { RegisterResponse } from "./userService";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-let stompClient: any = null;
+let joinSessionStompClient: any = null;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let startExamStompClient: any = null;
 
 export const connectJoinSessionSocket = (
   sessionId: string,
@@ -13,17 +15,17 @@ export const connectJoinSessionSocket = (
   const baseUrl =
     import.meta.env.VITE_BASE_URL || "http://localhost:8080/api/v1.0";
   const socket = new SockJS(`${baseUrl}/ws-join-quiz-session`);
-  stompClient = Stomp.over(socket);
+  joinSessionStompClient = Stomp.over(socket);
 
-  stompClient.connect(
+  joinSessionStompClient.connect(
     {
       Authorization: `Bearer ${sessionStorage.getItem("token")}`,
     },
     () => {
-      console.log("✅ WebSocket connected");
+      console.log("✅ Join Session WebSocket connected");
       onConnectionChange?.(true);
       // Subscribe to join session topic - replace sessionId with actual session ID
-      stompClient.subscribe(
+      joinSessionStompClient.subscribe(
         `/topic/join-quiz-session/${sessionId}`,
         (message: { body: string }) => {
           const data: RegisterResponse = JSON.parse(message.body);
@@ -33,7 +35,7 @@ export const connectJoinSessionSocket = (
       );
     },
     (error: Error) => {
-      console.error("❌ WebSocket error:", error);
+      console.error("❌ Join Session WebSocket error:", error);
       onConnectionChange?.(false);
     },
   );
@@ -41,42 +43,71 @@ export const connectJoinSessionSocket = (
 
 export const connectStartExamSocket = (
   sessionId: string,
-  onMessage: (data: boolean) => void,
+  onStartExamMessage: (data: boolean) => void,
+  onCloseQuizMessage?: (data: boolean) => void,
   onConnectionChange?: (connected: boolean) => void,
 ) => {
   const baseUrl =
     import.meta.env.VITE_BASE_URL || "http://localhost:8080/api/v1.0";
   const socket = new SockJS(`${baseUrl}/ws-start-exam`);
-  stompClient = Stomp.over(socket);
+  startExamStompClient = Stomp.over(socket);
 
-  stompClient.connect(
+  startExamStompClient.connect(
     {
       Authorization: `Bearer ${sessionStorage.getItem("token")}`,
     },
     () => {
-      console.log("✅ WebSocket connected");
+      console.log("✅ Start Exam WebSocket connected");
       onConnectionChange?.(true);
-      // Subscribe to join session topic - replace sessionId with actual session ID
-      stompClient.subscribe(
+
+      // Subscribe to start exam topic
+      startExamStompClient.subscribe(
         `/topic/start-exam/${sessionId}`,
         (message: { body: string }) => {
           const data: boolean = JSON.parse(message.body);
-          console.log("📡 Real-time join session update:", data);
-          onMessage(data); // Gửi về component sử dụng
+          console.log("📡 Real-time start exam update:", data);
+          onStartExamMessage(data);
         },
       );
+
+      // Subscribe to close quiz session topic if callback is provided
+      if (onCloseQuizMessage) {
+        startExamStompClient.subscribe(
+          `/topic/close-quiz-session/${sessionId}`,
+          (message: { body: string }) => {
+            const data: boolean = JSON.parse(message.body);
+            console.log("📡 Real-time close quiz update:", data);
+            onCloseQuizMessage(data);
+          },
+        );
+      }
     },
     (error: Error) => {
-      console.error("❌ WebSocket error:", error);
+      console.error("❌ Start Exam WebSocket error:", error);
       onConnectionChange?.(false);
     },
   );
 };
 
 export const disconnectJoinSessionSocket = () => {
-  if (stompClient !== null) {
-    stompClient.disconnect(() => {
-      console.log("🔌 WebSocket disconnected");
+  if (joinSessionStompClient !== null) {
+    joinSessionStompClient.disconnect(() => {
+      console.log("🔌 Join Session WebSocket disconnected");
     });
+    joinSessionStompClient = null;
   }
+};
+
+export const disconnectStartExamSocket = () => {
+  if (startExamStompClient !== null) {
+    startExamStompClient.disconnect(() => {
+      console.log("🔌 Start Exam WebSocket disconnected");
+    });
+    startExamStompClient = null;
+  }
+};
+
+export const disconnectAllSockets = () => {
+  disconnectJoinSessionSocket();
+  disconnectStartExamSocket();
 };
