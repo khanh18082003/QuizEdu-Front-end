@@ -24,6 +24,14 @@ export interface CreateQuizRequest {
   is_public: boolean;
 }
 
+// Update Quiz Request for editing quiz
+export interface UpdateQuizRequest {
+  name: string;
+  description: string;
+  is_active: boolean;
+  is_public: boolean;
+}
+
 // Quiz Session interfaces
 export interface QuizSession {
   id: string;
@@ -101,7 +109,7 @@ export const getQuizById = async (
 
 export const updateQuiz = async (
   quizId: string,
-  quizData: Partial<CreateQuizRequest>,
+  quizData: UpdateQuizRequest,
 ): Promise<SuccessApiResponse<Quiz>> => {
   const response = await axiosCustom.put(`/quizzes/${quizId}`, quizData);
   return response.data;
@@ -172,7 +180,7 @@ export const getClassStudents = async (
     params: {
       page,
       page_size: pageSize,
-    },
+    }, 
   });
   return response.data;
 };

@@ -7,6 +7,8 @@ import SelectQuizModal from "../../components/modals/SelectQuizModal";
 import QuizPracticeModal from "../../components/modals/QuizPracticeModal";
 import AddQuizToClassModal from "../../components/modals/AddQuizToClassModal";
 import InviteStudentsModal from "../../components/modals/InviteStudentsModal";
+import SpinWheelModal from "../../components/modals/SpinWheelModal";
+import ConfirmCreateSessionModal from "../../components/modals/ConfirmCreateSessionModal";
 import {
   getClassroomDetail,
   type ClassroomDetailData,
@@ -64,8 +66,14 @@ const ClassDetailPage = () => {
   // Invite students modal state
   const [isInviteStudentsModalOpen, setIsInviteStudentsModalOpen] = useState(false);
 
+  // Spin wheel modal state
+  const [showSpinWheel, setShowSpinWheel] = useState(false);
+  const [selectedStudentForPractice, setSelectedStudentForPractice] = useState<RegisterResponse | null>(null);
+
   // Quiz Session states
   const [isCreatingSession, setIsCreatingSession] = useState(false);
+  const [showConfirmCreateSession, setShowConfirmCreateSession] = useState(false);
+  const [selectedQuizForSession, setSelectedQuizForSession] = useState<ClassroomQuiz | null>(null);
 
   // Toast state
   const [toast, setToast] = useState<{
@@ -152,15 +160,19 @@ const ClassDetailPage = () => {
     }
   };
 
-  const handleCreateSession = async (quiz: ClassroomQuiz) => {
-    // Call create session immediately
-    if (!user?.id || !classId) return;
+  const handleCreateSession = (quiz: ClassroomQuiz) => {
+    setSelectedQuizForSession(quiz);
+    setShowConfirmCreateSession(true);
+  };
+
+  const confirmCreateSession = async () => {
+    if (!user?.id || !classId || !selectedQuizForSession) return;
 
     try {
       setIsCreatingSession(true);
 
       const sessionData: QuizSessionRequest = {
-        quiz_id: quiz.id,
+        quiz_id: selectedQuizForSession.id,
         class_id: classId,
         teacher_id: user.id
       };
@@ -169,11 +181,15 @@ const ClassDetailPage = () => {
       setQuizSessions(prev => [...prev, response.data]);
       showToast("Phiên quiz đã được tạo thành công!", "success");
 
+      // Close modal and reset state
+      setShowConfirmCreateSession(false);
+      setSelectedQuizForSession(null);
+
       // Navigate to waiting room page
       navigate(`/teacher/quiz-waiting-room`, {
         state: {
           session: response.data,
-          quiz: quiz,
+          quiz: selectedQuizForSession,
           students: students,
           classId: classId
         }
@@ -196,7 +212,8 @@ const ClassDetailPage = () => {
       setIsLoadingQuizDetails(true);
       const response = await getQuizForPractice(quiz.id);
       setSelectedQuizForPractice(response.data);
-      setIsPracticeModalOpen(true);
+      setIsSelectQuizModalOpen(false);
+      setShowSpinWheel(true);
     } catch (error) {
       console.error("Error loading quiz details:", error);
       showToast("Không thể tải chi tiết quiz. Vui lòng thử lại!", "error");
@@ -205,9 +222,16 @@ const ClassDetailPage = () => {
     }
   };
 
+  const handleStudentSelected = (student: RegisterResponse) => {
+    setSelectedStudentForPractice(student);
+    setShowSpinWheel(false);
+    setIsPracticeModalOpen(true);
+  };
+
   const handleClosePracticeModal = () => {
     setIsPracticeModalOpen(false);
     setSelectedQuizForPractice(null);
+    setSelectedStudentForPractice(null);
   };
 
   const handleRemoveStudent = (studentId: string) => {
@@ -379,9 +403,6 @@ const ClassDetailPage = () => {
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="text-xs text-gray-500">
-                        {student.is_active ? 'Đang hoạt động' : 'Không hoạt động'}
-                      </span>
                       <Button
                         variant="outline"
                         size="sm"
@@ -418,7 +439,7 @@ const ClassDetailPage = () => {
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
-                    Kiểm tra bài cũ
+                    🎯 Quay chọn học sinh kiểm tra
                   </Button>
                   <Button onClick={handleAddQuiz}>
                     Thêm Quiz
@@ -456,8 +477,16 @@ const ClassDetailPage = () => {
                         size="md"
                         className="flex-1 py-3"
                         onClick={() => handleCreateSession(quiz)}
+                        disabled={isCreatingSession}
                       >
-                        Tạo Session
+                        {isCreatingSession ? (
+                          <>
+                            <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full mr-2"></div>
+                            Đang tạo...
+                          </>
+                        ) : (
+                          'Tạo Session'
+                        )}
                       </Button>
                     </div>
                   </div>
@@ -558,6 +587,7 @@ const ClassDetailPage = () => {
         isOpen={isPracticeModalOpen}
         onClose={handleClosePracticeModal}
         quiz={selectedQuizForPractice}
+        selectedStudent={selectedStudentForPractice}
       />
 
       {/* Add Quiz to Class Modal */}
@@ -599,6 +629,28 @@ const ClassDetailPage = () => {
           </div>
         </div>
       )}
+
+      {/* Spin Wheel Modal */}
+      {showSpinWheel && selectedQuizForPractice && (
+        <SpinWheelModal
+          isOpen={showSpinWheel}
+          onClose={() => setShowSpinWheel(false)}
+          students={students}
+          onStudentSelected={handleStudentSelected}
+        />
+      )}
+
+      {/* Confirm Create Session Modal */}
+      <ConfirmCreateSessionModal
+        isOpen={showConfirmCreateSession}
+        onClose={() => {
+          setShowConfirmCreateSession(false);
+          setSelectedQuizForSession(null);
+        }}
+        onConfirm={confirmCreateSession}
+        quiz={selectedQuizForSession}
+        isLoading={isCreatingSession}
+      />
     </div>
   );
 };
