@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { FaTimes, FaCheck, FaChevronLeft, FaChevronRight, FaClock, FaQuestionCircle, FaTrophy, FaStar, FaVolumeUp, FaVolumeMute } from "react-icons/fa";
 import Button from "../ui/Button";
 import type { QuizManagementItem, MultipleChoiceQuestion, MatchingQuestion } from "../../services/quizService";
+import type { RegisterResponse } from "../../services/userService";
 
 interface Answer {
   answer_text: string;
@@ -26,9 +27,10 @@ interface QuizPracticeModalProps {
   isOpen: boolean;
   onClose: () => void;
   quiz: QuizManagementItem | null;
+  selectedStudent?: RegisterResponse | null;
 }
 
-const QuizPracticeModal = ({ isOpen, onClose, quiz }: QuizPracticeModalProps) => {
+const QuizPracticeModal = ({ isOpen, onClose, quiz, selectedStudent }: QuizPracticeModalProps) => {
   // State management
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [userAnswers, setUserAnswers] = useState<UserAnswer[]>([]);
@@ -318,7 +320,7 @@ const QuizPracticeModal = ({ isOpen, onClose, quiz }: QuizPracticeModalProps) =>
 
   // Timer countdown
   useEffect(() => {
-    let interval: number;
+    let interval: NodeJS.Timeout;
     
     if (isTimerActive && timeLeft > 0 && !showResult) {
       interval = setInterval(() => {
@@ -1613,6 +1615,28 @@ const QuizPracticeModal = ({ isOpen, onClose, quiz }: QuizPracticeModalProps) =>
               <FaTrophy className="text-3xl text-white" />
             </div>
             <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Hoàn thành bài kiểm tra!</h2>
+            
+            {/* Selected Student Info */}
+            {selectedStudent && (
+              <div className="bg-white dark:bg-gray-800 rounded-lg p-4 mb-4 border border-blue-200 dark:border-blue-700">
+                <div className="flex items-center justify-center gap-3">
+                  <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center">
+                    <span className="text-white font-bold">
+                      {selectedStudent.first_name.charAt(0)}{selectedStudent.last_name.charAt(0)}
+                    </span>
+                  </div>
+                  <div className="text-left">
+                    <p className="text-lg font-semibold text-gray-900 dark:text-white">
+                      {selectedStudent.first_name} {selectedStudent.last_name}
+                    </p>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      Học sinh được chọn kiểm tra
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+            
             <p className="text-lg text-gray-600 dark:text-gray-400">{getPerformanceMessage()}</p>
           </div>
 
