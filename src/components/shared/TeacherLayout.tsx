@@ -102,7 +102,7 @@ const TeacherLayout = () => {
   // Show loading indicator while profile is being fetched
   if (isLoading && (!user || !user.id)) {
     return (
-      <div className="flex min-h-screen bg-gray-50 dark:bg-gray-900">
+      <div className="flex h-screen bg-gray-50 dark:bg-gray-900">
         {/* Sidebar - Skeleton */}
         <aside className="fixed inset-y-0 left-0 z-50 flex w-72 flex-col border-r border-gray-100/40 bg-white shadow-lg transition-transform lg:static lg:translate-x-0 dark:border-gray-700/40 dark:bg-gray-800">
           {/* Logo - Skeleton */}
@@ -140,7 +140,7 @@ const TeacherLayout = () => {
         </aside>
 
         {/* Main content - Skeleton */}
-        <main className="flex-1">
+        <main className="flex flex-1 flex-col overflow-hidden">
           {/* Top header - Skeleton */}
           <header className="sticky top-0 z-40 border-b border-gray-100/40 bg-white/80 p-4 shadow-sm backdrop-blur-sm dark:border-gray-700/40 dark:bg-gray-800/80">
             <div className="flex items-center justify-between">
@@ -153,8 +153,10 @@ const TeacherLayout = () => {
           </header>
 
           {/* Page content - Import Skeleton Dashboard */}
-          <div className="container mx-auto p-6">
-            <SkeletonDashboard />
+          <div className="flex-1 overflow-y-auto">
+            <div className="container mx-auto p-6">
+              <SkeletonDashboard />
+            </div>
           </div>
         </main>
       </div>
@@ -220,7 +222,7 @@ const TeacherLayout = () => {
   };
 
   return (
-    <div className="flex min-h-screen bg-gray-50 dark:bg-gray-900">
+    <div className="flex h-screen bg-gray-50 dark:bg-gray-900">
       {/* Mobile overlay */}
       {isMobileMenuOpen && (
         <div
@@ -328,7 +330,7 @@ const TeacherLayout = () => {
       </aside>
 
       {/* Main content */}
-      <main className="flex-1 overflow-auto">
+      <main className="flex flex-1 flex-col overflow-hidden">
         {/* Top header */}
         <header className="sticky top-0 z-40 border-b border-gray-100/40 bg-white/80 px-5 py-4 shadow-sm backdrop-blur-sm dark:border-gray-700/40 dark:bg-gray-800/80">
           <div className="flex items-center justify-between">
@@ -381,9 +383,11 @@ const TeacherLayout = () => {
           </div>
         </header>
 
-        {/* Page content */}
-        <div className="container mx-auto max-w-7xl px-5 py-6">
-          <Outlet />
+        {/* Page content - Scrollable area */}
+        <div className="flex-1 overflow-y-auto">
+          <div className="container mx-auto max-w-7xl px-5 py-6">
+            <Outlet />
+          </div>
         </div>
       </main>
     </div>

@@ -3,9 +3,10 @@ import { useNavigate, useLocation, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
   FaChevronLeft,
+  FaChevronRight,
   FaClock,
   FaFlag,
-  FaArrowRight,
+  FaCheck,
   FaPlay,
   FaExclamationTriangle,
 } from "react-icons/fa";
@@ -25,8 +26,9 @@ import {
   getQuizSessionDetail,
 } from "../../services/quizSessionService";
 import {
-  connectStartExamSocket,
-  disconnectAllSockets,
+  connectSessionSocket,
+  disconnectSessionSocket,
+  type SessionSocketCallbacks,
 } from "../../services/simpleJoinSocket";
 import LoadingOverlay from "../../components/ui/LoadingOverlay";
 import Button from "../../components/ui/Button";
@@ -588,7 +590,10 @@ const QuizTaking: React.FC = () => {
   useEffect(() => {
     if (!sessionId) return;
 
-    console.log("🔌 Setting up socket connections for session:", sessionId);
+    console.log(
+      "🔌 Setting up unified socket connection for session:",
+      sessionId,
+    );
 
     const handleStartExamMessage = (shouldStart: boolean) => {
       console.log("📡 Received START EXAM signal:", shouldStart);
@@ -631,19 +636,21 @@ const QuizTaking: React.FC = () => {
       }
     };
 
-    // Connect to start exam socket with both handlers
-    console.log("🚀 Connecting to START EXAM socket with dual subscription...");
-    connectStartExamSocket(
-      sessionId,
-      handleStartExamMessage, // Handler for start exam messages
-      handleCloseQuizMessageLocal, // Handler for close quiz messages
-      handleConnectionChange,
-    );
+    // Create unified callback structure for session socket
+    const callbacks: SessionSocketCallbacks = {
+      onStartExam: handleStartExamMessage,
+      onCloseQuiz: handleCloseQuizMessageLocal,
+      onConnectionChange: handleConnectionChange,
+    };
+
+    // Connect to unified session socket
+    console.log("🚀 Connecting to unified session socket...");
+    connectSessionSocket(sessionId, callbacks);
 
     // Cleanup on unmount
     return () => {
-      // Disconnect all socket connections
-      disconnectAllSockets();
+      // Disconnect session socket
+      disconnectSessionSocket();
     };
   }, [sessionId]); // Chỉ dependency sessionId
 
@@ -745,9 +752,9 @@ const QuizTaking: React.FC = () => {
 
     if (question.type === "multiple_choice") {
       return (
-        <div className="space-y-6">
+        <div className="space-y-4">
           {question.hint && (
-            <div className="space-y-3">
+            <div className="space-y-2">
               <Button
                 variant="outline"
                 size="sm"
@@ -758,7 +765,7 @@ const QuizTaking: React.FC = () => {
               </Button>
 
               {showHint && (
-                <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-900/20">
+                <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 dark:border-blue-800 dark:bg-blue-900/20">
                   <p className="text-sm text-blue-800 dark:text-blue-200">
                     <strong>💡 Gợi ý:</strong> {question.hint}
                   </p>
@@ -767,11 +774,11 @@ const QuizTaking: React.FC = () => {
             </div>
           )}
 
-          <div className="space-y-3">
+          <div className="space-y-2">
             {question.answers?.map((answer, index: number) => (
               <label
                 key={index}
-                className="group flex cursor-pointer items-center rounded-xl border-2 border-gray-200 p-4 transition-all hover:border-blue-300 hover:bg-blue-50 dark:border-gray-700 dark:hover:border-blue-600 dark:hover:bg-blue-900/10"
+                className="group flex cursor-pointer items-center rounded-lg border-2 border-gray-200 p-3 transition-all hover:border-blue-300 hover:bg-blue-50 dark:border-gray-700 dark:hover:border-blue-600 dark:hover:bg-blue-900/10"
               >
                 <input
                   type={question.allow_multiple_answers ? "checkbox" : "radio"}
@@ -805,7 +812,7 @@ const QuizTaking: React.FC = () => {
                       handleAnswerChange(question.id, answer.answer_text);
                     }
                   }}
-                  className="mr-4 h-4 w-4 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700"
+                  className="mr-3 h-4 w-4 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700"
                 />
                 <span className="text-gray-900 dark:text-white">
                   {answer.answer_text}
@@ -822,20 +829,20 @@ const QuizTaking: React.FC = () => {
       const itemsB = question.item_b?.map((item) => item.content) || [];
 
       return (
-        <div className="space-y-6">
+        <div className="space-y-4">
           {/* Instructions */}
           <div className="text-center">
-            <p className="text-lg text-gray-700 dark:text-gray-300">
+            <p className="text-base text-gray-700 dark:text-gray-300">
               {question.question}
             </p>
-            <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
               Ghép {Math.min(itemsA.length, itemsB.length)} cặp tương ứng
             </p>
           </div>
 
           {/* Hint section */}
           {question.hint && (
-            <div className="space-y-3">
+            <div className="space-y-2">
               <Button
                 variant="outline"
                 size="sm"
@@ -846,7 +853,7 @@ const QuizTaking: React.FC = () => {
               </Button>
 
               {showHint && (
-                <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-900/20">
+                <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 dark:border-blue-800 dark:bg-blue-900/20">
                   <p className="text-sm text-blue-800 dark:text-blue-200">
                     <strong>💡 Gợi ý:</strong> {question.hint}
                   </p>
@@ -863,12 +870,10 @@ const QuizTaking: React.FC = () => {
               style={{ width: "100%", height: "100%" }}
             >
               {connectionPoints.map((point, index) => {
-                // Simple color scheme
-                const lineColor = "#3b82f6"; // Blue color for all connections
+                const lineColor = "#3b82f6";
 
                 return (
                   <g key={index}>
-                    {/* Simple straight line connection */}
                     <line
                       x1={point.startX}
                       y1={point.startY}
@@ -878,7 +883,6 @@ const QuizTaking: React.FC = () => {
                       strokeWidth="2"
                       strokeLinecap="round"
                     />
-                    {/* Simple connection dots */}
                     <circle
                       cx={point.startX}
                       cy={point.startY}
@@ -896,13 +900,13 @@ const QuizTaking: React.FC = () => {
               })}
             </svg>
 
-            <div className="relative z-20 grid grid-cols-2 gap-8">
+            <div className="relative z-20 grid grid-cols-2 gap-6">
               {/* Column A */}
-              <div className="space-y-4">
-                <h3 className="text-lg font-semibold text-blue-600 dark:text-blue-400">
+              <div className="space-y-3">
+                <h3 className="text-base font-semibold text-blue-600 dark:text-blue-400">
                   Cột A ({itemsA.length} Items)
                 </h3>
-                <div className="space-y-3">
+                <div className="space-y-2">
                   {itemsA.map((item, index) => {
                     const isSelected = matchingSelections.itemA === item;
                     const isMatched = matchingPairs.some(
@@ -915,7 +919,7 @@ const QuizTaking: React.FC = () => {
                         id={`item-a-${index}`}
                         onClick={() => handleMatchingSelection(item, "itemA")}
                         disabled={isMatched}
-                        className={`matching-item-hover matching-item-a-hover w-full rounded-lg border-2 p-4 text-left transition-all duration-200 ${
+                        className={`matching-item-hover matching-item-a-hover w-full rounded-lg border-2 p-3 text-left transition-all duration-200 ${
                           isMatched
                             ? "border-blue-500 bg-blue-50 dark:border-blue-400 dark:bg-blue-900/20"
                             : isSelected
@@ -923,9 +927,9 @@ const QuizTaking: React.FC = () => {
                               : "border-gray-300 bg-white dark:border-gray-600 dark:bg-gray-800"
                         }`}
                       >
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2">
                           <div
-                            className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold ${
+                            className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold ${
                               isMatched
                                 ? "bg-blue-600 text-white"
                                 : isSelected
@@ -935,16 +939,16 @@ const QuizTaking: React.FC = () => {
                           >
                             {index + 1}
                           </div>
-                          <span className="flex-1 font-medium text-gray-900 dark:text-white">
+                          <span className="flex-1 text-sm font-medium text-gray-900 dark:text-white">
                             {item}
                           </span>
                           {isMatched && (
-                            <div className="flex h-6 w-6 items-center justify-center rounded-full bg-green-500">
+                            <div className="flex h-5 w-5 items-center justify-center rounded-full bg-green-500">
                               <span className="text-xs text-white">✓</span>
                             </div>
                           )}
                           {isSelected && !isMatched && (
-                            <div className="h-3 w-3 rounded-full bg-blue-500"></div>
+                            <div className="h-2 w-2 rounded-full bg-blue-500"></div>
                           )}
                         </div>
                       </button>
@@ -954,18 +958,17 @@ const QuizTaking: React.FC = () => {
               </div>
 
               {/* Column B */}
-              <div className="space-y-4">
-                <h3 className="text-lg font-semibold text-purple-600 dark:text-purple-400">
+              <div className="space-y-3">
+                <h3 className="text-base font-semibold text-purple-600 dark:text-purple-400">
                   Cột B ({itemsB.length} Items)
                 </h3>
-                <div className="space-y-3">
+                <div className="space-y-2">
                   {itemsB.map((item, index) => {
                     const isSelected = matchingSelections.itemB === item;
                     const isMatched = matchingPairs.some(
                       (pair) => pair.itemB === item,
                     );
 
-                    // Get the letter for this item (A, B, C, D...)
                     const letter = String.fromCharCode(65 + index);
 
                     return (
@@ -974,7 +977,7 @@ const QuizTaking: React.FC = () => {
                         id={`item-b-${index}`}
                         onClick={() => handleMatchingSelection(item, "itemB")}
                         disabled={isMatched}
-                        className={`matching-item-hover matching-item-b-hover w-full rounded-lg border-2 p-4 text-left transition-all duration-200 ${
+                        className={`matching-item-hover matching-item-b-hover w-full rounded-lg border-2 p-3 text-left transition-all duration-200 ${
                           isMatched
                             ? "border-purple-500 bg-purple-50 dark:border-purple-400 dark:bg-purple-900/20"
                             : isSelected
@@ -982,9 +985,9 @@ const QuizTaking: React.FC = () => {
                               : "border-gray-300 bg-white dark:border-gray-600 dark:bg-gray-800"
                         }`}
                       >
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2">
                           <div
-                            className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold ${
+                            className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold ${
                               isMatched
                                 ? "bg-purple-600 text-white"
                                 : isSelected
@@ -994,16 +997,16 @@ const QuizTaking: React.FC = () => {
                           >
                             {letter}
                           </div>
-                          <span className="flex-1 font-medium text-gray-900 dark:text-white">
+                          <span className="flex-1 text-sm font-medium text-gray-900 dark:text-white">
                             {item}
                           </span>
                           {isMatched && (
-                            <div className="flex h-6 w-6 items-center justify-center rounded-full bg-green-500">
+                            <div className="flex h-5 w-5 items-center justify-center rounded-full bg-green-500">
                               <span className="text-xs text-white">✓</span>
                             </div>
                           )}
                           {isSelected && !isMatched && (
-                            <div className="h-3 w-3 rounded-full bg-purple-500"></div>
+                            <div className="h-2 w-2 rounded-full bg-purple-500"></div>
                           )}
                         </div>
                       </button>
@@ -1014,11 +1017,11 @@ const QuizTaking: React.FC = () => {
             </div>
           </div>
 
-          {/* Progress indicator */}
-          <div className="rounded-xl bg-gray-50 p-4 dark:bg-gray-800">
+          {/* Compact Progress indicator */}
+          <div className="rounded-lg bg-gray-50 p-3 dark:bg-gray-800">
             <div className="mb-2 flex items-center justify-between">
               <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                Tiến độ ghép cặp: {matchingPairs.length}/
+                Tiến độ: {matchingPairs.length}/
                 {Math.min(
                   question.item_a?.length || 0,
                   question.item_b?.length || 0,
@@ -1039,9 +1042,9 @@ const QuizTaking: React.FC = () => {
                 %
               </span>
             </div>
-            <div className="h-2 w-full rounded-full bg-gray-200 dark:bg-gray-700">
+            <div className="h-1.5 w-full rounded-full bg-gray-200 dark:bg-gray-700">
               <div
-                className="h-2 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 transition-all duration-500"
+                className="h-1.5 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 transition-all duration-500"
                 style={{
                   width: `${(matchingPairs.length / Math.max(1, Math.min(question.item_a?.length || 0, question.item_b?.length || 0))) * 100}%`,
                 }}
@@ -1054,6 +1057,7 @@ const QuizTaking: React.FC = () => {
             <div className="text-center">
               <Button
                 variant="outline"
+                size="sm"
                 onClick={() => {
                   setMatchingPairs([]);
                   setMatchingSelections({});
@@ -1392,225 +1396,158 @@ const QuizTaking: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      {/* Fixed Header */}
-      <div className="sticky top-0 z-10 border-b border-gray-200 bg-white/95 backdrop-blur-sm dark:border-gray-700 dark:bg-gray-800/95">
-        <div className="mx-auto max-w-7xl px-4 py-4">
+      {/* Smooth Header */}
+      <div className="sticky top-0 z-10 border-b border-gray-200 bg-white/95 shadow-sm backdrop-blur-sm dark:border-gray-700 dark:bg-gray-800/95">
+        <div className="mx-auto max-w-7xl px-6 py-3">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div>
+            {/* Left: Quiz info + Progress */}
+            <div className="flex items-center gap-6">
+              <div className="flex flex-col gap-1">
                 <h1 className="text-lg font-bold text-gray-900 dark:text-white">
                   {quiz.quiz.name}
                 </h1>
-                <p className="text-sm text-gray-600 dark:text-gray-400">
-                  Câu {currentQuestionIndex + 1} / {allQuestions.length}
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-4">
-              {/* Timer */}
-              <div
-                className={`flex items-center gap-2 rounded-lg px-3 py-2 transition-all duration-300 ${
-                  timeLeft !== null && timeLeft <= 10
-                    ? "animate-pulse bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
-                    : timeLeft !== null && timeLeft <= 30
-                      ? "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400"
-                      : "bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-300"
-                }`}
-              >
-                <FaClock className="h-4 w-4" />
-                <span className="text-sm font-medium">
-                  {timeLeft !== null
-                    ? `${Math.floor(timeLeft / 60)}:${(timeLeft % 60).toString().padStart(2, "0")}`
-                    : "∞"}
-                </span>
-                {timeLeft !== null && timeLeft <= 10 && (
-                  <span className="text-xs">⚠️</span>
-                )}
+                <div className="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-400">
+                  <span className="font-medium">
+                    Câu {currentQuestionIndex + 1}/{allQuestions.length}
+                  </span>
+                  <span>•</span>
+                  <span>{currentQuestion.points} điểm</span>
+                  <span>•</span>
+                  <span className="font-medium capitalize">
+                    {currentQuestion.type === "multiple_choice"
+                      ? "Trắc nghiệm"
+                      : "Ghép cặp"}
+                  </span>
+                </div>
               </div>
 
-              {/* Points */}
-              <div className="flex items-center gap-2 rounded-lg bg-green-50 px-3 py-2 text-green-700 dark:bg-green-900/20 dark:text-green-300">
-                <span className="text-sm font-medium">
-                  {currentQuestion.points} điểm
-                </span>
-              </div>
-
-              {/* Submit button */}
-              <Button
-                variant="primary"
-                size="sm"
-                className="flex items-center gap-2"
-              >
-                <FaFlag className="h-4 w-4" />
-                <span className="hidden sm:inline">Nộp bài</span>
-              </Button>
-            </div>
-          </div>
-
-          <div className="mt-4 space-y-4">
-            {/* Quiz Progress bar */}
-            <div>
-              <div className="mb-2 flex items-center justify-between text-sm">
-                <span className="text-gray-600 dark:text-gray-400">
-                  Tiến độ làm bài
-                </span>
-                <span className="text-gray-600 dark:text-gray-400">
+              {/* Enhanced Progress Bar */}
+              <div className="hidden items-center gap-3 md:flex">
+                <div className="h-2 w-24 rounded-full bg-gray-200 dark:bg-gray-700">
+                  <div
+                    className="h-2 rounded-full bg-gradient-to-r from-blue-500 to-blue-600 transition-all duration-500"
+                    style={{ width: `${progress}%` }}
+                  />
+                </div>
+                <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
                   {Math.round(progress)}%
                 </span>
               </div>
-              <div className="h-2 w-full rounded-full bg-gray-200 dark:bg-gray-700">
-                <div
-                  className="h-2 rounded-full bg-gradient-to-r from-blue-500 to-blue-600 transition-all duration-500"
-                  style={{ width: `${progress}%` }}
-                />
+
+              {/* Enhanced Question Navigation */}
+              <div className="hidden items-center gap-1 lg:flex">
+                {allQuestions.slice(0, 15).map((_, index) => {
+                  const isAnswered = !!userAnswers[allQuestions[index].id];
+                  const isCurrent = index === currentQuestionIndex;
+
+                  return (
+                    <div
+                      key={index}
+                      className={`h-2.5 w-2.5 rounded-full transition-all duration-200 ${
+                        isCurrent
+                          ? "scale-125 bg-blue-600 ring-2 ring-blue-300"
+                          : isAnswered
+                            ? "bg-green-500"
+                            : "bg-gray-300 dark:bg-gray-600"
+                      }`}
+                    />
+                  );
+                })}
+                {allQuestions.length > 15 && (
+                  <span className="ml-2 text-sm text-gray-400">
+                    +{allQuestions.length - 15}
+                  </span>
+                )}
               </div>
             </div>
 
-            {/* Timer Progress bar */}
-            {timeLeft !== null && currentQuestion.time_limit && (
-              <div>
-                <div className="mb-2 flex items-center justify-between text-sm">
-                  <span className="text-gray-600 dark:text-gray-400">
-                    Thời gian còn lại
-                  </span>
-                  <span
-                    className={`${
-                      timeLeft <= 10
-                        ? "font-bold text-red-600 dark:text-red-400"
-                        : timeLeft <= 30
-                          ? "font-medium text-orange-600 dark:text-orange-400"
-                          : "text-gray-600 dark:text-gray-400"
-                    }`}
-                  >
+            {/* Right: Timer */}
+            <div className="flex items-center gap-3">
+              {/* Enhanced Timer */}
+              {timeLeft !== null && (
+                <div
+                  className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-all ${
+                    timeLeft <= 10
+                      ? "animate-pulse bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
+                      : timeLeft <= 30
+                        ? "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400"
+                        : "bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-300"
+                  }`}
+                >
+                  <FaClock className="h-4 w-4" />
+                  <span className="font-mono">
                     {Math.floor(timeLeft / 60)}:
                     {(timeLeft % 60).toString().padStart(2, "0")}
                   </span>
                 </div>
-                <div className="h-2 w-full rounded-full bg-gray-200 dark:bg-gray-700">
-                  <div
-                    className={`h-2 rounded-full transition-all duration-1000 ${
-                      timeLeft <= 10
-                        ? "bg-gradient-to-r from-red-500 to-red-600"
-                        : timeLeft <= 30
-                          ? "bg-gradient-to-r from-orange-500 to-orange-600"
-                          : "bg-gradient-to-r from-green-500 to-green-600"
-                    }`}
-                    style={{
-                      width: `${Math.max(0, (timeLeft / currentQuestion.time_limit) * 100)}%`,
-                    }}
-                  />
+              )}
+
+              {/* Time warning indicator */}
+              {showTimeWarning && (
+                <div className="flex animate-pulse items-center gap-2 rounded-lg bg-red-100 px-3 py-2 text-red-700 dark:bg-red-900/30 dark:text-red-400">
+                  <FaExclamationTriangle className="h-4 w-4" />
+                  <span className="text-sm font-medium">Sắp hết giờ!</span>
                 </div>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Question Navigation */}
-      <div className="border-b border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800">
-        <div className="mx-auto max-w-7xl px-4 py-3">
-          <div className="flex items-center gap-2 overflow-x-auto pb-2">
-            <span className="mr-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-              Câu hỏi:
-            </span>
-            {allQuestions.map((_, index) => {
-              const isAnswered = !!userAnswers[allQuestions[index].id];
-              const isCurrent = index === currentQuestionIndex;
-
-              return (
-                <button
-                  key={index}
-                  disabled={
-                    index > currentQuestionIndex && !isCurrentQuestionAnswered()
-                  }
-                  className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg text-sm font-medium transition-all ${
-                    isCurrent
-                      ? "bg-blue-600 text-white shadow-lg ring-2 ring-blue-300 dark:ring-blue-500"
-                      : isAnswered
-                        ? "bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-900/30 dark:text-green-400 dark:hover:bg-green-900/50"
-                        : index > currentQuestionIndex &&
-                            !isCurrentQuestionAnswered()
-                          ? "cursor-not-allowed bg-gray-100 text-gray-400 dark:bg-gray-700 dark:text-gray-500"
-                          : "bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
-                  }`}
-                >
-                  {index + 1}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-
-      {/* Main Content */}
-      <div className="mx-auto max-w-4xl px-4 py-8">
-        <div className="rounded-2xl bg-white shadow-sm ring-1 ring-gray-200 dark:bg-gray-800 dark:ring-gray-700">
-          {/* Question Header */}
-          <div className="border-b border-gray-200 px-6 py-4 dark:border-gray-700">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-100 text-sm font-bold text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">
-                  {currentQuestionIndex + 1}
-                </span>
-                <span
-                  className={`rounded-full px-3 py-1 text-sm font-medium ${
-                    currentQuestion.type === "multiple_choice"
-                      ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
-                      : "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300"
-                  }`}
-                >
-                  {currentQuestion.type === "multiple_choice"
-                    ? "Trắc nghiệm"
-                    : "Ghép đôi"}
-                </span>
-              </div>
-              <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
-                <span>{currentQuestion.points} điểm</span>
-              </div>
+              )}
             </div>
-            <h2 className="mt-4 text-xl font-semibold text-gray-900 dark:text-white">
-              {currentQuestion.question}
-            </h2>
+          </div>
+        </div>
+      </div>
+
+      {/* Main Content - Enhanced Layout */}
+      <div className="mx-auto max-w-5xl px-6 py-4">
+        <div className="flex h-[calc(100vh-9rem)] flex-col rounded-xl bg-white shadow-lg ring-1 ring-gray-200 dark:bg-gray-800 dark:ring-gray-700">
+          {/* Question Content - Maximized Area */}
+          <div className="flex-1 overflow-y-auto p-6">
+            <div className="mb-6">
+              <h2 className="text-xl leading-relaxed font-semibold text-gray-900 dark:text-white">
+                {currentQuestion.question}
+              </h2>
+            </div>
+
+            {/* Answer Options */}
+            <div className="min-h-0">{renderQuestion(currentQuestion)}</div>
           </div>
 
-          {/* Question Content */}
-          <div className="p-6">{renderQuestion(currentQuestion)}</div>
-
-          {/* Navigation Footer */}
-          <div className="border-t border-gray-200 px-6 py-4 dark:border-gray-700">
+          {/* Enhanced Footer with Navigation */}
+          <div className="rounded-b-xl border-t border-gray-200 bg-gray-50 px-6 py-4 dark:border-gray-700 dark:bg-gray-900/50">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
-                <span>
-                  Câu {currentQuestionIndex + 1} / {allQuestions.length}
-                </span>
+              <div className="flex items-center gap-4">
+                {/* Question answered indicator */}
+                {isCurrentQuestionAnswered() ? (
+                  <div className="flex items-center gap-2 text-green-600 dark:text-green-400">
+                    <FaCheck className="h-4 w-4" />
+                    <span className="text-sm font-medium">Đã trả lời</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
+                    <span className="text-sm">⚠️ Vui lòng chọn đáp án</span>
+                  </div>
+                )}
               </div>
 
               <div className="flex items-center gap-4">
-                {/* Warning when not answered */}
-                {!isCurrentQuestionAnswered() && (
-                  <div className="flex items-center gap-2 text-sm text-amber-600 dark:text-amber-400">
-                    <span>⚠️ Vui lòng chọn đáp án để tiếp tục</span>
-                  </div>
-                )}
-
+                {/* Next/Submit button */}
                 <Button
+                  variant="primary"
                   onClick={handleNextQuestion}
                   disabled={!isCurrentQuestionAnswered() || isSubmitting}
-                  variant="primary"
-                  className="flex items-center gap-2"
+                  className="flex items-center gap-2 px-6 py-2"
                 >
                   {isSubmitting ? (
                     <>
                       <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
-                      Đang nộp bài...
+                      <span>Đang nộp...</span>
+                    </>
+                  ) : currentQuestionIndex === allQuestions.length - 1 ? (
+                    <>
+                      <FaFlag className="h-4 w-4" />
+                      <span>Nộp bài</span>
                     </>
                   ) : (
                     <>
-                      {currentQuestionIndex === allQuestions.length - 1
-                        ? "Hoàn thành"
-                        : "Câu tiếp theo"}
-                      <FaArrowRight className="h-4 w-4" />
+                      <span>Tiếp theo</span>
+                      <FaChevronRight className="h-4 w-4" />
                     </>
                   )}
                 </Button>
