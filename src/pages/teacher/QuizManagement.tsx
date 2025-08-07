@@ -3,9 +3,13 @@ import { useNavigate } from "react-router-dom";
 import Button from "../../components/ui/Button";
 import Toast from "../../components/ui/Toast";
 import LoadingOverlay from "../../components/ui/LoadingOverlay";
+import EditQuizModal from "../../components/modals/EditQuizModal";
 import { 
   getQuizzesForManagement,
-  type QuizManagementItem
+  deleteQuiz,
+  updateQuiz,
+  type QuizManagementItem,
+  type UpdateQuizRequest
 } from "../../services/quizService";
 import { 
   FaPlus, 
@@ -24,6 +28,15 @@ const QuizManagement = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalQuizzes, setTotalQuizzes] = useState(0);
+  
+  // Delete confirmation state
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [quizToDelete, setQuizToDelete] = useState<QuizManagementItem | null>(null);
+  
+  // Edit quiz modal state
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [quizToEdit, setQuizToEdit] = useState<QuizManagementItem | null>(null);
+  const [isUpdating, setIsUpdating] = useState(false);
   
   // Toast state
   const [toast, setToast] = useState<{
@@ -69,11 +82,101 @@ const QuizManagement = () => {
   };
 
   const handleEditQuiz = (quizId: string) => {
-    showToast(`Tính năng chỉnh sửa quiz ${quizId} đang được phát triển`, "info");
+    const quiz = quizzes.find(q => q.quiz.id === quizId);
+    if (quiz) {
+      console.log('Selected quiz for edit:', quiz);
+      setQuizToEdit(quiz);
+      setShowEditModal(true);
+    }
+  };
+
+  const handleUpdateQuiz = async (formData: UpdateQuizRequest) => {
+    if (!quizToEdit) return;
+    
+    try {
+      setIsUpdating(true);
+      
+      console.log('Updating quiz with data:', formData);
+      await updateQuiz(quizToEdit.quiz.id, formData);
+      
+      // Update the quiz in local state
+      setQuizzes(prev => prev.map(q => 
+        q.quiz.id === quizToEdit.quiz.id 
+          ? { 
+              ...q, 
+              quiz: { 
+                ...q.quiz, 
+                name: formData.name || q.quiz.name,
+                description: formData.description || q.quiz.description,
+                active: formData.is_active,
+                public: formData.is_public,
+                is_public: formData.is_public
+              } 
+            }
+          : q
+      ));
+      
+      showToast(`Đã cập nhật quiz "${formData.name || quizToEdit.quiz.name}" thành công`, "success");
+      setShowEditModal(false);
+      setQuizToEdit(null);
+      
+    } catch (error) {
+      console.error("Error updating quiz:", error);
+      showToast("Không thể cập nhật quiz. Vui lòng thử lại!", "error");
+    } finally {
+      setIsUpdating(false);
+    }
   };
 
   const handleDeleteQuiz = (quizId: string) => {
-    showToast(`Tính năng xóa quiz ${quizId} đang được phát triển`, "info");
+    const quiz = quizzes.find(q => q.quiz.id === quizId);
+    if (quiz) {
+      setQuizToDelete(quiz);
+      setShowDeleteConfirm(true);
+    }
+  };
+
+  const confirmDeleteQuiz = async () => {
+    if (!quizToDelete) return;
+    
+    try {
+      const quizName = quizToDelete.quiz.name;
+
+      await deleteQuiz(quizToDelete.quiz.id);
+      
+      // If successful (status 200), quiz was completely deleted
+      setQuizzes(prev => prev.filter(q => q.quiz.id !== quizToDelete.quiz.id));
+      showToast(`Đã xóa quiz "${quizName}" thành công`, "success");
+      
+      // Refresh the current page if no quizzes left
+      if (quizzes.length === 1 && currentPage > 1) {
+        setCurrentPage(currentPage - 1);
+      } else {
+        fetchQuizzes(currentPage);
+      }
+      
+    } catch (error: any) {
+      const quizName = quizToDelete.quiz.name;
+      
+      // Check if the error is M113 (quiz assigned to classes)
+      if (error.response?.data?.code === "M113") {
+        // Quiz was deactivated instead of deleted
+        showToast(`Quiz "${quizName}" đã được đặt thành không hoạt động vì đã được giao cho lớp học`, "info");
+        
+        // Update the quiz status in local state
+        setQuizzes(prev => prev.map(q => 
+          q.quiz.id === quizToDelete.quiz.id 
+            ? { ...q, quiz: { ...q.quiz, active: false } }
+            : q
+        ));
+      } else {
+        console.error("Error deleting quiz:", error);
+        showToast(`Không thể xóa quiz "${quizName}". Vui lòng thử lại!`, "error");
+      }
+    } finally {
+      setShowDeleteConfirm(false);
+      setQuizToDelete(null);
+    }
   };
 
   const handleViewQuiz = (quizId: string) => {
@@ -235,11 +338,11 @@ const QuizManagement = () => {
                       {item.quiz.active ? 'Hoạt động' : 'Tạm dừng'}
                     </span>
                     <span className={`text-xs px-2 py-1 rounded-full font-medium whitespace-nowrap ${
-                      item.quiz.is_public 
+                      item.quiz.public 
                         ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200' 
                         : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
                     }`}>
-                      {item.quiz.is_public ? 'Công khai' : 'Riêng tư'}
+                      {item.quiz.public ? 'Công khai' : 'Riêng tư'}
                     </span>
                   </div>
                 </div>
@@ -360,6 +463,76 @@ const QuizManagement = () => {
         type={toast.type}
         isVisible={toast.isVisible}
         onClose={() => setToast({ ...toast, isVisible: false })}
+      />
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && quizToDelete && (
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 w-full max-w-md mx-auto">
+            <div className="text-center">
+              {/* Warning Icon */}
+              <div className="mx-auto mb-4 w-16 h-16 bg-red-100 dark:bg-red-900 rounded-full flex items-center justify-center">
+                <FaTrash className="w-8 h-8 text-red-600 dark:text-red-400" />
+              </div>
+
+              {/* Title */}
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                Xóa Quiz
+              </h3>
+
+              {/* Quiz Info */}
+              <div className="mb-4 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                <p className="font-medium text-gray-900 dark:text-white">
+                  {quizToDelete.quiz.name}
+                </p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  {calculateQuestionCount(quizToDelete)} câu hỏi • {calculateTotalPoints(quizToDelete)} điểm
+                </p>
+              </div>
+
+              {/* Warning Message */}
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
+                Bạn có chắc chắn muốn xóa quiz này?
+                <br />
+                <span className="text-red-600 dark:text-red-400 font-medium">
+                  Nếu quiz đã được giao cho lớp học, nó sẽ được đặt thành không hoạt động thay vì xóa hoàn toàn.
+                </span>
+              </p>
+
+              {/* Action Buttons */}
+              <div className="flex gap-3 justify-center">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setShowDeleteConfirm(false);
+                    setQuizToDelete(null);
+                  }}
+                  className="px-6"
+                >
+                  Hủy
+                </Button>
+                <Button
+                  onClick={confirmDeleteQuiz}
+                  className="px-6 bg-red-600 hover:bg-red-700 dark:bg-red-600 dark:hover:bg-red-700"
+                >
+                  Xóa Quiz
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Quiz Modal */}
+      <EditQuizModal
+        isOpen={showEditModal}
+        quiz={quizToEdit}
+        onClose={() => {
+          setShowEditModal(false);
+          setQuizToEdit(null);
+        }}
+        onUpdate={handleUpdateQuiz}
+        isUpdating={isUpdating}
       />
     </div>
   );

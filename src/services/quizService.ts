@@ -24,6 +24,14 @@ export interface CreateQuizRequest {
   is_public: boolean;
 }
 
+// Update Quiz Request for editing quiz
+export interface UpdateQuizRequest {
+  name: string;
+  description: string;
+  is_active: boolean;
+  is_public: boolean;
+}
+
 // Quiz Session interfaces
 export interface QuizSession {
   id: string;
@@ -101,7 +109,7 @@ export const getQuizById = async (
 
 export const updateQuiz = async (
   quizId: string,
-  quizData: Partial<CreateQuizRequest>,
+  quizData: UpdateQuizRequest,
 ): Promise<SuccessApiResponse<Quiz>> => {
   const response = await axiosCustom.put(`/quizzes/${quizId}`, quizData);
   return response.data;
@@ -172,7 +180,7 @@ export const getClassStudents = async (
     params: {
       page,
       page_size: pageSize,
-    },
+    }, 
   });
   return response.data;
 };
@@ -256,7 +264,7 @@ export interface DetailedQuiz {
   created_at: string;
   updated_at: string;
   active: boolean;
-  is_public: boolean;
+  public: boolean;
 }
 
 export interface QuizManagementItem {
@@ -776,6 +784,16 @@ export const getQuizForPractice = async (
   const response = await axiosCustom.get(`/quizzes/${quizId}`);
   return response.data;
 };
+
+// API function to create quiz with FormData (supports file uploads)
+export const createQuizWithFormData = async (
+  formData: FormData,
+): Promise<SuccessApiResponse<any>> => {
+  const response = await axiosCustom.post("/quizzes", formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  });
 
 // New interfaces for quiz questions API
 export interface QuizQuestionAnswer {

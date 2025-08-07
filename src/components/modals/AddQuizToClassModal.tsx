@@ -24,18 +24,20 @@ const AddQuizToClassModal = ({ isOpen, onClose, classRoomId, assignedQuizIds, on
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
 
-  // Fetch available quizzes (not assigned to this class)
+  // Fetch available quizzes (not assigned to this class and active only)
   const fetchAvailableQuizzes = async (page: number = 1) => {
     try {
       setIsLoading(true);
       const response = await getQuizzesForManagement(page, 20); // Get more quizzes per page
       const allQuizzes = response.data.data;
       
-      // Filter out quizzes that are already assigned to this class
-      const unassignedQuizzes = allQuizzes.filter(quiz => !assignedQuizIds.includes(quiz.quiz.id));
+      // Filter out quizzes that are already assigned to this class and only get active quizzes
+      const unassignedActiveQuizzes = allQuizzes.filter(quiz => 
+        !assignedQuizIds.includes(quiz.quiz.id) && quiz.quiz.active
+      );
       
-      setAvailableQuizzes(unassignedQuizzes);
-      setFilteredQuizzes(unassignedQuizzes);
+      setAvailableQuizzes(unassignedActiveQuizzes);
+      setFilteredQuizzes(unassignedActiveQuizzes);
       setTotalPages(response.data.pages);
     } catch (error) {
       console.error("Error fetching available quizzes:", error);
