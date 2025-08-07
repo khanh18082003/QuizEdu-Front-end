@@ -290,9 +290,6 @@ const ClassRoomDetail = () => {
     useState<QuizSessionHistoryResponse | null>(null);
   const [isLoadingQuizResult, setIsLoadingQuizResult] = useState(false);
 
-  // Get user information from Redux store
-  const user = useSelector((state: { user: any }) => state.user);
-
   // Toast helper function
   const showToast = (
     message: string,

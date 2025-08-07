@@ -104,7 +104,6 @@ const ClassDetailPage = () => {
   const [quizSessionsHasMore, setQuizSessionsHasMore] = useState(true);
   const [isLoadingMoreSessions, setIsLoadingMoreSessions] = useState(false);
 
-  const [isCreatingSession, setIsCreatingSession] = useState(false);
   const [showConfirmCreateSession, setShowConfirmCreateSession] = useState(false);
   const [selectedQuizForSession, setSelectedQuizForSession] = useState<ClassroomQuiz | null>(null);
 
@@ -450,15 +449,6 @@ const ClassDetailPage = () => {
     }
   };
 
-  const handleDeleteSession = async (_sessionId: string) => {
-    try {
-      showToast("Tính năng xóa session đang được phát triển", "info");
-    } catch (error) {
-      console.error("Error deleting session:", error);
-      showToast("Không thể xóa session. Vui lòng thử lại!", "error");
-    }
-  };
-
   // Notification handlers
   const handleCreateNotification = () => {
     setIsCreateNotificationModalOpen(true);
@@ -757,6 +747,7 @@ const ClassDetailPage = () => {
   }
 
   return (
+    // Main component wrapper
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         {/* Header */}
@@ -949,45 +940,7 @@ const ClassDetailPage = () => {
                   <Button onClick={handleAddQuiz}>Thêm Quiz</Button>
                 </div>
               </div>
-              {quizzes.length === 0 ? (
-                <div className="rounded-lg border border-gray-200 bg-white p-8 text-center shadow-sm dark:border-gray-700 dark:bg-gray-800">
-                  <svg
-                    className="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={1}
-                      d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                    />
-                  </svg>
-                  <h3 className="mt-4 text-lg font-semibold text-gray-700 dark:text-gray-300">
-                    Chưa có quiz nào được thêm
-                  </h3>
-                  <p className="mt-2 text-gray-600 dark:text-gray-400">
-                    Thêm quiz vào lớp học để bắt đầu tạo bài kiểm tra cho học
-                    sinh.
-                  </p>
-                  <Button onClick={handleAddQuiz} className="mt-4 px-6 py-3">
-                    <svg
-                      className="mr-2 h-5 w-5"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M12 6v6m0 0v6m0-6h6m-6 0H6"
-                      />
-                    </svg>
-                    Thêm Quiz Đầu Tiên
-                  </Button>
-                </div>
+
               ) : (
                 <div className="space-y-4">
                   {quizzes.map((quiz: ClassroomQuiz) => (
@@ -1107,50 +1060,8 @@ const ClassDetailPage = () => {
                           </Button>
                         </div>
                       </div>
-              <div className="grid gap-6 md:grid-cols-1 lg:grid-cols-2 xl:grid-cols-3">
-                {quizzes.map((quiz: ClassroomQuiz) => (
-                  <div key={quiz.id} className="bg-white dark:bg-gray-800 rounded-xl p-8 border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-md transition-all duration-200 h-full flex flex-col">
-                    <div className="flex items-start justify-between mb-6">
-                      <h3 className="text-xl font-semibold text-gray-900 dark:text-white pr-3 flex-1 leading-relaxed">
-                        {quiz.name}
-                      </h3>
-                      <span className={`px-4 py-2 rounded-full text-sm font-medium flex-shrink-0 ${quiz.active
-                          ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-                          : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
-                        }`}>
-                        {quiz.active ? 'Hoạt động' : 'Tạm dừng'}
-                      </span>
                     </div>
-
-                    <p className="text-base text-gray-600 dark:text-gray-400 mb-8 line-clamp-3 leading-relaxed flex-grow">
-                      {quiz.description && quiz.description.length > 120
-                        ? `${quiz.description.substring(0, 120)}...`
-                        : quiz.description || "Không có mô tả"}
-                    </p>
-
-                    <div className="flex gap-3 mt-auto">
-                      <Button variant="outline" size="md" className="flex-1 py-3">
-                        Sửa
-                      </Button>
-                      <Button
-                        variant="primary"
-                        size="md"
-                        className="flex-1 py-3"
-                        onClick={() => handleCreateSession(quiz)}
-                        disabled={isCreatingSession}
-                      >
-                        {isCreatingSession ? (
-                          <>
-                            <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full mr-2"></div>
-                            Đang tạo...
-                          </>
-                        ) : (
-                          'Tạo Session'
-                        )}
-                      </Button>
-                    </div>
-                  </div>
-                ))}
+                  ))}
 
                 {quizzes.length === 0 && (
                   <div className="col-span-full text-center py-16">
@@ -1159,9 +1070,15 @@ const ClassDetailPage = () => {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                       </svg>
                     </div>
-                  ))}
-                </div>
-              )}
+                    <h3 className="text-xl font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Chưa có quiz nào
+                    </h3>
+                    <p className="text-gray-500 dark:text-gray-400">
+                      Thêm quiz vào lớp để bắt đầu tạo sessions.
+                    </p>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
@@ -1947,7 +1864,7 @@ const ClassDetailPage = () => {
         }}
         onConfirm={confirmCreateSession}
         quiz={selectedQuizForSession}
-        isLoading={isCreatingSession}
+        isLoading={false}
       />
 
       {/* Create Notification Modal */}
