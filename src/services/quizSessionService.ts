@@ -3,7 +3,7 @@ import api from "../utils/axiosCustom";
 import type { RegisterResponse } from "./userService";
 
 // Interface for quiz session response
-export interface QuizSessionResponse {
+export interface QuizSessionDetailResponse {
   id: string;
   name: string;
   description: string;
@@ -136,6 +136,17 @@ export interface QuizSubmissionResponse {
     total: number;
     score: number;
   };
+}
+
+// Interface for scoreboard entry
+export interface ScoreboardEntry {
+  id: string;
+  email: string;
+  first_name: string;
+  last_name: string;
+  score: number;
+  rank: number;
+  quiz_session_id: string;
 }
 
 /**
@@ -297,6 +308,20 @@ export const getStudentsInQuizSession = async (
     return response.data;
   } catch (error) {
     console.error("Error fetching students in quiz session:", error);
+    throw error;
+  }
+};
+
+export const getQuizSessionScoreboard = async (
+  sessionId: string,
+): Promise<SuccessApiResponse<ScoreboardEntry[]>> => {
+  try {
+    const response = await api.get<SuccessApiResponse<ScoreboardEntry[]>>(
+      `/quiz-sessions/${sessionId}/scoreboard`,
+    );
+    return response.data;
+  } catch (error) {
+    console.error("Error fetching quiz session scoreboard:", error);
     throw error;
   }
 };

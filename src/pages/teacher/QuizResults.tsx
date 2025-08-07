@@ -1,25 +1,18 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
-import {
-  FaArrowLeft,
-  FaTrophy,
-  FaUserTimes,
-  FaChartBar,
-  FaUsers,
-  FaPercentage,
-} from "react-icons/fa";
+import { FaArrowLeft, FaTrophy, FaChartBar, FaUsers } from "react-icons/fa";
 import Button from "../../components/ui/Button";
+import {
+  getQuizSessionScoreboard,
+  type ScoreboardEntry,
+} from "../../services/quizSessionService";
 
-// Mock data interfaces
+// Interface for student result display
 interface StudentResult {
   id: string;
   name: string;
-  avatar?: string;
+  email: string;
   score: number;
-  totalQuestions: number;
-  percentage: number;
-  timeSpent: string;
-  submittedAt: string;
   rank: number;
 }
 
@@ -29,137 +22,105 @@ interface QuizResultsSummary {
   totalStudents: number;
   submittedCount: number;
   averageScore: number;
-  averagePercentage: number;
   topScore: number;
-  completionRate: number;
-  startTime: string;
-  endTime: string;
 }
+
+// Skeleton loading component
+const ScoreboardSkeleton = () => {
+  return (
+    <div className="space-y-4">
+      {[...Array(6)].map((_, index) => (
+        <div
+          key={index}
+          className="flex items-center justify-between rounded-lg bg-white p-4 shadow-sm dark:bg-gray-800"
+        >
+          <div className="flex items-center">
+            <div className="h-12 w-12 animate-pulse rounded-full bg-gray-200 dark:bg-gray-700"></div>
+            <div className="ml-4">
+              <div className="h-4 w-24 animate-pulse rounded bg-gray-200 dark:bg-gray-700"></div>
+              <div className="mt-2 h-3 w-32 animate-pulse rounded bg-gray-200 dark:bg-gray-700"></div>
+            </div>
+          </div>
+          <div className="text-right">
+            <div className="h-6 w-16 animate-pulse rounded bg-gray-200 dark:bg-gray-700"></div>
+            <div className="mt-1 h-4 w-12 animate-pulse rounded bg-gray-200 dark:bg-gray-700"></div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+};
 
 const QuizResultsPage = () => {
   const { sessionId } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
   const location = useLocation();
-  const [isLoading, setIsLoading] = useState(false);
-
-  // Mock data - replace with actual API calls
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [scoreboardData, setScoreboardData] = useState<StudentResult[]>([]);
   const [summary, setSummary] = useState<QuizResultsSummary | null>(null);
-  const [topPerformers, setTopPerformers] = useState<StudentResult[]>([]);
-  const [lowPerformers, setLowPerformers] = useState<StudentResult[]>([]);
-  const [absentStudents, setAbsentStudents] = useState<string[]>([]);
-  const [allResults, setAllResults] = useState<StudentResult[]>([]);
 
   useEffect(() => {
-    const loadQuizResults = async () => {
+    const loadScoreboard = async () => {
+      if (!sessionId) {
+        setError("Session ID không hợp lệ");
+        setIsLoading(false);
+        return;
+      }
+
       try {
         setIsLoading(true);
-        // Simulate API delay
-        await new Promise((resolve) => setTimeout(resolve, 1000));
+        setError(null);
 
-        // Mock quiz results data
-        const mockSummary: QuizResultsSummary = {
-          quizName: "Mathematics Quiz Chapter 5",
-          sessionId: sessionId || "unknown",
-          totalStudents: 25,
-          submittedCount: 22,
-          averageScore: 7.8,
-          averagePercentage: 78,
-          topScore: 10,
-          completionRate: 88,
-          startTime: "2024-08-06T10:00:00Z",
-          endTime: "2024-08-06T11:30:00Z",
-        };
+        const response = await getQuizSessionScoreboard(sessionId);
 
-        const mockResults: StudentResult[] = [
-          {
-            id: "1",
-            name: "Nguyễn Văn An",
-            avatar: "",
-            score: 10,
-            totalQuestions: 10,
-            percentage: 100,
-            timeSpent: "25 phút",
-            submittedAt: "2024-08-06T11:15:00Z",
-            rank: 1,
-          },
-          {
-            id: "2",
-            name: "Trần Thị Bình",
-            avatar: "",
-            score: 9,
-            totalQuestions: 10,
-            percentage: 90,
-            timeSpent: "28 phút",
-            submittedAt: "2024-08-06T11:18:00Z",
-            rank: 2,
-          },
-          {
-            id: "3",
-            name: "Lê Hoàng Cường",
-            avatar: "",
-            score: 9,
-            totalQuestions: 10,
-            percentage: 90,
-            timeSpent: "30 phút",
-            submittedAt: "2024-08-06T11:20:00Z",
-            rank: 3,
-          },
-          {
-            id: "4",
-            name: "Phạm Thị Dung",
-            avatar: "",
-            score: 5,
-            totalQuestions: 10,
-            percentage: 50,
-            timeSpent: "35 phút",
-            submittedAt: "2024-08-06T11:25:00Z",
-            rank: 20,
-          },
-          {
-            id: "5",
-            name: "Võ Minh Euy",
-            avatar: "",
-            score: 4,
-            totalQuestions: 10,
-            percentage: 40,
-            timeSpent: "32 phút",
-            submittedAt: "2024-08-06T11:22:00Z",
-            rank: 21,
-          },
-          {
-            id: "6",
-            name: "Đặng Thị Phượng",
-            avatar: "",
-            score: 3,
-            totalQuestions: 10,
-            percentage: 30,
-            timeSpent: "28 phút",
-            submittedAt: "2024-08-06T11:18:00Z",
-            rank: 22,
-          },
-        ];
+        if (response.code === "M000" && response.data) {
+          // Transform API data to display format
+          const transformedData: StudentResult[] = response.data.map(
+            (entry: ScoreboardEntry) => ({
+              id: entry.id,
+              name: `${entry.first_name} ${entry.last_name}`,
+              email: entry.email,
+              score: entry.score,
+              rank: entry.rank,
+            }),
+          );
 
-        const mockAbsent = ["Hoàng Văn Gia", "Ngô Thị Hương", "Bùi Minh Khoa"];
+          setScoreboardData(transformedData);
 
-        setSummary(mockSummary);
-        setAllResults(mockResults);
-        setTopPerformers(mockResults.slice(0, 3));
-        setLowPerformers(mockResults.slice(-3));
-        setAbsentStudents(mockAbsent);
+          // Calculate summary from scoreboard data
+          const totalStudents = transformedData.length;
+          const totalScore = transformedData.reduce(
+            (sum, student) => sum + student.score,
+            0,
+          );
+          const averageScore =
+            totalStudents > 0 ? totalScore / totalStudents : 0;
+          const topScore = Math.max(...transformedData.map((s) => s.score), 0);
+
+          setSummary({
+            quizName: "Quiz Session Results",
+            sessionId: sessionId,
+            totalStudents: totalStudents,
+            submittedCount: totalStudents,
+            averageScore: Math.round(averageScore * 100) / 100,
+            topScore: topScore,
+          });
+        } else {
+          setError("Không thể tải dữ liệu scoreboard");
+        }
       } catch (error) {
-        console.error("Error loading quiz results:", error);
+        console.error("Error loading scoreboard:", error);
+        setError("Có lỗi xảy ra khi tải dữ liệu");
       } finally {
         setIsLoading(false);
       }
     };
 
-    if (sessionId) {
-      loadQuizResults();
-    }
+    loadScoreboard();
   }, [sessionId]);
 
   const handleGoBack = () => {
-    // Navigate back to class detail with sessions tab
     const state = location.state as { classId?: string };
     if (state?.classId) {
       navigate(`/teacher/classes/${state.classId}`, {
@@ -170,40 +131,41 @@ const QuizResultsPage = () => {
     }
   };
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("vi-VN", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+  const getRankIcon = (rank: number) => {
+    switch (rank) {
+      case 1:
+        return "🏆";
+      case 2:
+        return "🥈";
+      case 3:
+        return "🥉";
+      default:
+        return `#${rank}`;
+    }
   };
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-        <div className="flex min-h-screen items-center justify-center">
-          <div className="text-center">
-            <div className="mx-auto mb-4 h-12 w-12 animate-spin rounded-full border-b-2 border-blue-600"></div>
-            <p className="text-gray-600 dark:text-gray-400">
-              Đang tải kết quả quiz...
-            </p>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const getRankColor = (rank: number) => {
+    switch (rank) {
+      case 1:
+        return "from-yellow-400 to-yellow-600";
+      case 2:
+        return "from-gray-300 to-gray-500";
+      case 3:
+        return "from-orange-400 to-orange-600";
+      default:
+        return "from-blue-400 to-blue-600";
+    }
+  };
 
-  if (!summary) {
+  if (error) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
         <div className="flex min-h-screen items-center justify-center">
           <div className="text-center">
-            <p className="text-gray-600 dark:text-gray-400">
-              Không tìm thấy kết quả quiz
-            </p>
-            <Button onClick={handleGoBack} className="mt-4">
+            <div className="mb-6 text-lg text-red-600 dark:text-red-400">
+              {error}
+            </div>
+            <Button onClick={handleGoBack} variant="primary">
               Quay lại
             </Button>
           </div>
@@ -219,211 +181,161 @@ const QuizResultsPage = () => {
         <div className="mb-8">
           <button
             onClick={handleGoBack}
-            className="mb-4 flex items-center text-blue-600 hover:text-blue-700"
+            className="mb-4 flex items-center text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
           >
             <FaArrowLeft className="mr-2 h-5 w-5" />
             Quay lại Sessions
           </button>
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-            Kết quả Quiz
+            Bảng Xếp Hạng Quiz
           </h1>
           <p className="mt-2 text-gray-600 dark:text-gray-400">
-            {summary.quizName}
+            {summary?.quizName || "Quiz Session"}
           </p>
           <div className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-            Phiên: #{summary.sessionId.slice(-6)} • Từ{" "}
-            {formatDate(summary.startTime)} đến {formatDate(summary.endTime)}
+            Phiên: #{sessionId?.slice(-6)}
           </div>
         </div>
 
         {/* Summary Cards */}
-        <div className="mb-8 grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
-          <div className="rounded-lg bg-white p-6 shadow-sm dark:bg-gray-800">
-            <div className="flex items-center">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900/30">
-                <FaUsers className="h-6 w-6 text-blue-600 dark:text-blue-400" />
-              </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
-                  Tham gia
-                </p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {summary.submittedCount}/{summary.totalStudents}
-                </p>
+        {summary && (
+          <div className="mb-8 grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
+            <div className="rounded-lg bg-white p-6 shadow-sm dark:bg-gray-800">
+              <div className="flex items-center">
+                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900/30">
+                  <FaUsers className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+                </div>
+                <div className="ml-4">
+                  <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                    Tham gia
+                  </p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                    {summary.submittedCount}
+                  </p>
+                </div>
               </div>
             </div>
-          </div>
 
-          <div className="rounded-lg bg-white p-6 shadow-sm dark:bg-gray-800">
-            <div className="flex items-center">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/30">
-                <FaPercentage className="h-6 w-6 text-green-600 dark:text-green-400" />
-              </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
-                  Điểm TB
-                </p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {summary.averagePercentage}%
-                </p>
+            <div className="rounded-lg bg-white p-6 shadow-sm dark:bg-gray-800">
+              <div className="flex items-center">
+                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/30">
+                  <FaChartBar className="h-6 w-6 text-green-600 dark:text-green-400" />
+                </div>
+                <div className="ml-4">
+                  <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                    Điểm TB
+                  </p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                    {summary.averageScore}
+                  </p>
+                </div>
               </div>
             </div>
-          </div>
 
-          <div className="rounded-lg bg-white p-6 shadow-sm dark:bg-gray-800">
-            <div className="flex items-center">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-yellow-100 dark:bg-yellow-900/30">
-                <FaTrophy className="h-6 w-6 text-yellow-600 dark:text-yellow-400" />
-              </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
-                  Cao nhất
-                </p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {summary.topScore}/10
-                </p>
+            <div className="rounded-lg bg-white p-6 shadow-sm dark:bg-gray-800">
+              <div className="flex items-center">
+                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-yellow-100 dark:bg-yellow-900/30">
+                  <FaTrophy className="h-6 w-6 text-yellow-600 dark:text-yellow-400" />
+                </div>
+                <div className="ml-4">
+                  <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                    Cao nhất
+                  </p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                    {summary.topScore}
+                  </p>
+                </div>
               </div>
             </div>
-          </div>
 
-          <div className="rounded-lg bg-white p-6 shadow-sm dark:bg-gray-800">
-            <div className="flex items-center">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-purple-100 dark:bg-purple-900/30">
-                <FaChartBar className="h-6 w-6 text-purple-600 dark:text-purple-400" />
-              </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
-                  Hoàn thành
-                </p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {summary.completionRate}%
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
-          {/* Top Performers */}
-          <div className="rounded-lg bg-white shadow-sm dark:bg-gray-800">
-            <div className="border-b border-gray-200 px-6 py-4 dark:border-gray-700">
-              <h2 className="flex items-center text-lg font-semibold text-gray-900 dark:text-white">
-                <FaTrophy className="mr-2 h-5 w-5 text-yellow-500" />
-                Top 3 Điểm Cao Nhất
-              </h2>
-            </div>
-            <div className="p-6">
-              <div className="space-y-4">
-                {topPerformers.map((student, index) => (
-                  <div
-                    key={student.id}
-                    className="flex items-center justify-between rounded-lg bg-gradient-to-r from-yellow-50 to-orange-50 p-4 dark:from-yellow-900/20 dark:to-orange-900/20"
-                  >
-                    <div className="flex items-center">
-                      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-yellow-400 to-orange-500 font-bold text-white">
-                        {index === 0 ? "🏆" : index === 1 ? "🥈" : "🥉"}
-                      </div>
-                      <div className="ml-4">
-                        <h3 className="font-semibold text-gray-900 dark:text-white">
-                          {student.name}
-                        </h3>
-                        <p className="text-sm text-gray-600 dark:text-gray-400">
-                          {student.timeSpent} •{" "}
-                          {formatDate(student.submittedAt)}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-xl font-bold text-gray-900 dark:text-white">
-                        {student.score}/{student.totalQuestions}
-                      </p>
-                      <p className="text-sm text-green-600 dark:text-green-400">
-                        {student.percentage}%
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Low Performers */}
-          <div className="rounded-lg bg-white shadow-sm dark:bg-gray-800">
-            <div className="border-b border-gray-200 px-6 py-4 dark:border-gray-700">
-              <h2 className="flex items-center text-lg font-semibold text-gray-900 dark:text-white">
-                <FaChartBar className="mr-2 h-5 w-5 text-red-500" />
-                Cần Hỗ Trợ
-              </h2>
-            </div>
-            <div className="p-6">
-              <div className="space-y-4">
-                {lowPerformers.map((student) => (
-                  <div
-                    key={student.id}
-                    className="flex items-center justify-between rounded-lg bg-gradient-to-r from-red-50 to-pink-50 p-4 dark:from-red-900/20 dark:to-pink-900/20"
-                  >
-                    <div className="flex items-center">
-                      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-red-400 to-pink-500 font-bold text-white">
-                        {student.name.charAt(0)}
-                      </div>
-                      <div className="ml-4">
-                        <h3 className="font-semibold text-gray-900 dark:text-white">
-                          {student.name}
-                        </h3>
-                        <p className="text-sm text-gray-600 dark:text-gray-400">
-                          {student.timeSpent} •{" "}
-                          {formatDate(student.submittedAt)}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-xl font-bold text-gray-900 dark:text-white">
-                        {student.score}/{student.totalQuestions}
-                      </p>
-                      <p className="text-sm text-red-600 dark:text-red-400">
-                        {student.percentage}%
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Absent Students */}
-        {absentStudents.length > 0 && (
-          <div className="mt-8 rounded-lg bg-white shadow-sm dark:bg-gray-800">
-            <div className="border-b border-gray-200 px-6 py-4 dark:border-gray-700">
-              <h2 className="flex items-center text-lg font-semibold text-gray-900 dark:text-white">
-                <FaUserTimes className="mr-2 h-5 w-5 text-gray-500" />
-                Học sinh vắng mặt ({absentStudents.length})
-              </h2>
-            </div>
-            <div className="p-6">
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
-                {absentStudents.map((studentName, index) => (
-                  <div
-                    key={index}
-                    className="flex items-center rounded-lg bg-gray-50 p-3 dark:bg-gray-700"
-                  >
-                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-300 text-gray-600 dark:bg-gray-600 dark:text-gray-300">
-                      {studentName.charAt(0)}
-                    </div>
-                    <div className="ml-3">
-                      <p className="font-medium text-gray-900 dark:text-white">
-                        {studentName}
-                      </p>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">
-                        Không tham gia
-                      </p>
-                    </div>
-                  </div>
-                ))}
+            <div className="rounded-lg bg-white p-6 shadow-sm dark:bg-gray-800">
+              <div className="flex items-center">
+                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-purple-100 dark:bg-purple-900/30">
+                  <FaTrophy className="h-6 w-6 text-purple-600 dark:text-purple-400" />
+                </div>
+                <div className="ml-4">
+                  <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                    Tổng học sinh
+                  </p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                    {summary.totalStudents}
+                  </p>
+                </div>
               </div>
             </div>
           </div>
         )}
+
+        {/* Scoreboard */}
+        <div className="rounded-lg bg-white shadow-sm dark:bg-gray-800">
+          <div className="border-b border-gray-200 px-6 py-4 dark:border-gray-700">
+            <h2 className="flex items-center text-lg font-semibold text-gray-900 dark:text-white">
+              <FaTrophy className="mr-2 h-5 w-5 text-yellow-500" />
+              Bảng Xếp Hạng
+            </h2>
+          </div>
+
+          <div className="p-6">
+            {isLoading ? (
+              <ScoreboardSkeleton />
+            ) : scoreboardData.length > 0 ? (
+              <div className="space-y-4">
+                {scoreboardData.map((student) => (
+                  <div
+                    key={student.id}
+                    className={`flex items-center justify-between rounded-lg p-4 transition-all hover:shadow-md ${
+                      student.rank <= 3
+                        ? "bg-gradient-to-r from-yellow-50 to-orange-50 dark:from-yellow-900/20 dark:to-orange-900/20"
+                        : "bg-gray-50 dark:bg-gray-700"
+                    }`}
+                  >
+                    <div className="flex items-center">
+                      <div
+                        className={`flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br ${getRankColor(student.rank)} font-bold text-white`}
+                      >
+                        {getRankIcon(student.rank)}
+                      </div>
+                      <div className="ml-4">
+                        <h3 className="font-semibold text-gray-900 dark:text-white">
+                          {student.name}
+                        </h3>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                          {student.email}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xl font-bold text-gray-900 dark:text-white">
+                        {student.score} điểm
+                      </p>
+                      <p
+                        className={`text-sm font-medium ${
+                          student.rank <= 3
+                            ? "text-yellow-600 dark:text-yellow-400"
+                            : "text-gray-600 dark:text-gray-400"
+                        }`}
+                      >
+                        Hạng {student.rank}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="py-12 text-center">
+                <div className="mx-auto mb-4 h-12 w-12 text-gray-400">
+                  <FaTrophy className="h-12 w-12" />
+                </div>
+                <h3 className="text-lg font-medium text-gray-900 dark:text-white">
+                  Chưa có dữ liệu
+                </h3>
+                <p className="mt-2 text-gray-600 dark:text-gray-400">
+                  Chưa có học sinh nào hoàn thành quiz này.
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );

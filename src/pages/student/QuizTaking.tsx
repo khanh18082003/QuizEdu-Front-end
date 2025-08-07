@@ -173,14 +173,17 @@ const QuizTaking: React.FC = () => {
 
           return {
             question_id: question.id,
-            answer_participant: [
-              {
-                user_id: user.id,
-                answer: Array.isArray(userAnswer.answer)
-                  ? userAnswer.answer.join(",")
-                  : String(userAnswer.answer),
-              },
-            ],
+            answer_participant: Array.isArray(userAnswer.answer)
+              ? userAnswer.answer.map((answer) => ({
+                  user_id: user.id,
+                  answer: String(answer),
+                }))
+              : [
+                  {
+                    user_id: user.id,
+                    answer: String(userAnswer.answer),
+                  },
+                ],
           };
         })
         .filter(Boolean);

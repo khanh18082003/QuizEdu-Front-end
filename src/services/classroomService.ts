@@ -4,7 +4,10 @@ import type {
   TeacherProfileResponse,
 } from "../types/response";
 import api from "../utils/axiosCustom";
-import type { QuizSessionResponse } from "./quizSessionService";
+import type {
+  QuizSessionDetailResponse,
+  QuizSessionResponse,
+} from "./quizSessionService";
 import type { RegisterResponse } from "./userService";
 
 // Interface for classroom data
@@ -255,10 +258,12 @@ export const getQuizSessionsInClassroom = async (
   classroomId: string,
   page: number = 1,
   pageSize: number = 3,
-): Promise<SuccessApiResponse<PaginationResponse<QuizSessionResponse>>> => {
+): Promise<
+  SuccessApiResponse<PaginationResponse<QuizSessionDetailResponse>>
+> => {
   try {
     const response = await api.get<
-      SuccessApiResponse<PaginationResponse<QuizSessionResponse>>
+      SuccessApiResponse<PaginationResponse<QuizSessionDetailResponse>>
     >(
       `/classrooms/${classroomId}/quizSessions?page=${page}&pageSize=${pageSize}`,
     );
