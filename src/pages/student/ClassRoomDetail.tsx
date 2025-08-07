@@ -261,16 +261,13 @@ const ClassRoomDetail = () => {
     isVisible: false,
   });
 
-  const showToast = (message: string, type: "success" | "error" | "info") => {
-    setToast({ message, type, isVisible: true });
-  };
-
   // Access code modal state
   const [isAccessCodeModalOpen, setIsAccessCodeModalOpen] = useState(false);
   const [selectedQuizSession, setSelectedQuizSession] = useState<
     ProcessedClassroomData["assignments"][0] | null
   >(null);
   const [isJoiningSession, setIsJoiningSession] = useState(false);
+
 
   // Quiz sessions pagination state
   const [quizSessionsData, setQuizSessionsData] = useState<
@@ -1617,12 +1614,14 @@ const ClassRoomDetail = () => {
         }}
         onConfirm={confirmEditComment}
         comment={selectedCommentForEdit?.comment || null}
+      />
+
       {/* Toast */}
       <Toast
-        isVisible={toastVisible}
-        message={toastMessage}
-        type={toastType}
-        onClose={() => setToastVisible(false)}
+        message={toast.message}
+        type={toast.type}
+        isVisible={toast.isVisible}
+        onClose={() => setToast({ ...toast, isVisible: false })}
       />
     </div>
   );
