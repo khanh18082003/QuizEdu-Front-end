@@ -5,8 +5,7 @@ import InputField from "../../components/ui/InputField";
 import Toast from "../../components/ui/Toast";
 import LoadingOverlay from "../../components/ui/LoadingOverlay";
 import { 
-  createFullQuiz,
-  type CreateFullQuizRequest,
+  createQuizWithFormData,
   type CreateMultipleChoiceQuestion,
   type CreateMatchingQuestion,
   type CreateFillInBlankQuestion,
@@ -25,6 +24,20 @@ import {
   FaToggleOff,
   FaExclamationTriangle
 } from "react-icons/fa";
+
+// Extended interface to support file uploads and grouped matching
+interface CreateMatchingQuestionWithFile extends CreateMatchingQuestion {
+  file_a?: File;
+  file_b?: File;
+}
+
+// Interface for matching groups
+interface MatchingGroup {
+  id: string;
+  type_combination: string; // "TEXT-TEXT", "TEXT-IMAGE", "IMAGE-TEXT", "IMAGE-IMAGE"
+  points_per_pair: number;
+  questions: CreateMatchingQuestionWithFile[];
+}
 
 type QuizType = "multiple_choice" | "matching" | "fill_in_blank" | "true_false";
 
@@ -59,8 +72,8 @@ const CreateQuiz = () => {
   // Multiple Choice Questions
   const [multipleChoiceQuestions, setMultipleChoiceQuestions] = useState<CreateMultipleChoiceQuestion[]>([]);
   
-  // Matching Questions
-  const [matchingQuestions, setMatchingQuestions] = useState<CreateMatchingQuestion[]>([]);
+  // Matching Questions organized by groups
+  const [matchingGroups, setMatchingGroups] = useState<MatchingGroup[]>([]);
   const [matchingTimeLimit, setMatchingTimeLimit] = useState(60);
   
   // Fill in Blank Questions (for future development)
@@ -128,25 +141,113 @@ const CreateQuiz = () => {
   };
 
   // Matching Functions
-  const addMatchingQuestion = () => {
-    const newQuestion: CreateMatchingQuestion = {
-      content_a: "",
-      type_a: "TEXT",
-      content_b: "",
-      type_b: "TEXT",
-      points: 1
+  const addMatchingGroup = (typeCombination: string) => {
+    const newGroup: MatchingGroup = {
+      id: `group_${Date.now()}`,
+      type_combination: typeCombination,
+      points_per_pair: 1,
+      questions: []
     };
-    setMatchingQuestions([...matchingQuestions, newQuestion]);
+    
+    // Add minimum 2 empty questions
+    for (let i = 0; i < 2; i++) {
+      const [typeA, typeB] = typeCombination.split('-');
+      newGroup.questions.push({
+        content_a: "",
+        type_a: typeA as "TEXT" | "IMAGE",
+        content_b: "",
+        type_b: typeB as "TEXT" | "IMAGE", 
+        points: 1,
+        file_a: undefined,
+        file_b: undefined
+      });
+    }
+    
+    setMatchingGroups([...matchingGroups, newGroup]);
   };
 
-  const updateMatchingQuestion = (index: number, field: string, value: any) => {
-    const updated = [...matchingQuestions];
-    updated[index] = { ...updated[index], [field]: value };
-    setMatchingQuestions(updated);
+  const updateMatchingGroup = (groupId: string, field: string, value: any) => {
+    setMatchingGroups(prev => prev.map(group => 
+      group.id === groupId ? { ...group, [field]: value } : group
+    ));
   };
 
-  const removeMatchingQuestion = (index: number) => {
-    setMatchingQuestions(matchingQuestions.filter((_, i) => i !== index));
+  const addQuestionToGroup = (groupId: string) => {
+    setMatchingGroups(prev => prev.map(group => {
+      if (group.id === groupId && group.questions.length < 5) {
+        const [typeA, typeB] = group.type_combination.split('-');
+        const newQuestion: CreateMatchingQuestionWithFile = {
+          content_a: "",
+          type_a: typeA as "TEXT" | "IMAGE",
+          content_b: "",
+          type_b: typeB as "TEXT" | "IMAGE",
+          points: group.points_per_pair,
+          file_a: undefined,
+          file_b: undefined
+        };
+        return { ...group, questions: [...group.questions, newQuestion] };
+      }
+      return group;
+    }));
+  };
+
+  const removeQuestionFromGroup = (groupId: string, questionIndex: number) => {
+    setMatchingGroups(prev => prev.map(group => {
+      if (group.id === groupId && group.questions.length > 2) {
+        const updatedQuestions = group.questions.filter((_, index) => index !== questionIndex);
+        return { ...group, questions: updatedQuestions };
+      }
+      return group;
+    }));
+  };
+
+  const updateQuestionInGroup = (groupId: string, questionIndex: number, field: string, value: any) => {
+    setMatchingGroups(prev => prev.map(group => {
+      if (group.id === groupId) {
+        const updatedQuestions = group.questions.map((question, index) =>
+          index === questionIndex ? { ...question, [field]: value } : question
+        );
+        return { ...group, questions: updatedQuestions };
+      }
+      return group;
+    }));
+  };
+
+  const handleGroupFileUpload = (groupId: string, questionIndex: number, field: 'file_a' | 'file_b', file: File | null) => {
+    setMatchingGroups(prev => prev.map(group => {
+      if (group.id === groupId) {
+        const updatedQuestions = group.questions.map((question, index) => {
+          if (index === questionIndex) {
+            const updatedQuestion = { ...question, [field]: file };
+            // Clear corresponding content when file is selected
+            if (file) {
+              const contentField = field === 'file_a' ? 'content_a' : 'content_b';
+              updatedQuestion[contentField] = '';
+            }
+            return updatedQuestion;
+          }
+          return question;
+        });
+        return { ...group, questions: updatedQuestions };
+      }
+      return group;
+    }));
+  };
+
+  const clearGroupFile = (groupId: string, questionIndex: number, field: 'file_a' | 'file_b') => {
+    setMatchingGroups(prev => prev.map(group => {
+      if (group.id === groupId) {
+        const updatedQuestions = group.questions.map((question, index) =>
+          index === questionIndex ? { ...question, [field]: undefined } : question
+        );
+        return { ...group, questions: updatedQuestions };
+      }
+      return group;
+    }));
+  };
+
+  const removeMatchingGroup = (groupId: string) => {
+    setMatchingGroups(matchingGroups.filter(group => group.id !== groupId));
   };
 
   const handleSubmit = async () => {
@@ -160,42 +261,76 @@ const CreateQuiz = () => {
         return;
       }
 
-      // Note: Questions are optional, can be added later
+      // Create FormData for file upload support
+      const formData = new FormData();
+      
+      // Add basic info
+      formData.append('name', basicInfo.name);
+      formData.append('description', basicInfo.description);
+      formData.append('isActive', basicInfo.is_active.toString());
+      formData.append("isPublic", basicInfo.is_public.toString());
 
-      const quizData: CreateFullQuizRequest = {
-        name: basicInfo.name,
-        description: basicInfo.description,
-        is_active: basicInfo.is_active,
-        is_public: basicInfo.is_public,
-      };
-
-      // Add question types if they exist
+      // Add multiple choice questions if they exist
       if (multipleChoiceQuestions.length > 0) {
-        quizData.multiple_choice_quiz = {
-          questions: multipleChoiceQuestions
-        };
+        multipleChoiceQuestions.forEach((question, qIndex) => {
+          formData.append(`multipleChoiceQuiz.questions[${qIndex}].questionText`, question.question_text);
+          formData.append(`multipleChoiceQuiz.questions[${qIndex}].hint`, question.hint);
+          formData.append(`multipleChoiceQuiz.questions[${qIndex}].timeLimit`, question.time_limit.toString());
+          formData.append(`multipleChoiceQuiz.questions[${qIndex}].allowMultipleAnswers`, question.allow_multiple_answers.toString());
+          formData.append(`multipleChoiceQuiz.questions[${qIndex}].points`, question.points.toString());
+          
+          question.answers.forEach((answer, aIndex) => {
+            formData.append(`multipleChoiceQuiz.questions[${qIndex}].answers[${aIndex}].answerText`, answer.answer_text);
+            formData.append(`multipleChoiceQuiz.questions[${qIndex}].answers[${aIndex}].correct`, answer.correct.toString());
+          });
+        });
       }
 
-      if (matchingQuestions.length > 0) {
-        quizData.matching_quiz = {
-          time_limit: matchingTimeLimit,
-          questions: matchingQuestions
-        };
+      // Add matching questions if they exist
+      if (matchingGroups.length > 0) {
+        formData.append('matchingQuiz.timeLimit', matchingTimeLimit.toString());
+        
+        let questionIndex = 0;
+        matchingGroups.forEach((group) => {
+          group.questions.forEach((question) => {
+            formData.append(`matchingQuiz.questions[${questionIndex}].points`, group.points_per_pair.toString());
+            
+            // Handle side A
+            if (question.file_a) {
+              formData.append(`matchingQuiz.questions[${questionIndex}].fileContentA`, question.file_a);
+              formData.append(`matchingQuiz.questions[${questionIndex}].typeA`, 'IMAGE');
+            } else if (question.content_a) {
+              formData.append(`matchingQuiz.questions[${questionIndex}].contentA`, question.content_a);
+              formData.append(`matchingQuiz.questions[${questionIndex}].typeA`, 'TEXT');
+            }
+
+            // Handle side B
+            if (question.file_b) {
+              formData.append(`matchingQuiz.questions[${questionIndex}].fileContentB`, question.file_b);
+              formData.append(`matchingQuiz.questions[${questionIndex}].typeB`, 'IMAGE');
+            } else if (question.content_b) {
+              formData.append(`matchingQuiz.questions[${questionIndex}].contentB`, question.content_b);
+              formData.append(`matchingQuiz.questions[${questionIndex}].typeB`, 'TEXT');
+            }
+            
+            questionIndex++;
+          });
+        });
       }
 
-      if (fillInBlankQuestions.length > 0) {
-        quizData.fill_in_blank_quiz = {
-          questions: fillInBlankQuestions
-        };
+      // TODO: Replace with actual FormData API call
+      // For now, we'll use the existing API but this should be updated to handle FormData
+      console.log('FormData to be sent:');
+      console.log('Basic info state:', basicInfo);
+      console.log('is_public value:', basicInfo.is_public);
+      console.log('is_public type:', typeof basicInfo.is_public);
+      
+      for (const [key, value] of formData.entries()) {
+        console.log(`${key}: ${value instanceof File ? `[FILE: ${value.name}]` : value}`);
       }
 
-      if (trueFalseQuestions.length > 0) {
-        quizData.true_false_quiz = {
-          questions: trueFalseQuestions
-        };
-      }
-
-      await createFullQuiz(quizData);
+      // Use the new FormData API
+      await createQuizWithFormData(formData);
       showToast("Tạo quiz thành công! Bạn có thể thêm câu hỏi sau.", "success");
       
       // Navigate back to quiz management after a delay
@@ -212,15 +347,17 @@ const CreateQuiz = () => {
   };
 
   const calculateTotalQuestions = () => {
+    const matchingQuestionsCount = matchingGroups.reduce((total, group) => total + group.questions.length, 0);
     return multipleChoiceQuestions.length + 
-           matchingQuestions.length + 
+           matchingQuestionsCount + 
            fillInBlankQuestions.length + 
            trueFalseQuestions.length;
   };
 
   const calculateTotalPoints = () => {
     const mcPoints = multipleChoiceQuestions.reduce((sum, q) => sum + q.points, 0);
-    const matchingPoints = matchingQuestions.reduce((sum, q) => sum + q.points, 0);
+    const matchingPoints = matchingGroups.reduce((sum, group) => 
+      sum + (group.questions.length * group.points_per_pair), 0);
     const fillPoints = fillInBlankQuestions.reduce((sum, q) => sum + q.points, 0);
     const tfPoints = trueFalseQuestions.reduce((sum, q) => sum + q.points, 0);
     return mcPoints + matchingPoints + fillPoints + tfPoints;
@@ -305,7 +442,7 @@ const CreateQuiz = () => {
             >
               <div className="flex items-center gap-2">
                 <FaQuestionCircle />
-                Ghép đôi ({matchingQuestions.length})
+                Ghép đôi ({matchingGroups.reduce((total, group) => total + group.questions.length, 0)})
               </div>
             </button>
             <button
@@ -586,15 +723,29 @@ const CreateQuiz = () => {
             <div className="space-y-6">
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                  Câu hỏi ghép đôi ({matchingQuestions.length})
+                  Câu hỏi ghép đôi ({matchingGroups.reduce((total, group) => total + group.questions.length, 0)} cặp)
                 </h3>
-                <Button onClick={addMatchingQuestion} className="flex items-center gap-2">
-                  <FaPlus />
-                  Thêm câu hỏi
-                </Button>
+                <div className="flex items-center gap-2">
+                  <select 
+                    className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white"
+                    onChange={(e) => {
+                      if (e.target.value) {
+                        addMatchingGroup(e.target.value);
+                        e.target.value = ""; // Reset dropdown
+                      }
+                    }}
+                    value=""
+                  >
+                    <option value="">Chọn loại ghép đôi...</option>
+                    <option value="TEXT-TEXT">📝 Text - Text</option>
+                    <option value="TEXT-IMAGE">📝🖼️ Text - Image</option>
+                    <option value="IMAGE-TEXT">🖼️📝 Image - Text</option>
+                    <option value="IMAGE-IMAGE">🖼️ Image - Image</option>
+                  </select>
+                </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                 <InputField
                   label="Thời gian cho toàn bộ bài (giây)"
                   type="number"
@@ -609,90 +760,190 @@ const CreateQuiz = () => {
                 </div>
               </div>
 
-              {matchingQuestions.length === 0 ? (
+              {matchingGroups.length === 0 ? (
                 <div className="text-center py-8 text-gray-500 dark:text-gray-400">
                   <FaQuestionCircle className="text-4xl mx-auto mb-4 opacity-50" />
-                  <p>Chưa có câu hỏi ghép đôi nào</p>
-                  <p className="text-sm">Nhấn "Thêm câu hỏi" để bắt đầu</p>
+                  <p>Chưa có nhóm ghép đôi nào</p>
+                  <p className="text-sm">Chọn loại ghép đôi từ dropdown để bắt đầu</p>
                 </div>
               ) : (
-                <div className="space-y-4">
-                  {matchingQuestions.map((question, index) => (
-                    <div key={index} className="border border-gray-200 dark:border-gray-600 rounded-lg p-4 bg-gray-50 dark:bg-gray-700/30">
-                      <div className="flex items-center justify-between mb-4">
-                        <h4 className="font-medium text-gray-900 dark:text-white text-lg">
-                          Cặp ghép {index + 1}
-                        </h4>
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 px-2 py-1 rounded">
-                            {question.points} điểm
-                          </span>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => removeMatchingQuestion(index)}
-                            className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20"
-                            title="Xóa cặp ghép"
-                          >
-                            <FaTrash />
-                          </Button>
-                        </div>
-                      </div>
+                <div className="space-y-6">
+                  {matchingGroups.map((group) => {
+                    const typeConfig = {
+                      'TEXT-TEXT': { icon: '📝', label: 'Text - Text', color: 'blue' },
+                      'TEXT-IMAGE': { icon: '📝🖼️', label: 'Text - Image', color: 'purple' },
+                      'IMAGE-TEXT': { icon: '🖼️📝', label: 'Image - Text', color: 'indigo' },
+                      'IMAGE-IMAGE': { icon: '🖼️', label: 'Image - Image', color: 'pink' }
+                    }[group.type_combination] || { icon: '❓', label: group.type_combination, color: 'gray' };
 
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div className="space-y-2">
-                          <InputField
-                            label="Nội dung A"
-                            type="text"
-                            value={question.content_a}
-                            onChange={(e) => updateMatchingQuestion(index, "content_a", e.target.value)}
-                            placeholder="Nhập nội dung A..."
-                          />
+                    return (
+                      <div key={group.id} className="border border-gray-200 dark:border-gray-600 rounded-lg p-6 bg-gray-50 dark:bg-gray-700/30">
+                        {/* Group Header */}
+                        <div className="flex items-center justify-between mb-4">
+                          <div className="flex items-center gap-3">
+                            <span className="text-2xl">{typeConfig.icon}</span>
+                            <div>
+                              <h4 className="font-medium text-gray-900 dark:text-white text-lg">
+                                {typeConfig.label}
+                              </h4>
+                              <p className="text-sm text-gray-600 dark:text-gray-400">
+                                {group.questions.length} cặp • {group.points_per_pair} điểm/cặp
+                              </p>
+                            </div>
+                          </div>
                           <div className="flex items-center gap-2">
-                            <span className="text-xs text-gray-600 dark:text-gray-400">Loại:</span>
-                            <select
-                              value={question.type_a}
-                              onChange={(e) => updateMatchingQuestion(index, "type_a", e.target.value)}
-                              className="text-xs border border-gray-300 dark:border-gray-600 rounded px-2 py-1 dark:bg-gray-700 dark:text-white"
+                            <InputField
+                              label=""
+                              type="number"
+                              value={group.points_per_pair}
+                              onChange={(e) => updateMatchingGroup(group.id, 'points_per_pair', parseInt(e.target.value) || 1)}
+                              min="1"
+                              max="10"
+                              placeholder="Điểm/cặp"
+                              className="w-20"
+                            />
+                            <Button
+                              variant="outline" 
+                              size="sm"
+                              onClick={() => removeMatchingGroup(group.id)}
+                              className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20"
+                              title="Xóa nhóm"
                             >
-                              <option value="TEXT">TEXT</option>
-                              <option value="IMAGE">IMAGE</option>
-                            </select>
+                              <FaTrash />
+                            </Button>
                           </div>
                         </div>
-                        
-                        <div className="space-y-2">
-                          <InputField
-                            label="Nội dung B"
-                            type="text"
-                            value={question.content_b}
-                            onChange={(e) => updateMatchingQuestion(index, "content_b", e.target.value)}
-                            placeholder="Nhập nội dung B..."
-                          />
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs text-gray-600 dark:text-gray-400">Loại:</span>
-                            <select
-                              value={question.type_b}
-                              onChange={(e) => updateMatchingQuestion(index, "type_b", e.target.value)}
-                              className="text-xs border border-gray-300 dark:border-gray-600 rounded px-2 py-1 dark:bg-gray-700 dark:text-white"
-                            >
-                              <option value="TEXT">TEXT</option>
-                              <option value="IMAGE">IMAGE</option>
-                            </select>
-                          </div>
+
+                        {/* Questions in Group */}
+                        <div className="space-y-4">
+                          {group.questions.map((question, questionIndex) => (
+                            <div key={questionIndex} className="border border-gray-300 dark:border-gray-500 rounded-lg p-4 bg-white dark:bg-gray-800">
+                              <div className="flex items-center justify-between mb-3">
+                                <h5 className="font-medium text-gray-800 dark:text-gray-200">
+                                  Cặp {questionIndex + 1}
+                                </h5>
+                                <div className="flex items-center gap-2">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => addQuestionToGroup(group.id)}
+                                    disabled={group.questions.length >= 5}
+                                    className="text-green-600 hover:text-green-700 text-xs"
+                                    title="Thêm cặp"
+                                  >
+                                    <FaPlus />
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    size="sm" 
+                                    onClick={() => removeQuestionFromGroup(group.id, questionIndex)}
+                                    disabled={group.questions.length <= 2}
+                                    className="text-red-600 hover:text-red-700 text-xs"
+                                    title="Xóa cặp"
+                                  >
+                                    <FaTrash />
+                                  </Button>
+                                </div>
+                              </div>
+
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                {/* Side A */}
+                                <div className="space-y-2">
+                                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    Nội dung A ({question.type_a})
+                                  </label>
+                                  
+                                  {question.type_a === "TEXT" ? (
+                                    <input
+                                      type="text"
+                                      value={question.content_a}
+                                      onChange={(e) => updateQuestionInGroup(group.id, questionIndex, "content_a", e.target.value)}
+                                      placeholder="Nhập nội dung A..."
+                                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
+                                    />
+                                  ) : (
+                                    <div className="space-y-2">
+                                      {question.file_a ? (
+                                        <div className="flex items-center gap-2 p-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
+                                          <span className="text-sm text-green-700 dark:text-green-300 truncate">
+                                            {question.file_a.name}
+                                          </span>
+                                          <button
+                                            onClick={() => clearGroupFile(group.id, questionIndex, 'file_a')}
+                                            className="text-red-500 hover:text-red-700"
+                                            title="Xóa file"
+                                          >
+                                            <FaTimes className="text-xs" />
+                                          </button>
+                                        </div>
+                                      ) : (
+                                        <input
+                                          type="file"
+                                          accept="image/*"
+                                          onChange={(e) => handleGroupFileUpload(group.id, questionIndex, 'file_a', e.target.files?.[0] || null)}
+                                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                                        />
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+
+                                {/* Side B */}
+                                <div className="space-y-2">
+                                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    Nội dung B ({question.type_b})
+                                  </label>
+                                  
+                                  {question.type_b === "TEXT" ? (
+                                    <input
+                                      type="text"
+                                      value={question.content_b}
+                                      onChange={(e) => updateQuestionInGroup(group.id, questionIndex, "content_b", e.target.value)}
+                                      placeholder="Nhập nội dung B..."
+                                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
+                                    />
+                                  ) : (
+                                    <div className="space-y-2">
+                                      {question.file_b ? (
+                                        <div className="flex items-center gap-2 p-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
+                                          <span className="text-sm text-green-700 dark:text-green-300 truncate">
+                                            {question.file_b.name}
+                                          </span>
+                                          <button
+                                            onClick={() => clearGroupFile(group.id, questionIndex, 'file_b')}
+                                            className="text-red-500 hover:text-red-700"
+                                            title="Xóa file"
+                                          >
+                                            <FaTimes className="text-xs" />
+                                          </button>
+                                        </div>
+                                      ) : (
+                                        <input
+                                          type="file"
+                                          accept="image/*"
+                                          onChange={(e) => handleGroupFileUpload(group.id, questionIndex, 'file_b', e.target.files?.[0] || null)}
+                                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                                        />
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          ))}
                         </div>
-                        
-                        <InputField
-                          label="Điểm"
-                          type="number"
-                          value={question.points}
-                          onChange={(e) => updateMatchingQuestion(index, "points", parseInt(e.target.value) || 1)}
-                          min="1"
-                          max="20"
-                        />
+
+                        {/* Add/Remove Questions Info */}
+                        <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                          <p className="text-sm text-blue-700 dark:text-blue-300">
+                            📋 Mỗi nhóm có từ 2-5 cặp. Hiện tại: {group.questions.length}/5 cặp
+                            {group.questions.length < 5 && " • Có thể thêm cặp mới"}
+                            {group.questions.length > 2 && " • Có thể xóa cặp"}
+                          </p>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
