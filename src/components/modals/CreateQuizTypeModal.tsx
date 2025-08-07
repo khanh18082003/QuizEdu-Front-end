@@ -3,7 +3,6 @@ import { FaTimes, FaPlus, FaCheck, FaExchangeAlt, FaToggleOn, FaPen, FaClock, Fa
 import Button from "../ui/Button";
 import InputField from "../ui/InputField";
 import type { 
-  CreateQuizTypeRequest, 
   CreateMatchingQuestionData, 
   CreateMultipleChoiceQuestionData,
   CreateMultipleChoiceAnswerData 
@@ -12,7 +11,7 @@ import type {
 interface CreateQuizTypeModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (quizTypeData: CreateQuizTypeRequest) => void;
+  onSubmit: (formData: FormData) => void;
   availableTypes: ("MATCHING" | "MULTIPLE_CHOICE" | "TRUE_FALSE" | "FILL_IN_BLANK")[];
   isLoading?: boolean;
 }
@@ -34,16 +33,36 @@ const CreateQuizTypeModal = ({
   
   // Matching quiz state
   const [matchingTimeLimit, setMatchingTimeLimit] = useState(60);
-  const [matchingQuestions, setMatchingQuestions] = useState<CreateMatchingQuestionData[]>([
-    {
-      content_a: "",
-      type_a: "TEXT",
-      content_b: "",
-      type_b: "TEXT",
-      points: 1
-    }
+  const [selectedMatchingType, setSelectedMatchingType] = useState<"TEXT_TEXT" | "TEXT_IMAGE" | "IMAGE_TEXT" | "IMAGE_IMAGE" | "">("");
+  
+  // Points for each matching type
+  const [textTextPoints, setTextTextPoints] = useState(1);
+  const [textImagePoints, setTextImagePoints] = useState(1);
+  const [imageTextPoints, setImageTextPoints] = useState(1);
+  const [imageImagePoints, setImageImagePoints] = useState(1);
+  
+  // Separate states for each matching type (with file support)
+  interface MatchingQuestionWithFiles extends Omit<CreateMatchingQuestionData, 'content_a' | 'content_b'> {
+    content_a: string | File;
+    content_b: string | File;
+  }
+  
+  const [textTextQuestions, setTextTextQuestions] = useState<MatchingQuestionWithFiles[]>([
+    { content_a: "", type_a: "TEXT", content_b: "", type_b: "TEXT", points: 1 },
+    { content_a: "", type_a: "TEXT", content_b: "", type_b: "TEXT", points: 1 }
   ]);
-  const [matchingPoints, setMatchingPoints] = useState(1);
+  const [textImageQuestions, setTextImageQuestions] = useState<MatchingQuestionWithFiles[]>([
+    { content_a: "", type_a: "TEXT", content_b: "", type_b: "IMAGE", points: 1 },
+    { content_a: "", type_a: "TEXT", content_b: "", type_b: "IMAGE", points: 1 }
+  ]);
+  const [imageTextQuestions, setImageTextQuestions] = useState<MatchingQuestionWithFiles[]>([
+    { content_a: "", type_a: "IMAGE", content_b: "", type_b: "TEXT", points: 1 },
+    { content_a: "", type_a: "IMAGE", content_b: "", type_b: "TEXT", points: 1 }
+  ]);
+  const [imageImageQuestions, setImageImageQuestions] = useState<MatchingQuestionWithFiles[]>([
+    { content_a: "", type_a: "IMAGE", content_b: "", type_b: "IMAGE", points: 1 },
+    { content_a: "", type_a: "IMAGE", content_b: "", type_b: "IMAGE", points: 1 }
+  ]);
 
   // Multiple choice quiz state
   const [mcQuestions, setMcQuestions] = useState<CreateMultipleChoiceQuestionData[]>([
@@ -72,41 +91,72 @@ const CreateQuizTypeModal = ({
     console.log("=== QUIZ CREATION DEBUG ===");
     console.log("Selected Type:", selectedType);
 
+    const formData = new FormData();
+    formData.append('type', selectedType);
+
     if (selectedType === "MATCHING") {
-      // Validate matching questions
-      const validQuestions = matchingQuestions.filter(q => 
-        q.content_a.trim() !== "" && q.content_b.trim() !== ""
-      );
+      // Get all questions from all matching types
+      const allMatchingQuestions = [
+        ...textTextQuestions,
+        ...textImageQuestions, 
+        ...imageTextQuestions,
+        ...imageImageQuestions
+      ];
+
+      // Validate matching questions - at least one type must have valid data
+      const validQuestions = allMatchingQuestions.filter(q => {
+        const hasValidA = q.type_a === "TEXT" ? 
+          (typeof q.content_a === "string" && q.content_a.trim() !== "") : 
+          (q.content_a instanceof File);
+        const hasValidB = q.type_b === "TEXT" ? 
+          (typeof q.content_b === "string" && q.content_b.trim() !== "") : 
+          (q.content_b instanceof File);
+        return hasValidA && hasValidB;
+      });
       
-      console.log("Raw Matching Questions:", matchingQuestions);
+      console.log("All Matching Questions:", allMatchingQuestions);
       console.log("Valid Matching Questions:", validQuestions);
       console.log("Matching Time Limit:", matchingTimeLimit);
-      console.log("Matching Points:", matchingPoints);
       
-      if (validQuestions.length === 0) {
-        setErrorMessage("Vui lòng nhập ít nhất một cặp ghép hợp lệ!");
+      if (validQuestions.length < 2) {
+        setErrorMessage("Vui lòng nhập ít nhất 2 cặp ghép hợp lệ từ bất kỳ loại nào!");
         setShowErrorModal(true);
         return;
       }
 
-      // Apply uniform points to all questions
-      const questionsWithPoints = validQuestions.map(q => ({
-        ...q,
-        points: matchingPoints
-      }));
-
-      const quizTypeData: CreateQuizTypeRequest = {
-        type: "MATCHING",
-        data: {
-          time_limit: matchingTimeLimit,
-          questions: questionsWithPoints
-        }
-      };
+      // Add matching quiz data to FormData
+      formData.append('matchingQuizRequest.timeLimit', matchingTimeLimit.toString());
       
-      console.log("Final Matching Quiz Data:", JSON.stringify(quizTypeData, null, 2));
-      console.log("API CALL - Sending to server:", quizTypeData);
-      console.log("API CALL - Data stringified:", JSON.stringify(quizTypeData));
-      onSubmit(quizTypeData);
+      validQuestions.forEach((question, index) => {
+        // For text content, use contentA/contentB, for files use fileContentA/fileContentB
+        if (question.type_a === "TEXT") {
+          formData.append(`matchingQuizRequest.questions[${index}].contentA`, question.content_a as string);
+        } else {
+          // For files, append the actual File object
+          if (question.content_a instanceof File) {
+            formData.append(`matchingQuizRequest.questions[${index}].fileContentA`, question.content_a);
+          }
+        }
+        formData.append(`matchingQuizRequest.questions[${index}].typeA`, question.type_a);
+        
+        if (question.type_b === "TEXT") {
+          formData.append(`matchingQuizRequest.questions[${index}].contentB`, question.content_b as string);
+        } else {
+          // For files, append the actual File object
+          if (question.content_b instanceof File) {
+            formData.append(`matchingQuizRequest.questions[${index}].fileContentB`, question.content_b);
+          }
+        }
+        formData.append(`matchingQuizRequest.questions[${index}].typeB`, question.type_b);
+        formData.append(`matchingQuizRequest.questions[${index}].points`, question.points.toString());
+      });
+      
+      console.log("Final Matching Quiz FormData entries:");
+      for (const [key, value] of formData.entries()) {
+        console.log(`${key}: ${value}`);
+      }
+      
+      onSubmit(formData);
     } else if (selectedType === "MULTIPLE_CHOICE") {
       // Validate multiple choice questions
       const validQuestions = mcQuestions.filter(q => {
@@ -125,34 +175,55 @@ const CreateQuizTypeModal = ({
         return;
       }
 
-      const quizTypeData: CreateQuizTypeRequest = {
-        type: "MULTIPLE_CHOICE",
-        data: {
-          questions: validQuestions.map(q => ({
-            ...q,
-            answers: q.answers.filter(a => a.answer_text.trim() !== "")
-          }))
+      // Add multiple choice quiz data to FormData
+      validQuestions.forEach((question, qIndex) => {
+        formData.append(`multipleChoiceQuizRequest.questions[${qIndex}].questionText`, question.question_text);
+        if (question.hint) {
+          formData.append(`multipleChoiceQuizRequest.questions[${qIndex}].hint`, question.hint);
         }
-      };
+        formData.append(`multipleChoiceQuizRequest.questions[${qIndex}].timeLimit`, question.time_limit.toString());
+        formData.append(`multipleChoiceQuizRequest.questions[${qIndex}].allowMultipleAnswers`, question.allow_multiple_answers.toString());
+        formData.append(`multipleChoiceQuizRequest.questions[${qIndex}].points`, question.points.toString());
+        
+        const validAnswers = question.answers.filter(a => a.answer_text.trim() !== "");
+        validAnswers.forEach((answer, aIndex) => {
+          formData.append(`multipleChoiceQuizRequest.questions[${qIndex}].answers[${aIndex}].answerText`, answer.answer_text);
+          formData.append(`multipleChoiceQuizRequest.questions[${qIndex}].answers[${aIndex}].correct`, answer.correct.toString());
+        });
+      });
       
-      console.log("Final Multiple Choice Quiz Data:", JSON.stringify(quizTypeData, null, 2));
-      console.log("API CALL - Sending to server:", quizTypeData);
-      console.log("API CALL - Data stringified:", JSON.stringify(quizTypeData));
-      onSubmit(quizTypeData);
+      console.log("Final Multiple Choice Quiz FormData entries:");
+      for (const [key, value] of formData.entries()) {
+        console.log(`${key}: ${value}`);
+      }
+      
+      onSubmit(formData);
     }
   };
 
   const resetForm = () => {
     setSelectedType("");
     setMatchingTimeLimit(60);
-    setMatchingPoints(1);
-    setMatchingQuestions([{
-      content_a: "",
-      type_a: "TEXT",
-      content_b: "",
-      type_b: "TEXT",
-      points: 1
-    }]);
+    setSelectedMatchingType("");
+    
+    // Reset all matching question types to their initial state
+    setTextTextQuestions([
+      { content_a: "", type_a: "TEXT", content_b: "", type_b: "TEXT", points: 1 },
+      { content_a: "", type_a: "TEXT", content_b: "", type_b: "TEXT", points: 1 }
+    ]);
+    setTextImageQuestions([
+      { content_a: "", type_a: "TEXT", content_b: "", type_b: "IMAGE", points: 1 },
+      { content_a: "", type_a: "TEXT", content_b: "", type_b: "IMAGE", points: 1 }
+    ]);
+    setImageTextQuestions([
+      { content_a: "", type_a: "IMAGE", content_b: "", type_b: "TEXT", points: 1 },
+      { content_a: "", type_a: "IMAGE", content_b: "", type_b: "TEXT", points: 1 }
+    ]);
+    setImageImageQuestions([
+      { content_a: "", type_a: "IMAGE", content_b: "", type_b: "IMAGE", points: 1 },
+      { content_a: "", type_a: "IMAGE", content_b: "", type_b: "IMAGE", points: 1 }
+    ]);
+    
     setMcQuestions([{
       question_text: "",
       hint: "",
@@ -173,34 +244,118 @@ const CreateQuizTypeModal = ({
     onClose();
   };
 
-  // Matching question handlers
-  const addMatchingQuestion = () => {
-    setMatchingQuestions([...matchingQuestions, {
-      content_a: "",
-      type_a: "TEXT",
-      content_b: "",
-      type_b: "TEXT",
-      points: matchingPoints
-    }]);
-  };
-
-  const updateMatchingQuestion = (index: number, field: keyof CreateMatchingQuestionData, value: any) => {
-    const updated = [...matchingQuestions];
-    updated[index] = { ...updated[index], [field]: value };
-    setMatchingQuestions(updated);
-  };
-
-  const removeMatchingQuestion = (index: number) => {
-    if (matchingQuestions.length > 1) {
-      setMatchingQuestions(matchingQuestions.filter((_, i) => i !== index));
+  // Helper functions to get current questions and setters based on selected matching type
+  const getCurrentMatchingQuestions = () => {
+    switch (selectedMatchingType) {
+      case "TEXT_TEXT": return textTextQuestions;
+      case "TEXT_IMAGE": return textImageQuestions;
+      case "IMAGE_TEXT": return imageTextQuestions;
+      case "IMAGE_IMAGE": return imageImageQuestions;
+      default: return [];
     }
   };
 
-  // Apply uniform points to all matching questions
-  const applyUniformPoints = (points: number) => {
-    setMatchingPoints(points);
-    const updated = matchingQuestions.map(q => ({ ...q, points }));
-    setMatchingQuestions(updated);
+  const getCurrentMatchingSetter = () => {
+    switch (selectedMatchingType) {
+      case "TEXT_TEXT": return setTextTextQuestions;
+      case "TEXT_IMAGE": return setTextImageQuestions;
+      case "IMAGE_TEXT": return setImageTextQuestions;
+      case "IMAGE_IMAGE": return setImageImageQuestions;
+      default: return null;
+    }
+  };
+
+  // Helper functions to get current points and setters
+  const getCurrentMatchingPoints = () => {
+    switch (selectedMatchingType) {
+      case "TEXT_TEXT": return textTextPoints;
+      case "TEXT_IMAGE": return textImagePoints;
+      case "IMAGE_TEXT": return imageTextPoints;
+      case "IMAGE_IMAGE": return imageImagePoints;
+      default: return 1;
+    }
+  };
+
+  const getCurrentPointsSetter = () => {
+    switch (selectedMatchingType) {
+      case "TEXT_TEXT": return setTextTextPoints;
+      case "TEXT_IMAGE": return setTextImagePoints;
+      case "IMAGE_TEXT": return setImageTextPoints;
+      case "IMAGE_IMAGE": return setImageImagePoints;
+      default: return null;
+    }
+  };
+
+  // Helper function to update shared points and sync all questions
+  const updateSharedPoints = (newPoints: number) => {
+    const pointsSetter = getCurrentPointsSetter();
+    if (!pointsSetter) return;
+    
+    pointsSetter(newPoints);
+    
+    // Update all current questions to use the new shared points
+    const currentQuestions = getCurrentMatchingQuestions();
+    const setter = getCurrentMatchingSetter();
+    
+    if (setter && currentQuestions.length > 0) {
+      const updatedQuestions = currentQuestions.map(q => ({ ...q, points: newPoints }));
+      setter(updatedQuestions);
+    }
+  };
+
+  // Matching question handlers
+  const addMatchingQuestion = () => {
+    if (!selectedMatchingType) return;
+    
+    const currentQuestions = getCurrentMatchingQuestions();
+    const setter = getCurrentMatchingSetter();
+    const currentPoints = getCurrentMatchingPoints();
+    
+    if (currentQuestions.length >= 5 || !setter) return; // Maximum 5 pairs
+    
+    let newQuestion: MatchingQuestionWithFiles;
+    switch (selectedMatchingType) {
+      case "TEXT_TEXT":
+        newQuestion = { content_a: "", type_a: "TEXT", content_b: "", type_b: "TEXT", points: currentPoints };
+        break;
+      case "TEXT_IMAGE":
+        newQuestion = { content_a: "", type_a: "TEXT", content_b: "", type_b: "IMAGE", points: currentPoints };
+        break;
+      case "IMAGE_TEXT":
+        newQuestion = { content_a: "", type_a: "IMAGE", content_b: "", type_b: "TEXT", points: currentPoints };
+        break;
+      case "IMAGE_IMAGE":
+        newQuestion = { content_a: "", type_a: "IMAGE", content_b: "", type_b: "IMAGE", points: currentPoints };
+        break;
+    }
+    
+    setter([...currentQuestions, newQuestion]);
+  };
+
+  const updateMatchingQuestion = (index: number, field: keyof MatchingQuestionWithFiles, value: any) => {
+    if (!selectedMatchingType) return;
+    
+    const currentQuestions = getCurrentMatchingQuestions();
+    const setter = getCurrentMatchingSetter();
+    const currentPoints = getCurrentMatchingPoints();
+    
+    if (!setter) return;
+    
+    const updated = [...currentQuestions];
+    // Always use current shared points instead of the individual points
+    updated[index] = { ...updated[index], [field]: value, points: currentPoints };
+    setter(updated);
+  };
+
+  const removeMatchingQuestion = (index: number) => {
+    if (!selectedMatchingType) return;
+    
+    const currentQuestions = getCurrentMatchingQuestions();
+    const setter = getCurrentMatchingSetter();
+    
+    if (currentQuestions.length <= 2 || !setter) return; // Minimum 2 pairs
+    
+    setter(currentQuestions.filter((_, i) => i !== index));
   };
 
   // Multiple choice question handlers
@@ -279,7 +434,16 @@ const CreateQuizTypeModal = ({
 
   // Check if user has entered data
   const hasMatchingData = () => {
-    return matchingQuestions.some(q => q.content_a.trim() !== "" || q.content_b.trim() !== "");
+    const allQuestions = [...textTextQuestions, ...textImageQuestions, ...imageTextQuestions, ...imageImageQuestions];
+    return allQuestions.some(q => {
+      const hasContentA = q.type_a === "TEXT" ? 
+        (typeof q.content_a === "string" && q.content_a.trim() !== "") : 
+        (q.content_a instanceof File);
+      const hasContentB = q.type_b === "TEXT" ? 
+        (typeof q.content_b === "string" && q.content_b.trim() !== "") : 
+        (q.content_b instanceof File);
+      return hasContentA || hasContentB;
+    });
   };
 
   const hasMultipleChoiceData = () => {
@@ -300,14 +464,19 @@ const CreateQuizTypeModal = ({
         hasData = true;
       }
       
-      if (hasData) {
+      // Only show warning and reset if switching between major types (MATCHING <-> MULTIPLE_CHOICE)
+      if (hasData && ((selectedType === "MATCHING" && newType === "MULTIPLE_CHOICE") || 
+                      (selectedType === "MULTIPLE_CHOICE" && newType === "MATCHING"))) {
         setPendingType(newType);
         setShowWarningModal(true);
         return;
       }
       
-      // Reset form data when changing type
-      resetForm();
+      // Only reset form data when changing between major types
+      if ((selectedType === "MATCHING" && newType === "MULTIPLE_CHOICE") || 
+          (selectedType === "MULTIPLE_CHOICE" && newType === "MATCHING")) {
+        resetForm();
+      }
     }
     
     setSelectedType(newType);
@@ -455,7 +624,7 @@ const CreateQuizTypeModal = ({
                 <h3 className="text-lg font-semibold text-green-800 dark:text-green-200 mb-4">
                   Cài đặt quiz ghép đôi
                 </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-1 gap-4 mb-4">
                   <InputField
                     label="Thời gian (giây)"
                     type="number"
@@ -464,87 +633,257 @@ const CreateQuizTypeModal = ({
                     min={30}
                     max={600}
                   />
-                  <InputField
-                    label="Điểm cho mỗi cặp (áp dụng đồng loạt)"
-                    type="number"
-                    value={matchingPoints}
-                    onChange={(e) => applyUniformPoints(parseInt(e.target.value) || 1)}
-                    min={1}
-                    max={10}
-                  />
+                </div>
+                
+                {/* Matching Type Selection */}
+                <div className="space-y-4">
+                  <h4 className="text-md font-medium text-green-800 dark:text-green-200">
+                    Chọn loại ghép đôi
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <button
+                      onClick={() => setSelectedMatchingType("TEXT_TEXT")}
+                      className={`p-4 border-2 rounded-lg transition-all ${
+                        selectedMatchingType === "TEXT_TEXT"
+                          ? 'border-green-500 bg-green-100 dark:bg-green-800/30'
+                          : 'border-gray-200 dark:border-gray-600 hover:border-green-300'
+                      }`}
+                    >
+                      <div className="text-center">
+                        <h5 className="font-semibold text-gray-900 dark:text-white text-sm">
+                          Chữ ↔ Chữ
+                        </h5>
+                        <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                          Ghép văn bản với văn bản
+                        </p>
+                      </div>
+                    </button>
+                    
+                    <button
+                      onClick={() => setSelectedMatchingType("TEXT_IMAGE")}
+                      className={`p-4 border-2 rounded-lg transition-all ${
+                        selectedMatchingType === "TEXT_IMAGE"
+                          ? 'border-green-500 bg-green-100 dark:bg-green-800/30'
+                          : 'border-gray-200 dark:border-gray-600 hover:border-green-300'
+                      }`}
+                    >
+                      <div className="text-center">
+                        <h5 className="font-semibold text-gray-900 dark:text-white text-sm">
+                          Chữ ↔ Hình
+                        </h5>
+                        <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                          Ghép văn bản với hình ảnh
+                        </p>
+                      </div>
+                    </button>
+                    
+                    <button
+                      onClick={() => setSelectedMatchingType("IMAGE_TEXT")}
+                      className={`p-4 border-2 rounded-lg transition-all ${
+                        selectedMatchingType === "IMAGE_TEXT"
+                          ? 'border-green-500 bg-green-100 dark:bg-green-800/30'
+                          : 'border-gray-200 dark:border-gray-600 hover:border-green-300'
+                      }`}
+                    >
+                      <div className="text-center">
+                        <h5 className="font-semibold text-gray-900 dark:text-white text-sm">
+                          Hình ↔ Chữ
+                        </h5>
+                        <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                          Ghép hình ảnh với văn bản
+                        </p>
+                      </div>
+                    </button>
+                    
+                    <button
+                      onClick={() => setSelectedMatchingType("IMAGE_IMAGE")}
+                      className={`p-4 border-2 rounded-lg transition-all ${
+                        selectedMatchingType === "IMAGE_IMAGE"
+                          ? 'border-green-500 bg-green-100 dark:bg-green-800/30'
+                          : 'border-gray-200 dark:border-gray-600 hover:border-green-300'
+                      }`}
+                    >
+                      <div className="text-center">
+                        <h5 className="font-semibold text-gray-900 dark:text-white text-sm">
+                          Hình ↔ Hình
+                        </h5>
+                        <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                          Ghép hình ảnh với hình ảnh
+                        </p>
+                      </div>
+                    </button>
+                  </div>
                 </div>
               </div>
 
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-                  Cặp ghép đôi
-                </h3>
-                
-                <div className="space-y-4">
-                  {matchingQuestions.map((question, index) => (
-                    <div key={index} className="border border-gray-200 dark:border-gray-600 rounded-lg p-4 bg-gray-50 dark:bg-gray-700/50">
-                      <div className="flex items-center justify-between mb-4">
-                        <h4 className="font-medium text-gray-900 dark:text-white">
-                          Cặp {index + 1}
-                        </h4>
-                        {matchingQuestions.length > 1 && (
-                          <button
-                            onClick={() => removeMatchingQuestion(index)}
-                            className="text-red-500 hover:text-red-700 p-2"
-                          >
-                            <FaTimes />
-                          </button>
-                        )}
-                      </div>
-                      
-                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                        <div>
-                          <label className="block text-sm font-medium text-blue-600 dark:text-blue-400 mb-2">
-                            Nội dung A
-                          </label>
-                          <textarea
-                            value={question.content_a}
-                            onChange={(e) => updateMatchingQuestion(index, 'content_a', e.target.value)}
-                            placeholder="Nhập nội dung A..."
-                            className="w-full px-3 py-2 border border-blue-200 dark:border-blue-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-white resize-none"
-                            rows={3}
-                          />
+              {/* Show questions only when matching type is selected */}
+              {selectedMatchingType && (
+                <div>
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                      Cặp ghép đôi ({selectedMatchingType.replace('_', ' → ').toLowerCase()})
+                    </h3>
+                    <div className="text-sm text-gray-600 dark:text-gray-400">
+                      {getCurrentMatchingQuestions().length}/5 cặp (tối thiểu 2, tối đa 5)
+                    </div>
+                  </div>
+                  
+                  {/* Shared Points Input */}
+                  <div className="mb-6">
+                    <InputField
+                      label={`Điểm chung cho loại ${selectedMatchingType?.replace('_', ' → ')}`}
+                      type="number"
+                      value={getCurrentMatchingPoints().toString()}
+                      onChange={(e) => {
+                        const newPoints = parseInt(e.target.value) || 1;
+                        updateSharedPoints(newPoints);
+                      }}
+                      min="1"
+                      className="w-32"
+                    />
+                  </div>
+                  
+                  <div className="space-y-4">
+                    {getCurrentMatchingQuestions().map((question, index) => (
+                      <div key={index} className="border border-gray-200 dark:border-gray-600 rounded-lg p-4 bg-gray-50 dark:bg-gray-700/50">
+                        <div className="flex items-center justify-between mb-4">
+                          <h4 className="font-medium text-gray-900 dark:text-white">
+                            Cặp {index + 1}
+                          </h4>
+                          {getCurrentMatchingQuestions().length > 2 && (
+                            <button
+                              onClick={() => removeMatchingQuestion(index)}
+                              className="text-red-500 hover:text-red-700 p-2"
+                              title="Xóa cặp (tối thiểu 2 cặp)"
+                            >
+                              <FaTimes />
+                            </button>
+                          )}
                         </div>
                         
-                        <div>
-                          <label className="block text-sm font-medium text-purple-600 dark:text-purple-400 mb-2">
-                            Nội dung B
-                          </label>
-                          <textarea
-                            value={question.content_b}
-                            onChange={(e) => updateMatchingQuestion(index, 'content_b', e.target.value)}
-                            placeholder="Nhập nội dung B..."
-                            className="w-full px-3 py-2 border border-purple-200 dark:border-purple-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-white resize-none"
-                            rows={3}
-                          />
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+                          <div>
+                            <label className="block text-sm font-medium text-blue-600 dark:text-blue-400 mb-2">
+                              {question.type_a === "TEXT" ? "Nội dung A (Văn bản)" : "Nội dung A (Hình ảnh)"}
+                            </label>
+                            {question.type_a === "TEXT" ? (
+                              <textarea
+                                value={typeof question.content_a === "string" ? question.content_a : ""}
+                                onChange={(e) => updateMatchingQuestion(index, 'content_a', e.target.value)}
+                                placeholder="Nhập nội dung A..."
+                                className="w-full px-3 py-2 border border-blue-200 dark:border-blue-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-white resize-none"
+                                rows={3}
+                              />
+                            ) : (
+                              <div className="space-y-2">
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  onChange={(e) => {
+                                    const file = e.target.files?.[0];
+                                    if (file) {
+                                      updateMatchingQuestion(index, 'content_a', file);
+                                    }
+                                  }}
+                                  className="w-full px-3 py-2 border border-blue-200 dark:border-blue-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                                />
+                                {question.content_a instanceof File && (
+                                  <div className="space-y-2">
+                                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                                      Đã chọn: {question.content_a.name}
+                                    </p>
+                                    <div className="relative">
+                                      <img
+                                        src={URL.createObjectURL(question.content_a)}
+                                        alt="Preview A"
+                                        className="w-full h-32 object-cover rounded-lg border border-blue-200 dark:border-blue-700"
+                                      />
+                                      <button
+                                        onClick={() => updateMatchingQuestion(index, 'content_a', "")}
+                                        className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600 text-xs"
+                                        title="Xóa hình ảnh"
+                                      >
+                                        <FaTimes />
+                                      </button>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                          
+                          <div>
+                            <label className="block text-sm font-medium text-purple-600 dark:text-purple-400 mb-2">
+                              {question.type_b === "TEXT" ? "Nội dung B (Văn bản)" : "Nội dung B (Hình ảnh)"}
+                            </label>
+                            {question.type_b === "TEXT" ? (
+                              <textarea
+                                value={typeof question.content_b === "string" ? question.content_b : ""}
+                                onChange={(e) => updateMatchingQuestion(index, 'content_b', e.target.value)}
+                                placeholder="Nhập nội dung B..."
+                                className="w-full px-3 py-2 border border-purple-200 dark:border-purple-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-white resize-none"
+                                rows={3}
+                              />
+                            ) : (
+                              <div className="space-y-2">
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  onChange={(e) => {
+                                    const file = e.target.files?.[0];
+                                    if (file) {
+                                      updateMatchingQuestion(index, 'content_b', file);
+                                    }
+                                  }}
+                                  className="w-full px-3 py-2 border border-purple-200 dark:border-purple-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                                />
+                                {question.content_b instanceof File && (
+                                  <div className="space-y-2">
+                                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                                      Đã chọn: {question.content_b.name}
+                                    </p>
+                                    <div className="relative">
+                                      <img
+                                        src={URL.createObjectURL(question.content_b)}
+                                        alt="Preview B"
+                                        className="w-full h-32 object-cover rounded-lg border border-purple-200 dark:border-purple-700"
+                                      />
+                                      <button
+                                        onClick={() => updateMatchingQuestion(index, 'content_b', "")}
+                                        className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600 text-xs"
+                                        title="Xóa hình ảnh"
+                                      >
+                                        <FaTimes />
+                                      </button>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </div>
-                      
-                      <div className="mt-3 text-sm text-gray-600 dark:text-gray-400">
-                        <span className="inline-flex items-center px-2 py-1 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 rounded-full">
-                          {matchingPoints} điểm
-                        </span>
-                      </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
+                  
+                  <div className="mt-4 flex justify-center">
+                    <Button
+                      variant="outline"
+                      onClick={addMatchingQuestion}
+                      disabled={getCurrentMatchingQuestions().length >= 5}
+                      className={`flex items-center gap-2 ${
+                        getCurrentMatchingQuestions().length >= 5 
+                          ? 'opacity-50 cursor-not-allowed' 
+                          : ''
+                      }`}
+                      title={getCurrentMatchingQuestions().length >= 5 ? "Đã đạt số cặp tối đa (5)" : "Thêm cặp mới"}
+                    >
+                      <FaPlus />
+                      Thêm cặp ({getCurrentMatchingQuestions().length}/5)
+                    </Button>
+                  </div>
                 </div>
-                
-                <div className="mt-4 flex justify-center">
-                  <Button
-                    variant="outline"
-                    onClick={addMatchingQuestion}
-                    className="flex items-center gap-2"
-                  >
-                    <FaPlus />
-                    Thêm cặp
-                  </Button>
-                </div>
-              </div>
+              )}
             </div>
           )}
 
@@ -711,7 +1050,17 @@ const CreateQuizTypeModal = ({
         <div className="flex-shrink-0 flex items-center justify-between p-6 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50">
           <div className="text-sm text-gray-600 dark:text-gray-400">
             {selectedType === "MATCHING" && (
-              <span>Sẽ tạo {matchingQuestions.filter(q => q.content_a.trim() && q.content_b.trim()).length} cặp ghép</span>
+              <span>
+                Sẽ tạo {[...textTextQuestions, ...textImageQuestions, ...imageTextQuestions, ...imageImageQuestions].filter(q => {
+                  const hasValidA = q.type_a === "TEXT" ? 
+                    (typeof q.content_a === "string" && q.content_a.trim() !== "") : 
+                    (q.content_a instanceof File);
+                  const hasValidB = q.type_b === "TEXT" ? 
+                    (typeof q.content_b === "string" && q.content_b.trim() !== "") : 
+                    (q.content_b instanceof File);
+                  return hasValidA && hasValidB;
+                }).length} cặp ghép (từ tất cả loại)
+              </span>
             )}
             {selectedType === "MULTIPLE_CHOICE" && (
               <span>Sẽ tạo {mcQuestions.filter(q => q.question_text.trim() && q.answers.some(a => a.correct)).length} câu hỏi</span>

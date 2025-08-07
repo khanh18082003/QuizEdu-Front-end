@@ -12,7 +12,7 @@ import {
   updateMatchingQuestions,
   deleteMatchingQuestions,
   updateMatchingQuiz,
-  createQuizType,
+  addQuizTypeWithFormData,
   updateQuiz,
   type QuizManagementItem,
   type AddMultipleChoiceQuestion,
@@ -20,7 +20,6 @@ import {
   type AddMatchingQuestion,
   type UpdateMatchingQuestionByType,
   type UpdateMatchingQuizRequest,
-  type CreateQuizTypeRequest,
   type UpdateQuizRequest
 } from "../../services/quizService";
 import AddMultipleChoiceModal from "../../components/modals/AddMultipleChoiceModal";
@@ -344,12 +343,14 @@ const QuizDetail = () => {
     return availableTypes;
   };
 
-  const handleCreateQuizType = async (quizTypeData: CreateQuizTypeRequest) => {
+  const handleCreateQuizType = async (formData: FormData) => {
     if (!quiz) return;
     
+    const type = formData.get('type') as string;
+    
     // Check if it's a "coming soon" feature
-    if (quizTypeData.type === "TRUE_FALSE" || quizTypeData.type === "FILL_IN_BLANK") {
-      const typeName = quizTypeData.type === "TRUE_FALSE" ? "Đúng/Sai" : "Điền từ";
+    if (type === "TRUE_FALSE" || type === "FILL_IN_BLANK") {
+      const typeName = type === "TRUE_FALSE" ? "Đúng/Sai" : "Điền từ";
       showToast(`Tính năng tạo câu hỏi ${typeName} đang được phát triển!`, "info");
       setIsCreateQuizTypeModalOpen(false);
       return;
@@ -358,14 +359,15 @@ const QuizDetail = () => {
     try {
       setIsCreatingQuizType(true);
       
-      // Add quiz_id to multiple choice data if needed
-      if (quizTypeData.type === "MULTIPLE_CHOICE") {
-        (quizTypeData.data as any).quiz_id = quiz.quiz.id;
+      // Debug: Log all FormData entries
+      console.log("FormData entries being sent:");
+      for (const [key, value] of formData.entries()) {
+        console.log(`${key}: ${value}`);
       }
       
-      await createQuizType(quiz.quiz.id, quizTypeData);
+      await addQuizTypeWithFormData(quiz.quiz.id, formData);
       
-      const typeName = quizTypeData.type === "MULTIPLE_CHOICE" ? "trắc nghiệm" : "ghép đôi";
+      const typeName = type === "MULTIPLE_CHOICE" ? "trắc nghiệm" : "ghép đôi";
       showToast(`Đã tạo thành công loại quiz ${typeName}!`, "success");
       setIsCreateQuizTypeModalOpen(false);
       

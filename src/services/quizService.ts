@@ -796,6 +796,19 @@ export const createQuizWithFormData = async (
   });
   return response.data;
 };
+
+// API function to add quiz type with FormData (supports file uploads for questions)
+export const addQuizTypeWithFormData = async (
+  quizId: string,
+  formData: FormData,
+): Promise<SuccessApiResponse<any>> => {
+  const response = await axiosCustom.post(`/quizzes/${quizId}/add`, formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  });
+  return response.data;
+};
 // New interfaces for quiz questions API
 export interface QuizQuestionAnswer {
   answer_text: string;
