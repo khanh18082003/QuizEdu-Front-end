@@ -24,6 +24,10 @@ import {
   FaArrowLeft,
   FaUserPlus,
 } from "react-icons/fa";
+import {
+  startQuizSession,
+  endQuizSession,
+} from "../../services/quizSessionService";
 
 interface WaitingRoomState {
   session: QuizSessionResponse;
@@ -147,19 +151,22 @@ const QuizWaitingRoom = () => {
 
   const handleStartQuiz = async () => {
     try {
-      // TODO: Implement start quiz API call
-      showToast("Tính năng bắt đầu quiz đang được phát triển", "info");
-
-      // For now, just show message
-      // navigate to quiz session page when implemented
+      await startQuizSession(state.session.id);
     } catch (error) {
       console.error("Error starting quiz:", error);
       showToast("Không thể bắt đầu quiz. Vui lòng thử lại!", "error");
     }
   };
 
-  const handleEndSession = () => {
-    navigate(`/teacher/classes/${state.classId}`);
+  const handleEndSession = async () => {
+    try {
+      await endQuizSession(state.session.id);
+      showToast("Phiên thi đã được kết thúc!", "success");
+      navigate(`/teacher/classes/${state.classId}`);
+    } catch (error) {
+      console.error("Error ending quiz session:", error);
+      showToast("Không thể kết thúc phiên thi. Vui lòng thử lại!", "error");
+    }
   };
 
   const copyToClipboard = async (text: string) => {

@@ -24,7 +24,6 @@ import { Oauth2Authentication } from "./pages/auth/Oauth2Authentication";
 import ClassRoomList from "./pages/student/ClassRoomList";
 import ClassRoomDetail from "./pages/student/ClassRoomDetail";
 import QuizTaking from "./pages/student/QuizTaking";
-import QuizWaitingRoom from "./pages/student/QuizWaitingRoom";
 import Settings from "./pages/student/Settings";
 import TeacherSettings from "./pages/teacher/Settings";
 import ClassDetail from "./pages/teacher/ClassDetail";
@@ -65,10 +64,6 @@ function App() {
           <Route path="classrooms" element={<ClassRoomList />} />
           <Route path="classroom/:id" element={<ClassRoomDetail />} />
           <Route
-            path="quiz-session/:quizSessionId/waiting"
-            element={<QuizWaitingRoom />}
-          />
-          <Route
             path="quiz-session/:quizSessionId/take"
             element={<QuizTaking />}
           />
@@ -82,7 +77,10 @@ function App() {
           {/* Add more teacher routes as needed */}
           <Route path="classes" element={<Class />} />
           <Route path="classes/:classId" element={<ClassDetail />} />
-          <Route path="quiz-waiting-room" element={<TeacherQuizWaitingRoom />} />
+          <Route
+            path="quiz-waiting-room"
+            element={<TeacherQuizWaitingRoom />}
+          />
           <Route path="quizzes" element={<QuizManagement />} />
           <Route path="quizzes/create" element={<CreateQuiz />} />
           <Route path="quizzes/:id" element={<QuizDetail />} />

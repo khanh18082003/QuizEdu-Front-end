@@ -123,6 +123,7 @@ interface ProcessedClassroomData {
     description: string;
     quiz_session_id: string;
     start_time: string;
+    end_time: string;
     dueDate: Date;
     assignedDate: Date;
     status: QuizSessionStatus;
@@ -167,6 +168,7 @@ const transformClassroomData = (
         description: session.description,
         quiz_session_id: session.quiz_session_id,
         start_time: session.start_time,
+        end_time: session.end_time,
         dueDate: new Date(), // Default to current date, should come from API
         assignedDate: new Date(session.start_time),
         status: getQuizSessionStatus(session),
@@ -266,6 +268,23 @@ const ClassRoomDetail = () => {
   >(null);
   const [isJoiningSession, setIsJoiningSession] = useState(false);
 
+  // Toast state
+  const [toastVisible, setToastVisible] = useState(false);
+  const [toastMessage, setToastMessage] = useState("");
+  const [toastType, setToastType] = useState<"success" | "error" | "info">(
+    "info",
+  );
+
+  // Toast helper function
+  const showToast = (
+    message: string,
+    type: "success" | "error" | "info" = "info",
+  ) => {
+    setToastMessage(message);
+    setToastType(type);
+    setToastVisible(true);
+  };
+
   // Update URL when tab changes
   useEffect(() => {
     const searchParams = new URLSearchParams(location.search);
@@ -300,6 +319,15 @@ const ClassRoomDetail = () => {
   const handleJoinQuizSession = (
     assignment: ProcessedClassroomData["assignments"][0],
   ) => {
+    // Prevent joining if session is ACTIVE
+    if (assignment.status === "ACTIVE") {
+      showToast(
+        "Không thể tham gia: Quiz đã bắt đầu. Vui lòng chờ quiz tiếp theo.",
+        "error",
+      );
+      return;
+    }
+
     setSelectedQuizSession(assignment);
     setIsAccessCodeModalOpen(true);
   };
@@ -308,6 +336,12 @@ const ClassRoomDetail = () => {
   const handleAccessCodeSubmit = async (accessCode: string) => {
     if (!selectedQuizSession) return;
 
+    // Additional safeguard: prevent joining ACTIVE sessions
+    if (selectedQuizSession.status === "ACTIVE") {
+      showToast("Không thể tham gia: Quiz đã bắt đầu.", "error");
+      return;
+    }
+
     try {
       setIsJoiningSession(true);
 
@@ -315,34 +349,18 @@ const ClassRoomDetail = () => {
       const response = await joinQuizSession(accessCode);
 
       if (response.code === "M000") {
-        // Navigate based on session status
-        if (selectedQuizSession.status === "LOBBY") {
-          // Navigate to waiting room for LOBBY status
-          navigate(
-            `/student/quiz-session/${selectedQuizSession.quiz_session_id}/waiting`,
-            {
-              state: {
-                accessCode,
-                classroomId: id,
-                quizSessionId: selectedQuizSession.quiz_session_id,
-                quizSessionName: selectedQuizSession.title,
-              },
+        // Navigate directly to quiz taking page for all session statuses
+        navigate(
+          `/student/quiz-session/${selectedQuizSession.quiz_session_id}/take`,
+          {
+            state: {
+              accessCode,
+              quizSessionId: selectedQuizSession.quiz_session_id,
+              quizSessionName: selectedQuizSession.title,
+              classroomId: id,
             },
-          );
-        } else {
-          // For ACTIVE/PAUSED status, navigate directly to take quiz
-          navigate(
-            `/student/quiz-session/${selectedQuizSession.quiz_session_id}/take`,
-            {
-              state: {
-                accessCode,
-                quizSessionId: selectedQuizSession.quiz_session_id,
-                quizSessionName: selectedQuizSession.title,
-                classroomId: id,
-              },
-            },
-          );
-        }
+          },
+        );
       } else {
         throw new Error(response.message || "Failed to join quiz session");
       }
@@ -914,7 +932,8 @@ const ClassRoomDetail = () => {
               const statusInfo = getStatusDisplayInfo(assignment.status);
               const StatusIcon = statusInfo.icon;
               const startTime = new Date(assignment.start_time);
-
+              const endTime = new Date(assignment.end_time);
+              const time = assignment.status === "ACTIVE" ? startTime : endTime;
               return (
                 <div
                   key={assignment.id}
@@ -948,15 +967,11 @@ const ClassRoomDetail = () => {
                           <div className="flex items-center gap-1">
                             <FaClock className="h-3 w-3 flex-shrink-0" />
                             <span className="break-words">
-                              {assignment.status === "LOBBY"
-                                ? "Session opens"
-                                : assignment.status === "ACTIVE"
-                                  ? "Started"
-                                  : assignment.status === "PAUSED"
-                                    ? "Paused since"
-                                    : "Completed"}
-                              : {formatDate(startTime)} at{" "}
-                              {formatTime(startTime)}
+                              {assignment.status === "ACTIVE"
+                                ? "Started"
+                                : assignment.status === "COMPLETED" &&
+                                  "Completed"}
+                              : {formatDate(time)} at {formatTime(time)}
                             </span>
                           </div>
                         </div>
@@ -979,18 +994,17 @@ const ClassRoomDetail = () => {
                           </Button>
                         </div>
                       )}
-                      {(assignment.status === "ACTIVE" ||
-                        assignment.status === "PAUSED") && (
-                        <Button
-                          variant="primary"
-                          size="sm"
-                          onClick={() => handleJoinQuizSession(assignment)}
-                          className="flex-1 sm:flex-none"
-                        >
-                          <FaPlay className="mr-1 h-3 w-3 sm:mr-2" />
-                          <span className="hidden sm:inline">Join Quiz</span>
-                          <span className="sm:hidden">Join</span>
-                        </Button>
+                      {assignment.status === "ACTIVE" && (
+                        <span className="rounded-full bg-orange-100 px-2 py-1 text-center text-xs font-medium text-orange-700 sm:px-3 sm:text-sm dark:bg-orange-900/30 dark:text-orange-300">
+                          <FaPlay className="mr-1 inline h-3 w-3" />
+                          Quiz in Progress
+                        </span>
+                      )}
+                      {assignment.status === "PAUSED" && (
+                        <span className="rounded-full bg-yellow-100 px-2 py-1 text-center text-xs font-medium text-yellow-700 sm:px-3 sm:text-sm dark:bg-yellow-900/30 dark:text-yellow-300">
+                          <FaClock className="mr-1 inline h-3 w-3" />
+                          Paused
+                        </span>
                       )}
                       {assignment.status === "COMPLETED" && (
                         <span className="rounded-full bg-gray-100 px-2 py-1 text-center text-xs font-medium text-gray-700 sm:px-3 sm:text-sm dark:bg-gray-900/30 dark:text-gray-300">
@@ -1229,6 +1243,7 @@ const ClassRoomDetail = () => {
         isLoading={isJoiningSession}
       />
 
+
       {/* Confirm Delete Comment Modal */}
       <ConfirmDeleteCommentModal
         isOpen={isDeleteCommentModalOpen}
@@ -1249,6 +1264,12 @@ const ClassRoomDetail = () => {
         }}
         onConfirm={confirmEditComment}
         comment={selectedCommentForEdit?.comment || null}
+      {/* Toast */}
+      <Toast
+        isVisible={toastVisible}
+        message={toastMessage}
+        type={toastType}
+        onClose={() => setToastVisible(false)}
       />
     </div>
   );
