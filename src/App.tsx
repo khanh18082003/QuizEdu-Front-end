@@ -32,6 +32,7 @@ import QuizManagement from "./pages/teacher/QuizManagement";
 import CreateQuiz from "./pages/teacher/CreateQuiz";
 import QuizDetail from "./pages/teacher/QuizDetail";
 import TeacherQuizWaitingRoom from "./pages/teacher/QuizWaitingRoom";
+import QuizResultsPage from "./pages/teacher/QuizResults";
 
 function App() {
   return (
@@ -86,6 +87,10 @@ function App() {
           <Route path="quizzes/:id" element={<QuizDetail />} />
           <Route path="profile" element={<TeacherProfile />} />
           <Route path="settings" element={<TeacherSettings />} />
+          <Route
+            path="/teacher/quiz-results/:sessionId"
+            element={<QuizResultsPage />}
+          />
         </Route>
       </Routes>
     </BrowserRouter>

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useSelector } from "react-redux";
@@ -11,6 +11,7 @@ import {
   FaPlay,
   FaLock,
   FaCheckCircle,
+  FaEye,
   FaBell,
   FaDownload,
   FaCommentDots,
@@ -19,6 +20,7 @@ import Button from "../../components/ui/Button";
 import SkeletonLoader from "../../components/ui/SkeletonLoader";
 import AccessCodeModal from "../../components/ui/AccessCodeModal";
 import Toast from "../../components/ui/Toast";
+import QuizReviewModal from "../../components/modals/QuizReviewModal";
 import {
   getClassroomInfo,
   getClassroomStudents,
@@ -33,7 +35,9 @@ import type {
 import type { PaginationResponse } from "../../types/response";
 import {
   joinQuizSession,
+  getQuizSessionHistory,
   type QuizSessionResponse,
+  type QuizSessionHistoryResponse,
 } from "../../services/quizSessionService";
 
 import {
@@ -93,9 +97,9 @@ const getStatusDisplayInfo = (status: QuizSessionStatus) => {
       return {
         label: "Completed",
         icon: FaCheckCircle,
-        bgColor: "bg-gray-100 dark:bg-gray-900/30",
-        textColor: "text-gray-700 dark:text-gray-300",
-        iconColor: "text-gray-600 dark:text-gray-400",
+        bgColor: "bg-green-100 dark:bg-green-900/30",
+        textColor: "text-green-700 dark:text-green-300",
+        iconColor: "text-green-600 dark:text-green-400",
       };
   }
 };
@@ -268,12 +272,29 @@ const ClassRoomDetail = () => {
   >(null);
   const [isJoiningSession, setIsJoiningSession] = useState(false);
 
+  // Quiz sessions pagination state
+  const [quizSessionsData, setQuizSessionsData] = useState<
+    QuizSessionResponse[]
+  >([]);
+  const [quizSessionsPage, setQuizSessionsPage] = useState(1);
+  const [quizSessionsHasMore, setQuizSessionsHasMore] = useState(true);
+  const [isLoadingMoreSessions, setIsLoadingMoreSessions] = useState(false);
+
   // Toast state
   const [toastVisible, setToastVisible] = useState(false);
   const [toastMessage, setToastMessage] = useState("");
   const [toastType, setToastType] = useState<"success" | "error" | "info">(
     "info",
   );
+
+  // Quiz result modal state
+  const [isQuizReviewModalOpen, setIsQuizReviewModalOpen] = useState(false);
+  const [selectedQuizResult, setSelectedQuizResult] =
+    useState<QuizSessionHistoryResponse | null>(null);
+  const [isLoadingQuizResult, setIsLoadingQuizResult] = useState(false);
+
+  // Get user information from Redux store
+  const user = useSelector((state: { user: any }) => state.user);
 
   // Toast helper function
   const showToast = (
@@ -284,6 +305,73 @@ const ClassRoomDetail = () => {
     setToastType(type);
     setToastVisible(true);
   };
+
+  // Load more quiz sessions function
+  const loadMoreQuizSessions = useCallback(async () => {
+    if (!id || isLoadingMoreSessions || !quizSessionsHasMore) return;
+
+    try {
+      setIsLoadingMoreSessions(true);
+      const nextPage = quizSessionsPage + 1;
+
+      // Add delay to simulate slow loading and show skeleton
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+
+      const quizSessionsResponse = await getQuizSessionsInClassroom(
+        id,
+        nextPage,
+        3,
+      );
+
+      if (quizSessionsResponse.code === "M000" && quizSessionsResponse.data) {
+        const newSessions = quizSessionsResponse.data.data;
+
+        // Update quiz sessions data
+        setQuizSessionsData((prev) => [...prev, ...newSessions]);
+        setQuizSessionsPage(nextPage);
+
+        // Check if there are more pages
+        setQuizSessionsHasMore(nextPage < quizSessionsResponse.data.pages);
+
+        // Update classroom data with new combined sessions
+        if (classroom) {
+          const combinedSessions = [...quizSessionsData, ...newSessions];
+          const newAssignments = combinedSessions.map((session) => ({
+            id: session.id,
+            title: session.name,
+            description: session.description,
+            quiz_session_id: session.quiz_session_id,
+            start_time: session.start_time,
+            end_time: session.end_time,
+            dueDate: new Date(), // Default to current date, should come from API
+            assignedDate: new Date(session.start_time),
+            status: getQuizSessionStatus(session),
+          }));
+
+          setClassroom((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  assignments: newAssignments,
+                }
+              : null,
+          );
+        }
+      }
+    } catch (error) {
+      console.error("Error loading more quiz sessions:", error);
+      showToast("Không thể tải thêm quiz sessions", "error");
+    } finally {
+      setIsLoadingMoreSessions(false);
+    }
+  }, [
+    id,
+    isLoadingMoreSessions,
+    quizSessionsHasMore,
+    quizSessionsPage,
+    quizSessionsData,
+    classroom,
+  ]);
 
   // Update URL when tab changes
   useEffect(() => {
@@ -349,7 +437,10 @@ const ClassRoomDetail = () => {
       const response = await joinQuizSession(accessCode);
 
       if (response.code === "M000") {
-        // Navigate directly to quiz taking page for all session statuses
+        // Success - navigate to quiz taking page
+        setIsJoiningSession(false);
+        setIsAccessCodeModalOpen(false);
+        setSelectedQuizSession(null);
         navigate(
           `/student/quiz-session/${selectedQuizSession.quiz_session_id}/take`,
           {
@@ -362,20 +453,70 @@ const ClassRoomDetail = () => {
           },
         );
       } else {
-        throw new Error(response.message || "Failed to join quiz session");
+        // Handle other response codes as errors
+        throw new Error(
+          response.message ||
+            "Không thể tham gia quiz session. Vui lòng thử lại.",
+        );
       }
     } catch (error: unknown) {
       console.error("Error joining quiz session:", error);
-      // Let the modal handle the error display
+
+      // Handle axios error response
+      if (error && typeof error === "object" && "response" in error) {
+        const axiosError = error as {
+          response?: {
+            data?: {
+              code?: string;
+              message?: string;
+            };
+          };
+        };
+
+        if (axiosError.response?.data?.code) {
+          const code = axiosError.response.data.code;
+
+          if (code === "M102") {
+            // Access code is incorrect - let modal handle this error
+            throw new Error("Mã truy cập không đúng. Vui lòng thử lại.");
+          } else if (code === "M111") {
+            // Quiz session is active, cannot join - let modal handle this error
+            throw new Error(
+              "Quiz đang diễn ra, không thể tham gia. Vui lòng chờ quiz tiếp theo.",
+            );
+          } else if (code === "M110") {
+            // Student already joined - navigate directly
+            showToast(
+              "Bạn đã tham gia quiz này rồi. Đang chuyển hướng...",
+              "info",
+            );
+            setIsJoiningSession(false);
+            setIsAccessCodeModalOpen(false);
+            setSelectedQuizSession(null);
+            navigate(
+              `/student/quiz-session/${selectedQuizSession.quiz_session_id}/take`,
+              {
+                state: {
+                  accessCode,
+                  quizSessionId: selectedQuizSession.quiz_session_id,
+                  quizSessionName: selectedQuizSession.title,
+                  classroomId: id,
+                },
+              },
+            );
+            return;
+          }
+        }
+      }
+
+      // Default error handling - let modal handle this error
       const errorMessage =
         error instanceof Error
           ? error.message
-          : "Invalid access code. Please try again.";
+          : "Có lỗi xảy ra. Vui lòng thử lại.";
       throw new Error(errorMessage);
     } finally {
       setIsJoiningSession(false);
-      setIsAccessCodeModalOpen(false);
-      setSelectedQuizSession(null);
     }
   };
 
@@ -383,7 +524,62 @@ const ClassRoomDetail = () => {
   const handleCloseAccessCodeModal = () => {
     setIsAccessCodeModalOpen(false);
     setSelectedQuizSession(null);
-    setIsJoiningSession(false);
+  };
+
+  // Handle viewing quiz results
+  const handleViewQuizResult = async (
+    assignment: ProcessedClassroomData["assignments"][0],
+  ) => {
+    if (!user?.id) {
+      showToast(
+        "Không thể xem kết quả: Thông tin người dùng không hợp lệ",
+        "error",
+      );
+      return;
+    }
+
+    try {
+      setIsLoadingQuizResult(true);
+      const response = await getQuizSessionHistory(
+        assignment.quiz_session_id,
+        user.id,
+      );
+
+      if (response.code === "M000" && response.data) {
+        setSelectedQuizResult(response.data);
+        setIsQuizReviewModalOpen(true);
+      } else {
+        showToast("Không thể tải kết quả quiz", "error");
+      }
+    } catch (error: unknown) {
+      console.error("Error fetching quiz result:", error);
+
+      // Handle specific error codes
+      if (error && typeof error === "object" && "response" in error) {
+        const axiosError = error as {
+          response?: {
+            data?: {
+              code?: string;
+            };
+          };
+        };
+
+        if (axiosError.response?.data?.code === "M115") {
+          showToast("Bạn chưa tham gia session này", "error");
+          return;
+        }
+      }
+
+      showToast("Không thể tải kết quả quiz. Vui lòng thử lại!", "error");
+    } finally {
+      setIsLoadingQuizResult(false);
+    }
+  };
+
+  // Handle closing quiz result modal
+  const handleCloseQuizResultModal = () => {
+    setIsQuizReviewModalOpen(false);
+    setSelectedQuizResult(null);
   };
 
   // Notification handlers
@@ -599,8 +795,19 @@ const ClassRoomDetail = () => {
           );
           setClassroom(transformedData);
 
+          // Initialize quiz sessions pagination state
+          setQuizSessionsData(quizSessionsResponse.data.data);
+          setQuizSessionsPage(1);
+          setQuizSessionsHasMore(1 < quizSessionsResponse.data.pages);
+
           // Debug: Log transformed data
           console.log("Transformed classroom data:", transformedData);
+          console.log("Quiz sessions pagination info:", {
+            currentPage: quizSessionsResponse.data.page,
+            totalPages: quizSessionsResponse.data.pages,
+            hasMore: 1 < quizSessionsResponse.data.pages,
+            totalSessions: quizSessionsResponse.data.total,
+          });
         } else {
           setError(
             classroomInfoResponse.message ||
@@ -632,6 +839,63 @@ const ClassRoomDetail = () => {
 
     fetchClassroomDetails();
   }, [id, navigate]);
+
+  // Infinite scroll effect for quiz sessions
+  useEffect(() => {
+    const handleScroll = (event: Event) => {
+      // Only apply to classwork tab
+      if (activeTab !== "classwork") return;
+
+      const target = event.target;
+
+      // Check if the scroll event is from the main content area or window
+      let scrollTop: number;
+      let scrollHeight: number;
+      let clientHeight: number;
+
+      if (
+        target === document ||
+        target === window ||
+        !target ||
+        !(target as HTMLElement).scrollTop
+      ) {
+        // Page-level scroll (fallback for older layout)
+        scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+        scrollHeight = document.documentElement.scrollHeight;
+        clientHeight = window.innerHeight;
+      } else {
+        // Container-level scroll (new fixed sidebar layout)
+        const element = target as HTMLElement;
+        scrollTop = element.scrollTop;
+        scrollHeight = element.scrollHeight;
+        clientHeight = element.clientHeight;
+      }
+
+      if (scrollTop + clientHeight >= scrollHeight - 0) {
+        loadMoreQuizSessions();
+      }
+    };
+
+    // Try to find the scrollable container (main content area)
+    const mainContent = document.querySelector("main > div:last-child");
+
+    if (mainContent) {
+      // New layout with fixed sidebar - listen to container scroll
+      mainContent.addEventListener("scroll", handleScroll);
+    } else {
+      // Fallback to window scroll for older layout
+      window.addEventListener("scroll", handleScroll);
+    }
+
+    // Cleanup
+    return () => {
+      if (mainContent) {
+        mainContent.removeEventListener("scroll", handleScroll);
+      } else {
+        window.removeEventListener("scroll", handleScroll);
+      }
+    };
+  }, [activeTab, loadMoreQuizSessions]);
 
   const handleGoBack = () => {
     navigate("/student/classrooms");
@@ -936,7 +1200,7 @@ const ClassRoomDetail = () => {
               const time = assignment.status === "ACTIVE" ? startTime : endTime;
               return (
                 <div
-                  key={assignment.id}
+                  key={assignment.quiz_session_id}
                   className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm sm:p-6 dark:border-gray-700 dark:bg-gray-800"
                 >
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -965,13 +1229,16 @@ const ClassRoomDetail = () => {
                         )}
                         <div className="mt-3 flex flex-col gap-2 text-xs text-gray-500 sm:flex-row sm:flex-wrap sm:gap-4 sm:text-sm dark:text-gray-400">
                           <div className="flex items-center gap-1">
-                            <FaClock className="h-3 w-3 flex-shrink-0" />
+                            {assignment.status !== "LOBBY" && (
+                              <FaClock className="h-3 w-3 flex-shrink-0" />
+                            )}
                             <span className="break-words">
                               {assignment.status === "ACTIVE"
                                 ? "Started"
                                 : assignment.status === "COMPLETED" &&
                                   "Completed"}
-                              : {formatDate(time)} at {formatTime(time)}
+                              {assignment.status !== "LOBBY" &&
+                                `: ${formatDate(time)} at ${formatTime(time)}`}
                             </span>
                           </div>
                         </div>
@@ -1000,23 +1267,96 @@ const ClassRoomDetail = () => {
                           Quiz in Progress
                         </span>
                       )}
-                      {assignment.status === "PAUSED" && (
-                        <span className="rounded-full bg-yellow-100 px-2 py-1 text-center text-xs font-medium text-yellow-700 sm:px-3 sm:text-sm dark:bg-yellow-900/30 dark:text-yellow-300">
-                          <FaClock className="mr-1 inline h-3 w-3" />
-                          Paused
-                        </span>
-                      )}
                       {assignment.status === "COMPLETED" && (
-                        <span className="rounded-full bg-gray-100 px-2 py-1 text-center text-xs font-medium text-gray-700 sm:px-3 sm:text-sm dark:bg-gray-900/30 dark:text-gray-300">
-                          <FaCheckCircle className="mr-1 inline h-3 w-3" />
-                          Completed
-                        </span>
+                        <div className="flex flex-col gap-2 sm:gap-1">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleViewQuizResult(assignment)}
+                            disabled={isLoadingQuizResult}
+                            className="flex-1 border-green-300 text-green-600 hover:border-green-400 hover:text-green-700 sm:flex-none dark:border-green-600 dark:text-green-400 dark:hover:border-green-500 dark:hover:text-green-300"
+                          >
+                            {isLoadingQuizResult ? (
+                              <div className="mr-1 h-3 w-3 animate-spin rounded-full border-2 border-green-600 border-t-transparent sm:mr-2" />
+                            ) : (
+                              <FaEye className="mr-1 h-3 w-3 sm:mr-2" />
+                            )}
+                            <span className="hidden sm:inline">
+                              Xem kết quả
+                            </span>
+                            <span className="sm:hidden">Kết quả</span>
+                          </Button>
+                          <span className="rounded-full bg-green-100 px-2 py-1 text-center text-xs font-medium text-green-700 sm:px-3 sm:text-sm dark:bg-green-900/30 dark:text-green-300">
+                            <FaCheckCircle className="mr-1 inline h-3 w-3" />
+                            Completed
+                          </span>
+                        </div>
                       )}
                     </div>
                   </div>
                 </div>
               );
             })}
+          </div>
+        )}
+
+        {/* Skeleton loading for additional quiz sessions */}
+        {isLoadingMoreSessions && (
+          <div className="space-y-4">
+            {[...Array(3)].map((_, index) => (
+              <div
+                key={`skeleton-${index}`}
+                className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm sm:p-6 dark:border-gray-700 dark:bg-gray-800"
+              >
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="flex flex-1 items-start gap-3 sm:gap-4">
+                    {/* Icon skeleton */}
+                    <div className="h-10 w-10 flex-shrink-0 animate-pulse rounded-full bg-gray-200 sm:h-12 sm:w-12 dark:bg-gray-700" />
+
+                    <div className="min-w-0 flex-1 space-y-3">
+                      {/* Title and status skeleton */}
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+                        <div className="h-6 w-48 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+                        <div className="h-6 w-24 animate-pulse rounded-full bg-gray-200 dark:bg-gray-700" />
+                      </div>
+
+                      {/* Description skeleton */}
+                      <div className="space-y-2">
+                        <div className="h-4 w-full animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+                        <div className="h-4 w-3/4 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+                      </div>
+
+                      {/* Time info skeleton */}
+                      <div className="h-4 w-40 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+                    </div>
+                  </div>
+
+                  {/* Button skeleton */}
+                  <div className="flex flex-row gap-2 sm:flex-col sm:self-start">
+                    <div className="h-8 w-24 animate-pulse rounded bg-gray-200 sm:w-32 dark:bg-gray-700" />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Loading indicator for infinite scroll */}
+        {isLoadingMoreSessions && (
+          <div className="flex justify-center py-4">
+            <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+              <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-600 border-t-transparent"></div>
+              <span>Đang tải thêm quiz sessions...</span>
+            </div>
+          </div>
+        )}
+
+        {/* End of data indicator */}
+        {!quizSessionsHasMore && classroom.assignments.length > 3 && (
+          <div className="flex justify-center py-4">
+            <div className="text-sm text-gray-500 dark:text-gray-400">
+              Đã hiển thị tất cả quiz sessions
+            </div>
           </div>
         )}
       </div>
@@ -1242,7 +1582,20 @@ const ClassRoomDetail = () => {
         quizSessionStatus={selectedQuizSession?.status}
         isLoading={isJoiningSession}
       />
-
+      {/* Quiz Review Modal */}
+      {selectedQuizResult && (
+        <QuizReviewModal
+          isVisible={isQuizReviewModalOpen}
+          historyData={selectedQuizResult}
+          onClose={handleCloseQuizResultModal}
+          onGoHome={() => {
+            handleCloseQuizResultModal();
+            navigate("/student/classrooms");
+          }}
+          quizTitle={selectedQuizResult.quiz.name}
+          userId={user?.id || ""}
+        />
+      )}
 
       {/* Confirm Delete Comment Modal */}
       <ConfirmDeleteCommentModal

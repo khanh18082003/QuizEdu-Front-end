@@ -201,7 +201,7 @@ export const assignQuizToClassroom = async (
   try {
     const response = await api.post<SuccessApiResponse<any>>(
       `/classrooms/assignQuizToClassroom`,
-      data
+      data,
     );
     return response.data;
   } catch (error) {
@@ -254,7 +254,7 @@ export const getClassroomStudents = async (
 export const getQuizSessionsInClassroom = async (
   classroomId: string,
   page: number = 1,
-  pageSize: number = 10,
+  pageSize: number = 3,
 ): Promise<SuccessApiResponse<PaginationResponse<QuizSessionResponse>>> => {
   try {
     const response = await api.get<
@@ -280,17 +280,17 @@ export interface InviteStudentsRequest {
  */
 export const inviteStudents = async (
   classroomId: string,
-  studentEmails: string[]
+  studentEmails: string[],
 ): Promise<SuccessApiResponse<any>> => {
   try {
     const requestData: InviteStudentsRequest = {
       student_emails: studentEmails,
-      class_room_id: classroomId
+      class_room_id: classroomId,
     };
 
     const response = await api.post<SuccessApiResponse<any>>(
-      '/classrooms/invited-students',
-      requestData
+      "/classrooms/invited-students",
+      requestData,
     );
     return response.data;
   } catch (error) {
@@ -304,11 +304,11 @@ export const inviteStudents = async (
  */
 export const removeStudentFromClassroom = async (
   classroomId: string,
-  studentId: string
+  studentId: string,
 ): Promise<SuccessApiResponse<void>> => {
   try {
     const response = await api.delete<SuccessApiResponse<void>>(
-      `/classrooms/${classroomId}/students/${studentId}`
+      `/classrooms/${classroomId}/students/${studentId}`,
     );
     return response.data;
   } catch (error) {

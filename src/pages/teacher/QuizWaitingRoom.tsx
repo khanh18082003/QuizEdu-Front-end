@@ -4,15 +4,17 @@ import { useSelector } from "react-redux";
 import Button from "../../components/ui/Button";
 import Toast from "../../components/ui/Toast";
 import {
-  connectJoinSessionSocket,
-  disconnectJoinSessionSocket,
+  connectSessionSocket,
+  disconnectSessionSocket,
+  type QuizSubmissionData,
+  type SessionSocketCallbacks,
 } from "../../services/simpleJoinSocket";
 import { type RegisterResponse } from "../../services/userService";
 import type {
   StudentProfileResponse,
   TeacherProfileResponse,
 } from "../../types/response";
-import type { QuizSessionResponse } from "../../services/quizService";
+
 import type { ClassroomQuiz } from "../../services/classroomService";
 import {
   FaPlay,
@@ -23,10 +25,14 @@ import {
   FaClock,
   FaArrowLeft,
   FaUserPlus,
+  FaCheckCircle,
+  FaTrophy,
 } from "react-icons/fa";
 import {
   startQuizSession,
   endQuizSession,
+  getStudentsInQuizSession,
+  type QuizSessionResponse,
 } from "../../services/quizSessionService";
 
 interface WaitingRoomState {
@@ -51,8 +57,16 @@ const QuizWaitingRoom = () => {
   const [studentsInLobby, setStudentsInLobby] = useState<
     (RegisterResponse | StudentProfileResponse)[]
   >([]);
+  const [submittedStudents, setSubmittedStudents] = useState<
+    QuizSubmissionData[]
+  >([]);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [isWebSocketConnected, setIsWebSocketConnected] = useState(false);
+  const [isQuizStarted, setIsQuizStarted] = useState(false);
+
+  // Loading states
+  const [isStartingQuiz, setIsStartingQuiz] = useState(false);
+  const [isEndingSession, setIsEndingSession] = useState(false);
 
   // Toast state
   const [toast, setToast] = useState<{
@@ -85,6 +99,58 @@ const QuizWaitingRoom = () => {
     }, 4000);
   };
 
+  useEffect(() => {
+    const getStudentsInLobby = async () => {
+      // Fetch students in lobby from the session
+      try {
+        const response = await getStudentsInQuizSession(
+          state.session.quiz_session_id,
+        );
+        if (response.code === "M000") {
+          setStudentsInLobby(response.data);
+        }
+      } catch (error) {
+        console.error("Error fetching students in lobby:", error);
+      }
+    };
+    getStudentsInLobby();
+  }, [state.session.quiz_session_id]);
+
+  // Handle quiz submission WebSocket message
+  const handleQuizSubmissionMessage = useCallback(
+    (submissionData: QuizSubmissionData) => {
+      console.log("📝 Received quiz submission:", submissionData);
+
+      // Add submission to submitted students list
+      setSubmittedStudents((prev) => {
+        const existingSubmission = prev.find((s) => s.id === submissionData.id);
+        if (existingSubmission) {
+          console.log("⚠️ Student already submitted:", existingSubmission);
+          return prev;
+        }
+
+        const newList = [...prev, submissionData];
+        console.log("✅ Updated submitted students:", newList);
+        return newList;
+      });
+
+      // Find student name for notification
+      const student = studentsInLobby.find((s) => s.id === submissionData.id);
+      const studentName =
+        student?.display_name ||
+        `${student?.first_name || ""} ${student?.last_name || ""}`.trim() ||
+        student?.email ||
+        submissionData.email;
+
+      // Show notification
+      showToast(
+        `📝 ${studentName} đã nộp bài! Điểm: ${submissionData.score}`,
+        "success",
+      );
+    },
+    [studentsInLobby],
+  );
+
   // Handle WebSocket message
   const handleWebSocketMessage = useCallback(
     (studentData: RegisterResponse | StudentProfileResponse) => {
@@ -114,24 +180,35 @@ const QuizWaitingRoom = () => {
     [],
   );
 
-  // Setup WebSocket connection
+  // Setup WebSocket connections
   useEffect(() => {
-    if (state?.session?.id) {
-      console.log("📡 Setting up WebSocket for session:", state.session.id);
-
-      connectJoinSessionSocket(
-        state.session.id,
-        handleWebSocketMessage,
-        setIsWebSocketConnected,
+    if (state?.session?.quiz_session_id) {
+      console.log(
+        "📡 Setting up unified WebSocket for session:",
+        state.session.quiz_session_id,
       );
 
+      // Create unified callback structure
+      const callbacks: SessionSocketCallbacks = {
+        onJoinSession: handleWebSocketMessage,
+        onSubmitQuiz: handleQuizSubmissionMessage,
+        onConnectionChange: setIsWebSocketConnected,
+      };
+
+      // Connect to unified session socket
+      connectSessionSocket(state.session.quiz_session_id, callbacks);
+
       return () => {
-        console.log("🔌 Cleaning up WebSocket connection");
+        console.log("🔌 Cleaning up unified WebSocket connection");
         setIsWebSocketConnected(false);
-        disconnectJoinSessionSocket();
+        disconnectSessionSocket();
       };
     }
-  }, [state?.session?.id, handleWebSocketMessage]);
+  }, [
+    state?.session?.quiz_session_id,
+    handleWebSocketMessage,
+    handleQuizSubmissionMessage,
+  ]);
 
   // Update current time every second
   useEffect(() => {
@@ -150,22 +227,87 @@ const QuizWaitingRoom = () => {
   }, [state, navigate]);
 
   const handleStartQuiz = async () => {
+    if (isStartingQuiz) return; // Prevent double-click
+
     try {
-      await startQuizSession(state.session.id);
+      setIsStartingQuiz(true);
+      showToast("Đang bắt đầu quiz...", "info");
+
+      await startQuizSession(state.session.quiz_session_id);
+
+      // Set quiz as started to enable submission tracking
+      setIsQuizStarted(true);
+
+      showToast("🎉 Quiz đã được bắt đầu thành công!", "success");
     } catch (error) {
       console.error("Error starting quiz:", error);
-      showToast("Không thể bắt đầu quiz. Vui lòng thử lại!", "error");
+
+      // Handle specific error cases if needed
+      if (error && typeof error === "object" && "response" in error) {
+        const axiosError = error as {
+          response?: {
+            data?: {
+              code?: string;
+              message?: string;
+            };
+          };
+        };
+
+        const errorMessage =
+          axiosError.response?.data?.message ||
+          "Không thể bắt đầu quiz. Vui lòng thử lại!";
+        showToast(errorMessage, "error");
+      } else {
+        showToast("❌ Không thể bắt đầu quiz. Vui lòng thử lại!", "error");
+      }
+    } finally {
+      setIsStartingQuiz(false);
     }
   };
 
   const handleEndSession = async () => {
+    if (isEndingSession) return; // Prevent double-click
+
     try {
-      await endQuizSession(state.session.id);
-      showToast("Phiên thi đã được kết thúc!", "success");
-      navigate(`/teacher/classes/${state.classId}`);
+      setIsEndingSession(true);
+      showToast("Đang kết thúc session...", "info");
+
+      await endQuizSession(state.session.quiz_session_id);
+
+      showToast("✅ Phiên thi đã được kết thúc!", "success");
+
+      // Navigate back with a short delay to show the success message
+      setTimeout(() => {
+        navigate(`/teacher/classes/${state.classId}`, {
+          state: { message: "Phiên thi đã được kết thúc thành công!" },
+        });
+      }, 1500);
     } catch (error) {
       console.error("Error ending quiz session:", error);
-      showToast("Không thể kết thúc phiên thi. Vui lòng thử lại!", "error");
+
+      // Handle specific error cases if needed
+      if (error && typeof error === "object" && "response" in error) {
+        const axiosError = error as {
+          response?: {
+            data?: {
+              code?: string;
+              message?: string;
+            };
+          };
+        };
+
+        const errorMessage =
+          axiosError.response?.data?.message ||
+          "Không thể kết thúc phiên thi. Vui lòng thử lại!";
+        showToast(errorMessage, "error");
+      } else {
+        showToast(
+          "❌ Không thể kết thúc phiên thi. Vui lòng thử lại!",
+          "error",
+        );
+      }
+    } finally {
+      setIsEndingSession(false);
     }
   };
 
@@ -205,10 +347,22 @@ const QuizWaitingRoom = () => {
             <div className="flex items-center">
               <button
                 onClick={handleEndSession}
-                className="mr-6 flex items-center text-gray-600 transition-colors hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"
+                disabled={isEndingSession}
+                className="mr-6 flex cursor-pointer items-center text-gray-600 transition-colors hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-50 dark:text-gray-400 dark:hover:text-white"
               >
-                <FaArrowLeft className="mr-2 h-4 w-4" />
-                <span className="text-sm font-medium">Quay lại</span>
+                {isEndingSession ? (
+                  <>
+                    <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-gray-600 border-t-transparent" />
+                    <span className="text-sm font-medium">
+                      Đang kết thúc...
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <FaArrowLeft className="mr-2 h-4 w-4" />
+                    <span className="text-sm font-medium">Quay lại</span>
+                  </>
+                )}
               </button>
               <div>
                 <h1 className="text-xl font-bold text-gray-900 dark:text-white">
@@ -276,7 +430,7 @@ const QuizWaitingRoom = () => {
                     </p>
                     <button
                       onClick={() => copyToClipboard(session.access_code)}
-                      className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+                      className="inline-flex cursor-pointer items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
                     >
                       <FaCopy className="text-sm" />
                       <span>Sao chép mã</span>
@@ -310,19 +464,42 @@ const QuizWaitingRoom = () => {
                 <Button
                   variant="outline"
                   onClick={handleEndSession}
-                  className="flex-1 py-2.5 text-base"
+                  disabled={isEndingSession || isStartingQuiz}
+                  className="flex-1 cursor-pointer py-2.5 text-base disabled:cursor-not-allowed"
                 >
-                  <FaTimes className="mr-2 text-sm" />
-                  Kết thúc
+                  {isEndingSession ? (
+                    <>
+                      <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                      Đang kết thúc...
+                    </>
+                  ) : (
+                    <>
+                      <FaTimes className="mr-2 text-sm" />
+                      Kết thúc
+                    </>
+                  )}
                 </Button>
                 <Button
                   variant="primary"
                   onClick={handleStartQuiz}
-                  className="flex-1 py-2.5 text-base"
-                  disabled={studentsInLobby.length === 0 && students.length > 0}
+                  disabled={
+                    isStartingQuiz ||
+                    isEndingSession ||
+                    (studentsInLobby.length === 0 && students.length > 0)
+                  }
+                  className="flex-1 cursor-pointer py-2.5 text-base disabled:cursor-not-allowed"
                 >
-                  <FaPlay className="mr-2 text-sm" />
-                  Bắt đầu Quiz
+                  {isStartingQuiz ? (
+                    <>
+                      <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                      Đang bắt đầu...
+                    </>
+                  ) : (
+                    <>
+                      <FaPlay className="mr-2 text-sm" />
+                      Bắt đầu Quiz
+                    </>
+                  )}
                 </Button>
               </div>
             </div>
@@ -362,6 +539,26 @@ const QuizWaitingRoom = () => {
                 </div>
               </div>
 
+              {/* Submission Progress (only show when quiz is started) */}
+              {isQuizStarted && (
+                <div className="mb-6">
+                  <div className="mb-2 flex justify-between text-sm text-gray-600 dark:text-gray-400">
+                    <span>Tiến độ nộp bài</span>
+                    <span>
+                      {submittedStudents.length}/{studentsInLobby.length}
+                    </span>
+                  </div>
+                  <div className="h-3 w-full rounded-full bg-gray-200 dark:bg-gray-600">
+                    <div
+                      className="h-3 rounded-full bg-gradient-to-r from-purple-500 to-pink-600 transition-all duration-500 ease-out"
+                      style={{
+                        width: `${studentsInLobby.length > 0 ? (submittedStudents.length / studentsInLobby.length) * 100 : 0}%`,
+                      }}
+                    ></div>
+                  </div>
+                </div>
+              )}
+
               {/* Students List */}
               <div className="space-y-4">
                 <div className="flex items-center justify-between border-b border-gray-200 pb-2 dark:border-gray-600">
@@ -384,16 +581,32 @@ const QuizWaitingRoom = () => {
                         `${student.first_name || ""} ${student.last_name || ""}`.trim() ||
                         student.email;
 
+                      // Check if student has submitted
+                      const submission = submittedStudents.find(
+                        (s) => s.id === student.id,
+                      );
+                      const hasSubmitted = !!submission;
+
                       return (
                         <div
                           key={student.id}
-                          className="animate-fade-in-up flex items-center gap-3 rounded-lg bg-gradient-to-r from-green-50 to-emerald-50 p-3 shadow-sm transition-all duration-300 hover:shadow-md dark:from-green-900/20 dark:to-emerald-900/20"
+                          className={`animate-fade-in-up flex items-center gap-3 rounded-lg p-3 shadow-sm transition-all duration-300 hover:shadow-md ${
+                            hasSubmitted
+                              ? "bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20"
+                              : "bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20"
+                          }`}
                           style={{
                             animationDelay: `${index * 100}ms`,
                           }}
                         >
                           <div className="relative">
-                            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-green-500 to-emerald-600 text-sm font-bold text-white shadow-lg">
+                            <div
+                              className={`flex h-10 w-10 items-center justify-center rounded-full text-sm font-bold text-white shadow-lg ${
+                                hasSubmitted
+                                  ? "bg-gradient-to-br from-blue-500 to-purple-600"
+                                  : "bg-gradient-to-br from-green-500 to-emerald-600"
+                              }`}
+                            >
                               {student.avatar ? (
                                 <img
                                   src={student.avatar}
@@ -406,9 +619,17 @@ const QuizWaitingRoom = () => {
                                 student.email?.charAt(0).toUpperCase() || "S"
                               )}
                             </div>
-                            {/* Online indicator */}
-                            <div className="absolute -right-1 -bottom-1 h-4 w-4 rounded-full border-2 border-white bg-green-500 dark:border-gray-800">
-                              <div className="h-full w-full animate-ping rounded-full bg-green-400"></div>
+                            {/* Status indicator */}
+                            <div
+                              className={`absolute -right-1 -bottom-1 h-4 w-4 rounded-full border-2 border-white dark:border-gray-800 ${
+                                hasSubmitted ? "bg-blue-500" : "bg-green-500"
+                              }`}
+                            >
+                              {hasSubmitted ? (
+                                <FaCheckCircle className="h-3 w-3 text-white" />
+                              ) : (
+                                <div className="h-full w-full animate-ping rounded-full bg-green-400"></div>
+                              )}
                             </div>
                           </div>
                           <div className="min-w-0 flex-1">
@@ -416,19 +637,54 @@ const QuizWaitingRoom = () => {
                               <p className="truncate text-sm font-semibold text-gray-900 dark:text-white">
                                 {studentName}
                               </p>
-                              <span className="inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800 dark:bg-green-900/50 dark:text-green-200">
-                                <FaUserPlus className="mr-1 h-2.5 w-2.5" />
-                                Online
-                              </span>
+                              {hasSubmitted ? (
+                                <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-900/50 dark:text-blue-200">
+                                  <FaTrophy className="mr-1 h-2.5 w-2.5" />
+                                  Đã nộp bài
+                                </span>
+                              ) : isQuizStarted ? (
+                                <span className="inline-flex items-center rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-200">
+                                  <FaClock className="mr-1 h-2.5 w-2.5" />
+                                  Đang làm bài
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800 dark:bg-green-900/50 dark:text-green-200">
+                                  <FaUserPlus className="mr-1 h-2.5 w-2.5" />
+                                  Online
+                                </span>
+                              )}
                             </div>
-                            <p className="flex items-center text-xs text-green-600 dark:text-green-400">
-                              <div className="mr-1 h-1.5 w-1.5 rounded-full bg-green-500"></div>
-                              Đã tham gia lúc{" "}
-                              {new Date().toLocaleTimeString("vi-VN", {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              })}
-                            </p>
+                            <div className="flex items-center justify-between">
+                              <p
+                                className={`flex items-center text-xs ${
+                                  hasSubmitted
+                                    ? "text-blue-600 dark:text-blue-400"
+                                    : "text-green-600 dark:text-green-400"
+                                }`}
+                              >
+                                <div
+                                  className={`mr-1 h-1.5 w-1.5 rounded-full ${
+                                    hasSubmitted
+                                      ? "bg-blue-500"
+                                      : "bg-green-500"
+                                  }`}
+                                ></div>
+                                {hasSubmitted
+                                  ? "Đã nộp bài lúc"
+                                  : "Đã tham gia lúc"}{" "}
+                                {new Date().toLocaleTimeString("vi-VN", {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })}
+                              </p>
+                              {hasSubmitted && submission && (
+                                <div className="text-right">
+                                  <p className="text-xs font-bold text-blue-600 dark:text-blue-400">
+                                    Điểm: {submission.score}
+                                  </p>
+                                </div>
+                              )}
+                            </div>
                           </div>
                         </div>
                       );
@@ -507,10 +763,10 @@ const QuizWaitingRoom = () => {
                                     Chờ
                                   </span>
                                 </div>
-                                <p className="flex items-center text-xs text-gray-500 dark:text-gray-400">
-                                  <div className="mr-1 h-1.5 w-1.5 rounded-full bg-gray-400"></div>
+                                <span className="flex items-center text-xs text-gray-500 dark:text-gray-400">
+                                  <span className="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-gray-400"></span>
                                   Chưa nhập mã truy cập
-                                </p>
+                                </span>
                               </div>
                             </div>
                           );
