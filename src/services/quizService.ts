@@ -794,7 +794,8 @@ export const createQuizWithFormData = async (
       'Content-Type': 'multipart/form-data',
     },
   });
-
+  return response.data;
+};
 // New interfaces for quiz questions API
 export interface QuizQuestionAnswer {
   answer_text: string;

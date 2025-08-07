@@ -257,10 +257,6 @@ const ClassRoomDetail = () => {
     isVisible: false,
   });
 
-  const showToast = (message: string, type: "success" | "error" | "info") => {
-    setToast({ message, type, isVisible: true });
-  };
-
   // Access code modal state
   const [isAccessCodeModalOpen, setIsAccessCodeModalOpen] = useState(false);
   const [selectedQuizSession, setSelectedQuizSession] = useState<
@@ -268,21 +264,8 @@ const ClassRoomDetail = () => {
   >(null);
   const [isJoiningSession, setIsJoiningSession] = useState(false);
 
-  // Toast state
-  const [toastVisible, setToastVisible] = useState(false);
-  const [toastMessage, setToastMessage] = useState("");
-  const [toastType, setToastType] = useState<"success" | "error" | "info">(
-    "info",
-  );
-
-  // Toast helper function
-  const showToast = (
-    message: string,
-    type: "success" | "error" | "info" = "info",
-  ) => {
-    setToastMessage(message);
-    setToastType(type);
-    setToastVisible(true);
+  const showToast = (message: string, type: "success" | "error" | "info") => {
+    setToast({ message, type, isVisible: true });
   };
 
   // Update URL when tab changes
@@ -1264,12 +1247,14 @@ const ClassRoomDetail = () => {
         }}
         onConfirm={confirmEditComment}
         comment={selectedCommentForEdit?.comment || null}
+      />
+
       {/* Toast */}
       <Toast
-        isVisible={toastVisible}
-        message={toastMessage}
-        type={toastType}
-        onClose={() => setToastVisible(false)}
+        message={toast.message}
+        type={toast.type}
+        isVisible={toast.isVisible}
+        onClose={() => setToast({ ...toast, isVisible: false })}
       />
     </div>
   );
