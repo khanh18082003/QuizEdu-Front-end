@@ -13,13 +13,15 @@ import {
   deleteMatchingQuestions,
   updateMatchingQuiz,
   createQuizType,
+  updateQuiz,
   type QuizManagementItem,
   type AddMultipleChoiceQuestion,
   type UpdateMultipleChoiceQuestion,
   type AddMatchingQuestion,
   type UpdateMatchingQuestionByType,
   type UpdateMatchingQuizRequest,
-  type CreateQuizTypeRequest
+  type CreateQuizTypeRequest,
+  type UpdateQuizRequest
 } from "../../services/quizService";
 import AddMultipleChoiceModal from "../../components/modals/AddMultipleChoiceModal";
 import EditMultipleChoiceModal from "../../components/modals/EditMultipleChoiceModal";
@@ -29,6 +31,7 @@ import EditMatchingModal from "../../components/modals/EditMatchingModal";
 import EditMatchingQuizModal from "../../components/modals/EditMatchingQuizModal";
 import DeleteMatchingModal from "../../components/modals/DeleteMatchingModal";
 import CreateQuizTypeModal from "../../components/modals/CreateQuizTypeModal";
+import EditQuizModal from "../../components/modals/EditQuizModal";
 import { 
   FaArrowLeft,
   FaEdit, 
@@ -96,6 +99,10 @@ const QuizDetail = () => {
   const [isDeletingMatchingQuestions, setIsDeletingMatchingQuestions] = useState(false);
   const [isCreatingQuizType, setIsCreatingQuizType] = useState(false);
   
+  // Edit Quiz Modal States
+  const [isEditQuizModalOpen, setIsEditQuizModalOpen] = useState(false);
+  const [isUpdatingQuiz, setIsUpdatingQuiz] = useState(false);
+  
   // Toast state
   const [toast, setToast] = useState<{
     message: string;
@@ -130,14 +137,6 @@ const QuizDetail = () => {
   useEffect(() => {
     fetchQuizDetail();
   }, [id]);
-
-  const handleEditQuiz = () => {
-    showToast("Tính năng chỉnh sửa quiz đang được phát triển", "info");
-  };
-
-  const handleDeleteQuiz = () => {
-    showToast("Tính năng xóa quiz đang được phát triển", "info");
-  };
 
   const toggleSection = (section: 'multipleChoice' | 'matching') => {
     setExpandedSections(prev => ({
@@ -380,6 +379,50 @@ const QuizDetail = () => {
     }
   };
 
+  // Handle Edit Quiz
+  const handleEditQuiz = () => {
+    setIsEditQuizModalOpen(true);
+  };
+
+  const handleUpdateQuiz = async (formData: UpdateQuizRequest) => {
+    if (!quiz) return;
+    
+    try {
+      setIsUpdatingQuiz(true);
+      
+      await updateQuiz(quiz.quiz.id, formData);
+      
+      // Update the quiz in local state
+      setQuiz(prev => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          quiz: {
+            ...prev.quiz,
+            name: formData.name || prev.quiz.name,
+            description: formData.description || prev.quiz.description,
+            active: formData.is_active,
+            public: formData.is_public
+          }
+        };
+      });
+      
+      showToast(`Đã cập nhật quiz "${formData.name || quiz.quiz.name}" thành công`, "success");
+      setIsEditQuizModalOpen(false);
+      
+    } catch (error) {
+      console.error("Error updating quiz:", error);
+      showToast("Không thể cập nhật quiz. Vui lòng thử lại!", "error");
+    } finally {
+      setIsUpdatingQuiz(false);
+    }
+  };
+
+  const handleDeleteQuiz = () => {
+    // TODO: Implement delete quiz functionality
+    showToast("Chức năng xóa quiz sẽ được bổ sung trong phiên bản tiếp theo", "info");
+  };
+
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString("vi-VN", {
       year: "numeric",
@@ -443,11 +486,11 @@ const QuizDetail = () => {
               </div>
               <div className="flex items-center gap-2">
                 <span className={`text-xs px-3 py-1 rounded-full font-medium ${
-                  quiz.quiz.is_public 
+                  quiz.quiz.public 
                     ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200' 
                     : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
                 }`}>
-                  {quiz.quiz.is_public ? 'Công khai' : 'Riêng tư'}
+                  {quiz.quiz.public ? 'Công khai' : 'Riêng tư'}
                 </span>
               </div>
             </div>
@@ -1376,6 +1419,17 @@ const QuizDetail = () => {
         onSubmit={handleCreateQuizType}
         availableTypes={getAvailableQuizTypes()}
         isLoading={isCreatingQuizType}
+      />
+
+      {/* Edit Quiz Modal */}
+      <EditQuizModal
+        isOpen={isEditQuizModalOpen}
+        quiz={quiz}
+        onClose={() => {
+          setIsEditQuizModalOpen(false);
+        }}
+        onUpdate={handleUpdateQuiz}
+        isUpdating={isUpdatingQuiz}
       />
 
       {/* Toast */}

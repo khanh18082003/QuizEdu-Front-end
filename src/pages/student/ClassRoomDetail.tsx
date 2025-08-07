@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
+import { useSelector } from "react-redux";
 import {
   FaUsers,
   FaChevronLeft,
@@ -10,6 +11,9 @@ import {
   FaPlay,
   FaLock,
   FaCheckCircle,
+  FaBell,
+  FaDownload,
+  FaCommentDots,
 } from "react-icons/fa";
 import Button from "../../components/ui/Button";
 import SkeletonLoader from "../../components/ui/SkeletonLoader";
@@ -22,11 +26,26 @@ import {
   type ClassRoomResponse,
 } from "../../services/classroomService";
 import type { RegisterResponse } from "../../services/userService";
+import type {
+  StudentProfileResponse,
+  TeacherProfileResponse,
+} from "../../types/response";
 import type { PaginationResponse } from "../../types/response";
 import {
   joinQuizSession,
   type QuizSessionResponse,
 } from "../../services/quizSessionService";
+
+import {
+  getAllNotifications,
+  submitNotificationComment,
+  deleteComment,
+  updateComment,
+  type Notification,
+  type NotificationComment
+} from "../../services/notificationService";
+import ConfirmDeleteCommentModal from "../../components/modals/ConfirmDeleteCommentModal";
+import EditCommentModal from "../../components/modals/EditCommentModal";
 
 // Default classroom image
 const defaultClassroomImage =
@@ -196,6 +215,13 @@ const ClassRoomDetail = () => {
   const navigate = useNavigate();
   const { t } = useTranslation();
 
+  // Get user from Redux store
+  const user = useSelector(
+    (state: {
+      user: RegisterResponse | StudentProfileResponse | TeacherProfileResponse;
+    }) => state.user,
+  );
+
   // Get activeTab from URL query parameter or location.state, default to "stream"
   const searchParams = new URLSearchParams(location.search);
   const tabFromQuery = searchParams.get("tab") as TabType | null;
@@ -208,6 +234,32 @@ const ClassRoomDetail = () => {
   );
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Notification states
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [expandedNotifications, setExpandedNotifications] = useState<Record<string, boolean>>({});
+  const [newComments, setNewComments] = useState<Record<string, string>>({});
+  const [isSubmittingComment, setIsSubmittingComment] = useState<Record<string, boolean>>({});
+  const [isDeletingComment, setIsDeletingComment] = useState<Record<string, boolean>>({});
+  const [isDeleteCommentModalOpen, setIsDeleteCommentModalOpen] = useState(false);
+  const [selectedCommentForDelete, setSelectedCommentForDelete] = useState<NotificationComment | null>(null);
+  const [isEditCommentModalOpen, setIsEditCommentModalOpen] = useState(false);
+  const [selectedCommentForEdit, setSelectedCommentForEdit] = useState<{comment: NotificationComment, notificationId: string} | null>(null);
+
+  // Toast state
+  const [toast, setToast] = useState<{
+    message: string;
+    type: "success" | "error" | "info";
+    isVisible: boolean;
+  }>({
+    message: "",
+    type: "info",
+    isVisible: false,
+  });
+
+  const showToast = (message: string, type: "success" | "error" | "info") => {
+    setToast({ message, type, isVisible: true });
+  };
 
   // Access code modal state
   const [isAccessCodeModalOpen, setIsAccessCodeModalOpen] = useState(false);
@@ -334,6 +386,175 @@ const ClassRoomDetail = () => {
     setIsJoiningSession(false);
   };
 
+  // Notification handlers
+  const toggleNotificationExpanded = (notificationId: string) => {
+    setExpandedNotifications(prev => ({
+      ...prev,
+      [notificationId]: !prev[notificationId]
+    }));
+  };
+
+  const handleCommentSubmit = async (notificationId: string) => {
+    const comment = newComments[notificationId];
+    if (!comment.trim()) return;
+
+    try {
+      // Set loading state for this specific comment
+      setIsSubmittingComment(prev => ({
+        ...prev,
+        [notificationId]: true
+      }));
+
+      // Call API to submit comment with new endpoint
+      const response = await submitNotificationComment(notificationId, comment.trim());
+      
+      // Update the notification with the new comment
+      setNotifications(prev => 
+        prev.map(notification => {
+          if (notification.id === notificationId) {
+            // Convert CommentResponse to NotificationComment format
+            const newComment = {
+              id: response.data.id,
+              user: response.data.user,
+              content: response.data.content,
+              created_at: response.data.created_at
+            };
+            
+            return {
+              ...notification,
+              comments: [...(notification.comments || []), newComment]
+            };
+          }
+          return notification;
+        })
+      );
+
+      // Clear the comment input
+      setNewComments(prev => ({
+        ...prev,
+        [notificationId]: ""
+      }));
+
+      showToast("Nhận xét đã được thêm thành công!", "success");
+
+    } catch (error) {
+      console.error("Error submitting comment:", error);
+      showToast("Không thể thêm nhận xét. Vui lòng thử lại!", "error");
+    } finally {
+      setIsSubmittingComment(prev => ({
+        ...prev,
+        [notificationId]: false
+      }));
+    }
+  };
+
+  const handleCommentChange = (notificationId: string, value: string) => {
+    setNewComments(prev => ({
+      ...prev,
+      [notificationId]: value
+    }));
+  };
+
+  const handleDeleteComment = (comment: NotificationComment, notificationId: string) => {
+    // Create an extended comment object with notificationId for deletion
+    const commentWithNotificationId = {
+      ...comment,
+      notificationId: notificationId
+    };
+    setSelectedCommentForDelete(commentWithNotificationId as any);
+    setIsDeleteCommentModalOpen(true);
+  };
+
+  const confirmDeleteComment = async () => {
+    if (!selectedCommentForDelete) return;
+    
+    // Get the notificationId from the extended object
+    const notificationId = (selectedCommentForDelete as any).notificationId;
+    if (!notificationId) return;
+    
+    try {
+      // Set loading state for this specific comment
+      setIsDeletingComment(prev => ({
+        ...prev,
+        [selectedCommentForDelete.id]: true
+      }));
+
+      // Call API to delete comment
+      await deleteComment(notificationId, selectedCommentForDelete.id);
+      
+      // Update the notification by removing the deleted comment
+      setNotifications(prev => 
+        prev.map(notification => {
+          if (notification.id === notificationId) {
+            return {
+              ...notification,
+              comments: notification.comments?.filter(comment => comment.id !== selectedCommentForDelete.id) || []
+            };
+          }
+          return notification;
+        })
+      );
+
+      showToast("Nhận xét đã được xóa thành công!", "success");
+      
+      // Close modal
+      setIsDeleteCommentModalOpen(false);
+      setSelectedCommentForDelete(null);
+    } catch (error) {
+      console.error("Error deleting comment:", error);
+      showToast("Không thể xóa nhận xét. Vui lòng thử lại!", "error");
+    } finally {
+      setIsDeletingComment(prev => ({
+        ...prev,
+        [selectedCommentForDelete.id]: false
+      }));
+    }
+  };
+
+  const handleEditComment = (comment: NotificationComment, notificationId: string) => {
+    setSelectedCommentForEdit({ comment, notificationId });
+    setIsEditCommentModalOpen(true);
+  };
+
+  const confirmEditComment = async (newContent: string) => {
+    if (!selectedCommentForEdit) return;
+    
+    const { comment, notificationId } = selectedCommentForEdit;
+    
+    try {
+      // Call API to update comment
+      const response = await updateComment(notificationId, comment.id, newContent);
+      
+      // Update the notification with the updated comment
+      setNotifications(prev => 
+        prev.map(notification => {
+          if (notification.id === notificationId) {
+            return {
+              ...notification,
+              comments: notification.comments?.map(c => 
+                c.id === comment.id ? {
+                  ...c,
+                  content: response.data.content,
+                  updated_at: response.data.updated_at
+                } : c
+              ) || []
+            };
+          }
+          return notification;
+        })
+      );
+
+      // Close modal and reset state
+      setIsEditCommentModalOpen(false);
+      setSelectedCommentForEdit(null);
+      showToast("Nhận xét đã được cập nhật thành công!", "success");
+    } catch (error) {
+      console.error("Error updating comment:", error);
+      showToast("Không thể cập nhật nhận xét. Vui lòng thử lại!", "error");
+      throw error; // Re-throw to let the modal handle it
+    }
+  };
+
   // Set page title dynamically based on classroom name
   useEffect(() => {
     if (classroom) {
@@ -388,6 +609,19 @@ const ClassRoomDetail = () => {
               "Failed to fetch classroom details",
           );
         }
+
+        // Fetch notifications for this class
+        try {
+          const notificationResponse = await getAllNotifications(id);
+          // Sort notifications by created_at descending (newest first)
+          const sortedNotifications = notificationResponse.data.sort((a, b) => 
+            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+          );
+          setNotifications(sortedNotifications);
+        } catch (notificationError) {
+          console.error("Error fetching notifications:", notificationError);
+          // Don't show error for notifications as it's not critical
+        }
       } catch (error) {
         console.error("Error fetching classroom details:", error);
         setError("Failed to fetch classroom details");
@@ -403,32 +637,261 @@ const ClassRoomDetail = () => {
     navigate("/student/classrooms");
   };
 
-  // Render the stream tab (announcements/feed)
+  // Render the stream tab (announcements/feed and notifications)
   const renderStreamTab = () => {
     if (!classroom) return null;
 
     return (
-      <div className="mt-6 space-y-6">
-        {classroom.announcements.length === 0 ? (
-          <div className="rounded-lg border border-gray-200 bg-white p-8 text-center shadow-sm dark:border-gray-700 dark:bg-gray-800">
-            <FaBullhorn className="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500" />
-            <h3 className="mt-4 text-lg font-semibold text-gray-700 dark:text-gray-300">
-              {t("classroom.noAnnouncements")}
-            </h3>
-            <p className="mt-2 text-gray-600 dark:text-gray-400">
-              {t("classroom.noAnnouncementsDesc")}
-            </p>
+      <div className="mt-6 space-y-8">
+        {/* Notifications Section */}
+        <div>
+          <h3 className="mb-4 text-xl font-bold text-gray-800 dark:text-white">
+            Thông báo từ giáo viên ({notifications.length})
+          </h3>
+          
+          <div className="space-y-6">
+            {notifications.length === 0 ? (
+              <div className="rounded-lg border border-gray-200 bg-white p-6 text-center shadow-sm dark:border-gray-700 dark:bg-gray-800">
+                <FaBell className="mx-auto h-8 w-8 text-gray-400 dark:text-gray-500" />
+                <h4 className="mt-3 text-md font-medium text-gray-700 dark:text-gray-300">
+                  Chưa có thông báo nào
+                </h4>
+                <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                  Các thông báo từ giáo viên sẽ xuất hiện ở đây khi có.
+                </p>
+              </div>
+            ) : (
+              notifications.map((notification) => (
+                <div key={notification.id} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm">
+                  {/* Notification Header */}
+                  <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+                    <div className="flex items-start gap-4">
+                      <div className="flex-shrink-0">
+                        <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center">
+                          {notification.teacher.avatar ? (
+                            <img
+                              src={notification.teacher.avatar}
+                              alt={`${notification.teacher.first_name} ${notification.teacher.last_name}`}
+                              className="w-10 h-10 rounded-full object-cover"
+                            />
+                          ) : (
+                            <span className="text-white text-sm font-medium">
+                              {notification.teacher.first_name.charAt(0)}{notification.teacher.last_name.charAt(0)}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <h4 className="text-sm font-medium text-gray-900 dark:text-white">
+                            {notification.teacher.first_name} {notification.teacher.last_name}
+                          </h4>
+                          <span className="text-xs text-gray-500 dark:text-gray-400">
+                            {new Date(notification.created_at).toLocaleString("vi-VN")}
+                          </span>
+                        </div>
+                        <div 
+                          className={`text-gray-700 dark:text-gray-300 ${
+                            !expandedNotifications[notification.id] && notification.description.length > 200 
+                              ? 'line-clamp-3' 
+                              : ''
+                          }`}
+                        >
+                          {expandedNotifications[notification.id] || notification.description.length <= 200
+                            ? notification.description
+                            : `${notification.description.substring(0, 200)}...`
+                          }
+                        </div>
+                        
+                        {notification.description.length > 200 && (
+                          <button
+                            onClick={() => toggleNotificationExpanded(notification.id)}
+                            className="text-blue-600 hover:text-blue-700 text-sm font-medium mt-2"
+                          >
+                            {expandedNotifications[notification.id] ? 'Thu gọn' : 'Xem thêm'}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* File attachments */}
+                    {notification.xpath_files && notification.xpath_files.length > 0 && (
+                      <div className="mt-4">
+                        <div className="flex items-center gap-2 mb-3">
+                          <FaDownload className="w-4 h-4 text-gray-500" />
+                          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                            File đính kèm ({notification.xpath_files.length})
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          {notification.xpath_files.map((fileUrl: string, index: number) => {
+                            // Extract filename from URL
+                            const fileName = fileUrl.split('/').pop() || `File ${index + 1}`;
+                            const fileExtension = fileName.split('.').pop()?.toUpperCase() || 'FILE';
+                            
+                            return (
+                              <div key={index} className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
+                                <div className="flex-shrink-0">
+                                  <svg className="w-8 h-8 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                  </svg>
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                                    {fileName}
+                                  </p>
+                                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                                    {fileExtension}
+                                  </p>
+                                </div>
+                                <button 
+                                  onClick={() => window.open(fileUrl, '_blank')}
+                                  className="px-3 py-1 text-xs font-medium text-blue-600 hover:text-blue-700 border border-blue-300 hover:border-blue-400 rounded"
+                                >
+                                  Tải xuống
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Comments Section */}
+                  <div className="p-6">
+                    <div className="flex items-center gap-2 mb-4">
+                      <FaCommentDots className="w-4 h-4 text-gray-500" />
+                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                        Nhận xét từ lớp học ({notification.comments?.length || 0})
+                      </span>
+                    </div>
+
+                    {/* Existing Comments */}
+                    {notification.comments && notification.comments.length > 0 && (
+                      <div className="space-y-4 mb-4">
+                        {notification.comments.map((comment, index: number) => (
+                          <div key={comment.id || index} className="flex items-start gap-3">
+                            <div className="flex-shrink-0">
+                              <div className="w-8 h-8 bg-gray-400 rounded-full flex items-center justify-center">
+                                {comment.user.avatar ? (
+                                  <img
+                                    src={comment.user.avatar}
+                                    alt={`${comment.user.first_name} ${comment.user.last_name}`}
+                                    className="w-8 h-8 rounded-full object-cover"
+                                  />
+                                ) : (
+                                  <span className="text-white text-xs font-medium">
+                                    {comment.user.first_name.charAt(0)}{comment.user.last_name.charAt(0)}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            <div className="flex-1 bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
+                              <div className="flex items-center justify-between mb-1">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-sm font-medium text-gray-900 dark:text-white">
+                                    {comment.user.first_name} {comment.user.last_name}
+                                  </span>
+                                  <span className="text-xs text-gray-500 dark:text-gray-400">
+                                    {new Date(comment.created_at).toLocaleString("vi-VN")}
+                                    {comment.updated_at && comment.updated_at !== comment.created_at && (
+                                      <span className="ml-1 text-xs text-blue-600 dark:text-blue-400">(đã chỉnh sửa)</span>
+                                    )}
+                                  </span>
+                                  {comment.user.role === 'TEACHER' && (
+                                    <span className="text-xs bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 px-2 py-1 rounded">
+                                      Giáo viên
+                                    </span>
+                                  )}
+                                </div>
+                                {/* Edit and Delete buttons - only show for comment owner */}
+                                {user?.id === comment.user.id && (
+                                  <div className="flex gap-1">
+                                    <button
+                                      onClick={() => handleEditComment(comment, notification.id)}
+                                      className="text-blue-500 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-900/20 p-1.5 rounded transition-colors duration-150"
+                                      title="Chỉnh sửa nhận xét"
+                                    >
+                                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                      </svg>
+                                    </button>
+                                    <button
+                                      onClick={() => handleDeleteComment(comment, notification.id)}
+                                      disabled={isDeletingComment[comment.id]}
+                                      className="text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 p-1.5 rounded disabled:opacity-50 transition-colors duration-150"
+                                      title="Xóa nhận xét"
+                                    >
+                                      {isDeletingComment[comment.id] ? (
+                                        <div className="animate-spin w-4 h-4 border-2 border-red-500 border-t-transparent rounded-full"></div>
+                                      ) : (
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                        </svg>
+                                      )}
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                              <p className="text-sm text-gray-700 dark:text-gray-300">
+                                {comment.content}
+                              </p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Add Comment */}
+                    <div className="flex items-start gap-3">
+                      <div className="flex-shrink-0">
+                        <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
+                          {user?.avatar ? (
+                            <img
+                              src={user.avatar}
+                              alt={`${user.first_name} ${user.last_name}`}
+                              className="w-8 h-8 rounded-full object-cover"
+                            />
+                          ) : (
+                            <span className="text-white text-xs font-medium">
+                              {user?.first_name?.charAt(0) || 'S'}{user?.last_name?.charAt(0) || ''}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex-1">
+                        <textarea
+                          value={newComments[notification.id] || ""}
+                          onChange={(e) => handleCommentChange(notification.id, e.target.value)}
+                          placeholder="Thêm nhận xét..."
+                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white resize-none"
+                          rows={3}
+                        />
+                        <div className="flex justify-end mt-2">
+                          <button
+                            onClick={() => handleCommentSubmit(notification.id)}
+                            disabled={!newComments[notification.id]?.trim() || isSubmittingComment[notification.id]}
+                            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed rounded-lg flex items-center"
+                          >
+                            {isSubmittingComment[notification.id] ? (
+                              <>
+                                <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full mr-2"></div>
+                                Đang gửi...
+                              </>
+                            ) : (
+                              'Gửi nhận xét'
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
-        ) : (
-          classroom.announcements.map((announcement) => (
-            <div
-              key={announcement.id}
-              className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800"
-            >
-              {/* ...existing announcement content... */}
-            </div>
-          ))
-        )}
+        </div>
       </div>
     );
   };
@@ -696,23 +1159,25 @@ const ClassRoomDetail = () => {
       </button>
 
       {/* Classroom header */}
-      <div
-        className="relative mb-6 h-48 w-full rounded-lg bg-cover bg-center"
-        style={{ backgroundImage: `url(${classroom.imageUrl})` }}
-      >
-        <div className="absolute inset-0 flex items-end bg-gradient-to-t from-black/80 via-black/40 to-transparent p-6">
-          <div>
-            <h1 className="text-3xl font-bold text-white">{classroom.name}</h1>
-            <p className="mt-2 text-lg text-gray-200">
-              {classroom.description}
-            </p>
-            <div className="mt-1 flex items-center gap-4 text-sm text-gray-300">
-              <span>Class Code: {classroom.class_code}</span>
-              <span>Created: {formatDate(new Date(classroom.created_at))}</span>
+      {classroom && (
+        <div
+          className="relative mb-6 h-48 w-full rounded-lg bg-cover bg-center"
+          style={{ backgroundImage: `url(${classroom.imageUrl})` }}
+        >
+          <div className="absolute inset-0 flex items-end bg-gradient-to-t from-black/80 via-black/40 to-transparent p-6">
+            <div>
+              <h1 className="text-3xl font-bold text-white">{classroom.name}</h1>
+              <p className="mt-2 text-lg text-gray-200">
+                {classroom.description}
+              </p>
+              <div className="mt-1 flex items-center gap-4 text-sm text-gray-300">
+                <span>Class Code: {classroom.class_code}</span>
+                <span>Created: {formatDate(new Date(classroom.created_at))}</span>
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Tabs navigation */}
       <div className="border-b border-gray-200 dark:border-gray-700">
@@ -760,6 +1225,14 @@ const ClassRoomDetail = () => {
         {activeTab === "people" && renderPeopleTab()}
       </div>
 
+      {/* Toast */}
+      <Toast
+        message={toast.message}
+        type={toast.type}
+        isVisible={toast.isVisible}
+        onClose={() => setToast({ ...toast, isVisible: false })}
+      />
+
       {/* Access Code Modal */}
       <AccessCodeModal
         isOpen={isAccessCodeModalOpen}
@@ -770,6 +1243,27 @@ const ClassRoomDetail = () => {
         isLoading={isJoiningSession}
       />
 
+
+      {/* Confirm Delete Comment Modal */}
+      <ConfirmDeleteCommentModal
+        isOpen={isDeleteCommentModalOpen}
+        onClose={() => {
+          setIsDeleteCommentModalOpen(false);
+          setSelectedCommentForDelete(null);
+        }}
+        onConfirm={confirmDeleteComment}
+        comment={selectedCommentForDelete}
+      />
+
+      {/* Edit Comment Modal */}
+      <EditCommentModal
+        isOpen={isEditCommentModalOpen}
+        onClose={() => {
+          setIsEditCommentModalOpen(false);
+          setSelectedCommentForEdit(null);
+        }}
+        onConfirm={confirmEditComment}
+        comment={selectedCommentForEdit?.comment || null}
       {/* Toast */}
       <Toast
         isVisible={toastVisible}
