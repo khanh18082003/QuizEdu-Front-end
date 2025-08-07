@@ -32,11 +32,15 @@ import {
   startQuizSession,
   endQuizSession,
   getStudentsInQuizSession,
-  type QuizSessionResponse,
 } from "../../services/quizSessionService";
 
+interface QuizSession {
+  id: string;
+  access_code: string;
+  status: string;
+}
 interface WaitingRoomState {
-  session: QuizSessionResponse;
+  session: QuizSession;
   quiz: ClassroomQuiz;
   students: RegisterResponse[];
   classId: string;
@@ -103,9 +107,7 @@ const QuizWaitingRoom = () => {
     const getStudentsInLobby = async () => {
       // Fetch students in lobby from the session
       try {
-        const response = await getStudentsInQuizSession(
-          state.session.quiz_session_id,
-        );
+        const response = await getStudentsInQuizSession(state.session.id);
         if (response.code === "M000") {
           setStudentsInLobby(response.data);
         }
@@ -114,7 +116,7 @@ const QuizWaitingRoom = () => {
       }
     };
     getStudentsInLobby();
-  }, [state.session.quiz_session_id]);
+  }, [state.session.id]);
 
   // Handle quiz submission WebSocket message
   const handleQuizSubmissionMessage = useCallback(
@@ -182,12 +184,7 @@ const QuizWaitingRoom = () => {
 
   // Setup WebSocket connections
   useEffect(() => {
-    if (state?.session?.quiz_session_id) {
-      console.log(
-        "📡 Setting up unified WebSocket for session:",
-        state.session.quiz_session_id,
-      );
-
+    if (state?.session.id) {
       // Create unified callback structure
       const callbacks: SessionSocketCallbacks = {
         onJoinSession: handleWebSocketMessage,
@@ -196,7 +193,7 @@ const QuizWaitingRoom = () => {
       };
 
       // Connect to unified session socket
-      connectSessionSocket(state.session.quiz_session_id, callbacks);
+      connectSessionSocket(state.session.id, callbacks);
 
       return () => {
         console.log("🔌 Cleaning up unified WebSocket connection");
@@ -204,11 +201,7 @@ const QuizWaitingRoom = () => {
         disconnectSessionSocket();
       };
     }
-  }, [
-    state?.session?.quiz_session_id,
-    handleWebSocketMessage,
-    handleQuizSubmissionMessage,
-  ]);
+  }, [state.session.id, handleWebSocketMessage, handleQuizSubmissionMessage]);
 
   // Update current time every second
   useEffect(() => {
@@ -233,7 +226,7 @@ const QuizWaitingRoom = () => {
       setIsStartingQuiz(true);
       showToast("Đang bắt đầu quiz...", "info");
 
-      await startQuizSession(state.session.quiz_session_id);
+      await startQuizSession(state.session.id);
 
       // Set quiz as started to enable submission tracking
       setIsQuizStarted(true);
@@ -272,7 +265,7 @@ const QuizWaitingRoom = () => {
       setIsEndingSession(true);
       showToast("Đang kết thúc session...", "info");
 
-      await endQuizSession(state.session.quiz_session_id);
+      await endQuizSession(state.session.id);
 
       showToast("✅ Phiên thi đã được kết thúc!", "success");
 
