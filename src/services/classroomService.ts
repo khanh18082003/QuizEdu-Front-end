@@ -6,7 +6,6 @@ import type {
 import api from "../utils/axiosCustom";
 import type {
   QuizSessionDetailResponse,
-  QuizSessionResponse,
 } from "./quizSessionService";
 import type { RegisterResponse } from "./userService";
 
@@ -28,6 +27,13 @@ export interface CreateClassroomRequest {
   name: string;
   description: string;
   is_active: boolean;
+}
+
+// Interface for updating a classroom
+export interface UpdateClassroomRequest {
+  name: string;
+  description: string;
+  isActive: boolean;
 }
 
 // Interface for classroom list response
@@ -109,10 +115,10 @@ export const createClassroom = async (
  */
 export const updateClassroom = async (
   id: string,
-  classroomData: Partial<CreateClassroomRequest>,
-): Promise<SuccessApiResponse<Classroom>> => {
+  classroomData: UpdateClassroomRequest,
+): Promise<SuccessApiResponse<ClassRoomResponse>> => {
   try {
-    const response = await api.put<SuccessApiResponse<Classroom>>(
+    const response = await api.put<SuccessApiResponse<ClassRoomResponse>>(
       `/classrooms/${id}`,
       classroomData,
     );

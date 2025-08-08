@@ -1,15 +1,19 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { FaSearch, FaPlus, FaUserAlt, FaClock } from "react-icons/fa";
+import { FaSearch, FaPlus, FaUserAlt, FaClock, FaEdit, FaTrash } from "react-icons/fa";
 import Button from "../../components/ui/Button";
 import CreateClassModal from "../../components/ui/CreateClassModal";
+import EditClassModal from "../../components/ui/EditClassModal";
 import SkeletonLoader from "../../components/ui/SkeletonLoader";
 import { usePageTitle, PAGE_TITLES } from "../../utils/title";
 import {
   getClassrooms,
   createClassroom,
+  updateClassroom,
+  deleteClassroom,
   type CreateClassroomRequest,
+  type UpdateClassroomRequest,
   type ClassRoomResponse,
 } from "../../services/classroomService";
 import Toast from "../../components/ui/Toast";
@@ -23,7 +27,12 @@ const Class = () => {
   const [classrooms, setClassrooms] = useState<ClassRoomResponse[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [selectedClassroom, setSelectedClassroom] = useState<ClassRoomResponse | null>(null);
   const [pagination, setPagination] = useState({
     page: 1,
     pageSize: 9,
@@ -116,6 +125,62 @@ const Class = () => {
     } finally {
       setIsCreating(false);
     }
+  };
+
+  const handleUpdateClass = async (formData: UpdateClassroomRequest) => {
+    if (!selectedClassroom) return;
+    
+    try {
+      setIsUpdating(true);
+      await updateClassroom(selectedClassroom.id, formData);
+      await fetchClassrooms(pagination.page, pagination.pageSize);
+      showToast("Cập nhật lớp học thành công!", "success");
+      setIsEditModalOpen(false);
+      setSelectedClassroom(null);
+    } catch (error) {
+      console.error("Error updating classroom:", error);
+      showToast("Không thể cập nhật lớp học. Vui lòng thử lại!", "error");
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const handleEditClass = (classroom: ClassRoomResponse) => {
+    setSelectedClassroom(classroom);
+    setIsEditModalOpen(true);
+  };
+
+  const handleCloseEditModal = () => {
+    setIsEditModalOpen(false);
+    setSelectedClassroom(null);
+  };
+
+  const handleDeleteClass = (classroom: ClassRoomResponse) => {
+    setSelectedClassroom(classroom);
+    setShowDeleteModal(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!selectedClassroom) return;
+
+    try {
+      setIsDeleting(true);
+      await deleteClassroom(selectedClassroom.id);
+      await fetchClassrooms(pagination.page, pagination.pageSize);
+      showToast("Xóa lớp học thành công!", "success");
+      setShowDeleteModal(false);
+      setSelectedClassroom(null);
+    } catch (error) {
+      console.error("Error deleting classroom:", error);
+      showToast("Không thể xóa lớp học. Vui lòng thử lại!", "error");
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handleCancelDelete = () => {
+    setShowDeleteModal(false);
+    setSelectedClassroom(null);
   };
 
   const handleClassClick = (classroom: ClassRoomResponse) => {
@@ -264,6 +329,18 @@ const Class = () => {
 
                   {/* Card Content */}
                   <div className="p-4 pt-8">
+                    {/* Description */}
+                    <div className="mb-4">
+                      <p className="text-sm text-gray-600 dark:text-gray-400 overflow-hidden" 
+                         style={{
+                           display: '-webkit-box',
+                           WebkitLineClamp: 2,
+                           WebkitBoxOrient: 'vertical',
+                         }}>
+                        {classroom.description || "Không có mô tả"}
+                      </p>
+                    </div>
+
                     <div className="mb-4 flex flex-col gap-2">
                       <div className="flex items-center gap-2">
                         <FaUserAlt className="h-3.5 w-3.5 text-gray-500 dark:text-gray-400" />
@@ -280,40 +357,43 @@ const Class = () => {
                     </div>
 
                     {/* Action Buttons */}
-                    <div className="mt-4 flex justify-between">
+                    <div className="mt-4 grid grid-cols-3 gap-2">
                       <Button
                         variant="outline"
                         size="sm"
-                        className="flex items-center gap-1 border-red-500 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"
+                        className="flex items-center justify-center gap-1.5 border-blue-500 text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all duration-200"
                         onClick={(e) => {
                           e.stopPropagation();
-                          // Handle edit/delete action
+                          handleEditClass(classroom);
                         }}
                       >
-                        <svg
-                          className="h-3 w-3"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
-                          />
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                          />
-                        </svg>
-                        <span>Edit</span>
+                        <FaEdit className="h-3 w-3" />
+                        <span className="text-xs font-medium">Edit</span>
                       </Button>
 
-                      <Button variant="primary" size="sm">
-                        View
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="flex items-center justify-center gap-1.5 border-red-500 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all duration-200"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteClass(classroom);
+                        }}
+                      >
+                        <FaTrash className="h-3 w-3" />
+                        <span className="text-xs font-medium">Delete</span>
+                      </Button>
+
+                      <Button 
+                        variant="primary" 
+                        size="sm"
+                        className="flex items-center justify-center gap-1.5 transition-all duration-200"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleClassClick(classroom);
+                        }}
+                      >
+                        <span className="text-xs font-medium">View</span>
                       </Button>
                     </div>
                   </div>
@@ -331,6 +411,75 @@ const Class = () => {
         onSubmit={handleCreateClass}
         isLoading={isCreating}
       />
+
+      {/* Edit Class Modal */}
+      <EditClassModal
+        isOpen={isEditModalOpen}
+        onClose={handleCloseEditModal}
+        onSubmit={handleUpdateClass}
+        isLoading={isUpdating}
+        classroom={selectedClassroom}
+      />
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-md border border-gray-200 dark:border-gray-700 animate-in fade-in zoom-in duration-200">
+            {/* Header */}
+            <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-red-100 dark:bg-red-900/30 rounded-full">
+                  <FaTrash className="h-5 w-5 text-red-600 dark:text-red-400" />
+                </div>
+                <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+                  Xác nhận xóa lớp học
+                </h2>
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="p-6">
+              <p className="text-gray-600 dark:text-gray-300 mb-4">
+                Bạn có chắc chắn muốn xóa lớp học <strong className="text-gray-900 dark:text-white">"{selectedClassroom?.name}"</strong> không?
+              </p>
+              <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3">
+                <p className="text-red-700 dark:text-red-300 text-sm font-medium flex items-center gap-2">
+                  <svg className="h-4 w-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                  </svg>
+                  Cảnh báo: Hành động này không thể hoàn tác!
+                </p>
+                <p className="text-red-600 dark:text-red-400 text-sm mt-1 ml-6">
+                  Tất cả dữ liệu liên quan đến lớp học này sẽ bị xóa vĩnh viễn.
+                </p>
+              </div>
+            </div>
+
+            {/* Buttons */}
+            <div className="flex gap-3 p-6 pt-0">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleCancelDelete}
+                disabled={isDeleting}
+                className="flex-1 border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+              >
+                Hủy bỏ
+              </Button>
+              <Button
+                type="button"
+                variant="primary"
+                onClick={handleConfirmDelete}
+                disabled={isDeleting}
+                className="flex-1 bg-red-600 hover:bg-red-700 border-red-600 hover:border-red-700 focus:ring-red-500"
+                isLoading={isDeleting}
+              >
+                {isDeleting ? "Đang xóa..." : "Xóa lớp học"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Toast Notification */}
       <Toast
