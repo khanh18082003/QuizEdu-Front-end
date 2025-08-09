@@ -24,6 +24,7 @@ import { Oauth2Authentication } from "./pages/auth/Oauth2Authentication";
 import ClassRoomList from "./pages/student/ClassRoomList";
 import ClassRoomDetail from "./pages/student/ClassRoomDetail";
 import QuizTaking from "./pages/student/QuizTaking";
+import QuizPractice from "./pages/student/QuizPractice";
 import Settings from "./pages/student/Settings";
 import TeacherSettings from "./pages/teacher/Settings";
 import ClassDetail from "./pages/teacher/ClassDetail";
@@ -68,6 +69,7 @@ function App() {
             path="quiz-session/:quizSessionId/take"
             element={<QuizTaking />}
           />
+          <Route path="quiz-practice" element={<QuizPractice />} />
           <Route path="profile" element={<StudentProfile />} />
           <Route path="settings" element={<Settings />} />
         </Route>

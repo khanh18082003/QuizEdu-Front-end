@@ -15,6 +15,9 @@ import {
   FaBell,
   FaDownload,
   FaCommentDots,
+  FaGamepad,
+  FaQuestionCircle,
+  FaCheck,
 } from "react-icons/fa";
 import Button from "../../components/ui/Button";
 import SkeletonLoader from "../../components/ui/SkeletonLoader";
@@ -27,6 +30,12 @@ import {
   getQuizSessionsInClassroom,
   type ClassRoomResponse,
 } from "../../services/classroomService";
+import {
+  getAllQuizIsPublicInClassroom,
+  getPracticeQuiz,
+  type PublicQuiz,
+  type PracticeQuizRequest,
+} from "../../services/quizService";
 import type { RegisterResponse } from "../../services/userService";
 import type {
   StudentProfileResponse,
@@ -36,7 +45,7 @@ import type { PaginationResponse } from "../../types/response";
 import {
   joinQuizSession,
   getQuizSessionHistory,
-  type QuizSessionResponse,
+  type QuizSessionDetailResponse,
   type QuizSessionHistoryResponse,
 } from "../../services/quizSessionService";
 
@@ -46,7 +55,7 @@ import {
   deleteComment,
   updateComment,
   type Notification,
-  type NotificationComment
+  type NotificationComment,
 } from "../../services/notificationService";
 import ConfirmDeleteCommentModal from "../../components/modals/ConfirmDeleteCommentModal";
 import EditCommentModal from "../../components/modals/EditCommentModal";
@@ -60,7 +69,7 @@ type QuizSessionStatus = "LOBBY" | "ACTIVE" | "COMPLETED" | "PAUSED";
 
 // Helper function to determine quiz session status
 const getQuizSessionStatus = (
-  session: QuizSessionResponse,
+  session: QuizSessionDetailResponse,
 ): QuizSessionStatus => {
   // Use the status from the session directly since it's now provided by backend
   return session.status as QuizSessionStatus;
@@ -150,7 +159,7 @@ interface ProcessedClassroomData {
 const transformClassroomData = (
   classroomInfo: ClassRoomResponse,
   students: PaginationResponse<RegisterResponse>,
-  quizSessions?: PaginationResponse<QuizSessionResponse>,
+  quizSessions?: PaginationResponse<QuizSessionDetailResponse>,
 ): ProcessedClassroomData => {
   // Debug: Log API data
   console.log("Classroom info:", classroomInfo);
@@ -211,7 +220,7 @@ const transformClassroomData = (
   };
 };
 
-type TabType = "stream" | "classwork" | "people";
+type TabType = "stream" | "classwork" | "people" | "practice";
 
 const ClassRoomDetail = () => {
   const { id } = useParams<{ id: string }>();
@@ -241,14 +250,25 @@ const ClassRoomDetail = () => {
 
   // Notification states
   const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [expandedNotifications, setExpandedNotifications] = useState<Record<string, boolean>>({});
+  const [expandedNotifications, setExpandedNotifications] = useState<
+    Record<string, boolean>
+  >({});
   const [newComments, setNewComments] = useState<Record<string, string>>({});
-  const [isSubmittingComment, setIsSubmittingComment] = useState<Record<string, boolean>>({});
-  const [isDeletingComment, setIsDeletingComment] = useState<Record<string, boolean>>({});
-  const [isDeleteCommentModalOpen, setIsDeleteCommentModalOpen] = useState(false);
-  const [selectedCommentForDelete, setSelectedCommentForDelete] = useState<NotificationComment | null>(null);
+  const [isSubmittingComment, setIsSubmittingComment] = useState<
+    Record<string, boolean>
+  >({});
+  const [isDeletingComment, setIsDeletingComment] = useState<
+    Record<string, boolean>
+  >({});
+  const [isDeleteCommentModalOpen, setIsDeleteCommentModalOpen] =
+    useState(false);
+  const [selectedCommentForDelete, setSelectedCommentForDelete] =
+    useState<NotificationComment | null>(null);
   const [isEditCommentModalOpen, setIsEditCommentModalOpen] = useState(false);
-  const [selectedCommentForEdit, setSelectedCommentForEdit] = useState<{comment: NotificationComment, notificationId: string} | null>(null);
+  const [selectedCommentForEdit, setSelectedCommentForEdit] = useState<{
+    comment: NotificationComment;
+    notificationId: string;
+  } | null>(null);
 
   // Toast state
   const [toast, setToast] = useState<{
@@ -268,21 +288,25 @@ const ClassRoomDetail = () => {
   >(null);
   const [isJoiningSession, setIsJoiningSession] = useState(false);
 
-
   // Quiz sessions pagination state
   const [quizSessionsData, setQuizSessionsData] = useState<
-    QuizSessionResponse[]
+    QuizSessionDetailResponse[]
   >([]);
   const [quizSessionsPage, setQuizSessionsPage] = useState(1);
   const [quizSessionsHasMore, setQuizSessionsHasMore] = useState(true);
   const [isLoadingMoreSessions, setIsLoadingMoreSessions] = useState(false);
 
-  // Toast state
-  const [toastVisible, setToastVisible] = useState(false);
-  const [toastMessage, setToastMessage] = useState("");
-  const [toastType, setToastType] = useState<"success" | "error" | "info">(
-    "info",
-  );
+  // Public quizzes state for practice tab
+  const [publicQuizzes, setPublicQuizzes] = useState<PublicQuiz[]>([]);
+  const [publicQuizzesPage, setPublicQuizzesPage] = useState(1);
+  const [publicQuizzesHasMore, setPublicQuizzesHasMore] = useState(true);
+  const [isLoadingPublicQuizzes, setIsLoadingPublicQuizzes] = useState(false);
+
+  // Practice tab state
+  const [selectedQuizIds, setSelectedQuizIds] = useState<string[]>([]);
+  const [quantityMultipleChoice, setQuantityMultipleChoice] = useState(5);
+  const [quantityMatching, setQuantityMatching] = useState(3);
+  const [isCreatingPractice, setIsCreatingPractice] = useState(false);
 
   // Quiz result modal state
   const [isQuizReviewModalOpen, setIsQuizReviewModalOpen] = useState(false);
@@ -295,9 +319,95 @@ const ClassRoomDetail = () => {
     message: string,
     type: "success" | "error" | "info" = "info",
   ) => {
-    setToastMessage(message);
-    setToastType(type);
-    setToastVisible(true);
+    setToast({ message, type, isVisible: true });
+  };
+
+  // Calculate available question counts from selected quizzes
+  const selectedQuizzes = publicQuizzes.filter((quiz) =>
+    selectedQuizIds.includes(quiz.id),
+  );
+  const totalMultipleChoiceAvailable = selectedQuizzes.reduce(
+    (sum, quiz) => sum + quiz.number_of_multiple_choice_questions,
+    0,
+  );
+  const totalMatchingAvailable = selectedQuizzes.reduce(
+    (sum, quiz) => sum + quiz.number_of_matching_questions,
+    0,
+  );
+
+  // Auto-adjust quantities when selection changes
+  useEffect(() => {
+    if (quantityMultipleChoice > totalMultipleChoiceAvailable) {
+      setQuantityMultipleChoice(
+        Math.min(quantityMultipleChoice, totalMultipleChoiceAvailable),
+      );
+    }
+    if (quantityMatching > totalMatchingAvailable) {
+      setQuantityMatching(Math.min(quantityMatching, totalMatchingAvailable));
+    }
+  }, [
+    selectedQuizIds,
+    totalMultipleChoiceAvailable,
+    totalMatchingAvailable,
+    quantityMultipleChoice,
+    quantityMatching,
+  ]);
+
+  // Handle quiz selection
+  const handleQuizSelection = (quizId: string) => {
+    setSelectedQuizIds((prev) =>
+      prev.includes(quizId)
+        ? prev.filter((id) => id !== quizId)
+        : [...prev, quizId],
+    );
+  };
+
+  // Handle creating practice quiz
+  const handleCreatePractice = async () => {
+    if (selectedQuizIds.length === 0) {
+      showToast("Please select at least one quiz", "error");
+      return;
+    }
+
+    if (quantityMultipleChoice === 0 && quantityMatching === 0) {
+      showToast("Please select at least one question", "error");
+      return;
+    }
+
+    try {
+      setIsCreatingPractice(true);
+
+      const request: PracticeQuizRequest = {
+        quiz_ids: selectedQuizIds,
+        quantity_multiple_choice: quantityMultipleChoice,
+        quantity_matching: quantityMatching,
+      };
+
+      const response = await getPracticeQuiz(request);
+
+      if (response.code === "M000" && response.data) {
+        // Navigate to practice page instead of opening modal
+        navigate("/student/quiz-practice", {
+          state: {
+            practiceData: response.data,
+            classroomId: id,
+            classroomName: classroom?.name || "Classroom",
+          },
+        });
+
+        // Reset selections
+        setSelectedQuizIds([]);
+        setQuantityMultipleChoice(5);
+        setQuantityMatching(3);
+      } else {
+        showToast("Failed to create practice quiz", "error");
+      }
+    } catch (error) {
+      console.error("Error creating practice quiz:", error);
+      showToast("Failed to create practice quiz", "error");
+    } finally {
+      setIsCreatingPractice(false);
+    }
   };
 
   // Load more quiz sessions function
@@ -366,6 +476,38 @@ const ClassRoomDetail = () => {
     quizSessionsData,
     classroom,
   ]);
+
+  // Load more public quizzes function
+  const loadMorePublicQuizzes = useCallback(async () => {
+    if (!id || isLoadingPublicQuizzes || !publicQuizzesHasMore) return;
+
+    try {
+      setIsLoadingPublicQuizzes(true);
+      const nextPage = publicQuizzesPage + 1;
+
+      const publicQuizzesResponse = await getAllQuizIsPublicInClassroom(
+        id,
+        nextPage,
+        10,
+      );
+
+      if (publicQuizzesResponse.code === "M000" && publicQuizzesResponse.data) {
+        const newQuizzes = publicQuizzesResponse.data.data;
+
+        // Update public quizzes data
+        setPublicQuizzes((prev) => [...prev, ...newQuizzes]);
+        setPublicQuizzesPage(nextPage);
+
+        // Check if there are more pages
+        setPublicQuizzesHasMore(nextPage < publicQuizzesResponse.data.pages);
+      }
+    } catch (error) {
+      console.error("Error loading more public quizzes:", error);
+      showToast("Failed to load more quizzes", "error");
+    } finally {
+      setIsLoadingPublicQuizzes(false);
+    }
+  }, [id, isLoadingPublicQuizzes, publicQuizzesHasMore, publicQuizzesPage]);
 
   // Update URL when tab changes
   useEffect(() => {
@@ -578,9 +720,9 @@ const ClassRoomDetail = () => {
 
   // Notification handlers
   const toggleNotificationExpanded = (notificationId: string) => {
-    setExpandedNotifications(prev => ({
+    setExpandedNotifications((prev) => ({
       ...prev,
-      [notificationId]: !prev[notificationId]
+      [notificationId]: !prev[notificationId],
     }));
   };
 
@@ -590,66 +732,71 @@ const ClassRoomDetail = () => {
 
     try {
       // Set loading state for this specific comment
-      setIsSubmittingComment(prev => ({
+      setIsSubmittingComment((prev) => ({
         ...prev,
-        [notificationId]: true
+        [notificationId]: true,
       }));
 
       // Call API to submit comment with new endpoint
-      const response = await submitNotificationComment(notificationId, comment.trim());
-      
+      const response = await submitNotificationComment(
+        notificationId,
+        comment.trim(),
+      );
+
       // Update the notification with the new comment
-      setNotifications(prev => 
-        prev.map(notification => {
+      setNotifications((prev) =>
+        prev.map((notification) => {
           if (notification.id === notificationId) {
             // Convert CommentResponse to NotificationComment format
             const newComment = {
               id: response.data.id,
               user: response.data.user,
               content: response.data.content,
-              created_at: response.data.created_at
+              created_at: response.data.created_at,
             };
-            
+
             return {
               ...notification,
-              comments: [...(notification.comments || []), newComment]
+              comments: [...(notification.comments || []), newComment],
             };
           }
           return notification;
-        })
+        }),
       );
 
       // Clear the comment input
-      setNewComments(prev => ({
+      setNewComments((prev) => ({
         ...prev,
-        [notificationId]: ""
+        [notificationId]: "",
       }));
 
       showToast("Nhận xét đã được thêm thành công!", "success");
-
     } catch (error) {
       console.error("Error submitting comment:", error);
       showToast("Không thể thêm nhận xét. Vui lòng thử lại!", "error");
     } finally {
-      setIsSubmittingComment(prev => ({
+      setIsSubmittingComment((prev) => ({
         ...prev,
-        [notificationId]: false
+        [notificationId]: false,
       }));
     }
   };
 
   const handleCommentChange = (notificationId: string, value: string) => {
-    setNewComments(prev => ({
+    setNewComments((prev) => ({
       ...prev,
-      [notificationId]: value
+      [notificationId]: value,
     }));
   };
 
-  const handleDeleteComment = (comment: NotificationComment, notificationId: string) => {
+  const handleDeleteComment = (
+    comment: NotificationComment,
+    notificationId: string,
+  ) => {
     // Create an extended comment object with notificationId for deletion
     const commentWithNotificationId = {
       ...comment,
-      notificationId: notificationId
+      notificationId: notificationId,
     };
     setSelectedCommentForDelete(commentWithNotificationId as any);
     setIsDeleteCommentModalOpen(true);
@@ -657,36 +804,39 @@ const ClassRoomDetail = () => {
 
   const confirmDeleteComment = async () => {
     if (!selectedCommentForDelete) return;
-    
+
     // Get the notificationId from the extended object
     const notificationId = (selectedCommentForDelete as any).notificationId;
     if (!notificationId) return;
-    
+
     try {
       // Set loading state for this specific comment
-      setIsDeletingComment(prev => ({
+      setIsDeletingComment((prev) => ({
         ...prev,
-        [selectedCommentForDelete.id]: true
+        [selectedCommentForDelete.id]: true,
       }));
 
       // Call API to delete comment
       await deleteComment(notificationId, selectedCommentForDelete.id);
-      
+
       // Update the notification by removing the deleted comment
-      setNotifications(prev => 
-        prev.map(notification => {
+      setNotifications((prev) =>
+        prev.map((notification) => {
           if (notification.id === notificationId) {
             return {
               ...notification,
-              comments: notification.comments?.filter(comment => comment.id !== selectedCommentForDelete.id) || []
+              comments:
+                notification.comments?.filter(
+                  (comment) => comment.id !== selectedCommentForDelete.id,
+                ) || [],
             };
           }
           return notification;
-        })
+        }),
       );
 
       showToast("Nhận xét đã được xóa thành công!", "success");
-      
+
       // Close modal
       setIsDeleteCommentModalOpen(false);
       setSelectedCommentForDelete(null);
@@ -694,44 +844,54 @@ const ClassRoomDetail = () => {
       console.error("Error deleting comment:", error);
       showToast("Không thể xóa nhận xét. Vui lòng thử lại!", "error");
     } finally {
-      setIsDeletingComment(prev => ({
+      setIsDeletingComment((prev) => ({
         ...prev,
-        [selectedCommentForDelete.id]: false
+        [selectedCommentForDelete.id]: false,
       }));
     }
   };
 
-  const handleEditComment = (comment: NotificationComment, notificationId: string) => {
+  const handleEditComment = (
+    comment: NotificationComment,
+    notificationId: string,
+  ) => {
     setSelectedCommentForEdit({ comment, notificationId });
     setIsEditCommentModalOpen(true);
   };
 
   const confirmEditComment = async (newContent: string) => {
     if (!selectedCommentForEdit) return;
-    
+
     const { comment, notificationId } = selectedCommentForEdit;
-    
+
     try {
       // Call API to update comment
-      const response = await updateComment(notificationId, comment.id, newContent);
-      
+      const response = await updateComment(
+        notificationId,
+        comment.id,
+        newContent,
+      );
+
       // Update the notification with the updated comment
-      setNotifications(prev => 
-        prev.map(notification => {
+      setNotifications((prev) =>
+        prev.map((notification) => {
           if (notification.id === notificationId) {
             return {
               ...notification,
-              comments: notification.comments?.map(c => 
-                c.id === comment.id ? {
-                  ...c,
-                  content: response.data.content,
-                  updated_at: response.data.updated_at
-                } : c
-              ) || []
+              comments:
+                notification.comments?.map((c) =>
+                  c.id === comment.id
+                    ? {
+                        ...c,
+                        content: response.data.content,
+                        updated_at: response.data.updated_at,
+                      }
+                    : c,
+                ) || [],
             };
           }
           return notification;
-        })
+        }),
       );
 
       // Close modal and reset state
@@ -766,12 +926,17 @@ const ClassRoomDetail = () => {
         }
 
         // Call APIs separately
-        const [classroomInfoResponse, studentsResponse, quizSessionsResponse] =
-          await Promise.all([
-            getClassroomInfo(id),
-            getClassroomStudents(id),
-            getQuizSessionsInClassroom(id),
-          ]);
+        const [
+          classroomInfoResponse,
+          studentsResponse,
+          quizSessionsResponse,
+          publicQuizzesResponse,
+        ] = await Promise.all([
+          getClassroomInfo(id),
+          getClassroomStudents(id),
+          getQuizSessionsInClassroom(id),
+          getAllQuizIsPublicInClassroom(id, 1, 10),
+        ]);
 
         // Check if all API calls were successful
         if (
@@ -780,7 +945,9 @@ const ClassRoomDetail = () => {
           studentsResponse.code === "M000" &&
           studentsResponse.data &&
           quizSessionsResponse.code === "M000" &&
-          quizSessionsResponse.data
+          quizSessionsResponse.data &&
+          publicQuizzesResponse.code === "M000" &&
+          publicQuizzesResponse.data
         ) {
           const transformedData = transformClassroomData(
             classroomInfoResponse.data,
@@ -793,20 +960,18 @@ const ClassRoomDetail = () => {
           setQuizSessionsData(quizSessionsResponse.data.data);
           setQuizSessionsPage(1);
           setQuizSessionsHasMore(1 < quizSessionsResponse.data.pages);
-
-          // Debug: Log transformed data
-          console.log("Transformed classroom data:", transformedData);
-          console.log("Quiz sessions pagination info:", {
-            currentPage: quizSessionsResponse.data.page,
-            totalPages: quizSessionsResponse.data.pages,
-            hasMore: 1 < quizSessionsResponse.data.pages,
-            totalSessions: quizSessionsResponse.data.total,
-          });
+          console.log("quiz sessions:", quizSessionsData);
+          // Initialize public quizzes pagination state
+          setPublicQuizzes(publicQuizzesResponse.data.data);
+          setPublicQuizzesPage(1);
+          setPublicQuizzesHasMore(1 < publicQuizzesResponse.data.pages);
+          console.log("public quizzes:", publicQuizzes);
         } else {
           setError(
             classroomInfoResponse.message ||
               studentsResponse.message ||
               quizSessionsResponse.message ||
+              publicQuizzesResponse.message ||
               "Failed to fetch classroom details",
           );
         }
@@ -815,8 +980,10 @@ const ClassRoomDetail = () => {
         try {
           const notificationResponse = await getAllNotifications(id);
           // Sort notifications by created_at descending (newest first)
-          const sortedNotifications = notificationResponse.data.sort((a, b) => 
-            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+          const sortedNotifications = notificationResponse.data.sort(
+            (a, b) =>
+              new Date(b.created_at).getTime() -
+              new Date(a.created_at).getTime(),
           );
           setNotifications(sortedNotifications);
         } catch (notificationError) {
@@ -906,12 +1073,12 @@ const ClassRoomDetail = () => {
           <h3 className="mb-4 text-xl font-bold text-gray-800 dark:text-white">
             Thông báo từ giáo viên ({notifications.length})
           </h3>
-          
+
           <div className="space-y-6">
             {notifications.length === 0 ? (
               <div className="rounded-lg border border-gray-200 bg-white p-6 text-center shadow-sm dark:border-gray-700 dark:bg-gray-800">
                 <FaBell className="mx-auto h-8 w-8 text-gray-400 dark:text-gray-500" />
-                <h4 className="mt-3 text-md font-medium text-gray-700 dark:text-gray-300">
+                <h4 className="text-md mt-3 font-medium text-gray-700 dark:text-gray-300">
                   Chưa có thông báo nào
                 </h4>
                 <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
@@ -920,200 +1087,282 @@ const ClassRoomDetail = () => {
               </div>
             ) : (
               notifications.map((notification) => (
-                <div key={notification.id} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm">
+                <div
+                  key={notification.id}
+                  className="rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800"
+                >
                   {/* Notification Header */}
-                  <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+                  <div className="border-b border-gray-200 p-6 dark:border-gray-700">
                     <div className="flex items-start gap-4">
                       <div className="flex-shrink-0">
-                        <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-500">
                           {notification.teacher.avatar ? (
                             <img
                               src={notification.teacher.avatar}
                               alt={`${notification.teacher.first_name} ${notification.teacher.last_name}`}
-                              className="w-10 h-10 rounded-full object-cover"
+                              className="h-10 w-10 rounded-full object-cover"
                             />
                           ) : (
-                            <span className="text-white text-sm font-medium">
-                              {notification.teacher.first_name.charAt(0)}{notification.teacher.last_name.charAt(0)}
+                            <span className="text-sm font-medium text-white">
+                              {notification.teacher.first_name.charAt(0)}
+                              {notification.teacher.last_name.charAt(0)}
                             </span>
                           )}
                         </div>
                       </div>
                       <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
+                        <div className="mb-1 flex items-center gap-2">
                           <h4 className="text-sm font-medium text-gray-900 dark:text-white">
-                            {notification.teacher.first_name} {notification.teacher.last_name}
+                            {notification.teacher.first_name}{" "}
+                            {notification.teacher.last_name}
                           </h4>
                           <span className="text-xs text-gray-500 dark:text-gray-400">
-                            {new Date(notification.created_at).toLocaleString("vi-VN")}
+                            {new Date(notification.created_at).toLocaleString(
+                              "vi-VN",
+                            )}
                           </span>
                         </div>
-                        <div 
+                        <div
                           className={`text-gray-700 dark:text-gray-300 ${
-                            !expandedNotifications[notification.id] && notification.description.length > 200 
-                              ? 'line-clamp-3' 
-                              : ''
+                            !expandedNotifications[notification.id] &&
+                            notification.description.length > 200
+                              ? "line-clamp-3"
+                              : ""
                           }`}
                         >
-                          {expandedNotifications[notification.id] || notification.description.length <= 200
+                          {expandedNotifications[notification.id] ||
+                          notification.description.length <= 200
                             ? notification.description
-                            : `${notification.description.substring(0, 200)}...`
-                          }
+                            : `${notification.description.substring(0, 200)}...`}
                         </div>
-                        
+
                         {notification.description.length > 200 && (
                           <button
-                            onClick={() => toggleNotificationExpanded(notification.id)}
-                            className="text-blue-600 hover:text-blue-700 text-sm font-medium mt-2"
+                            onClick={() =>
+                              toggleNotificationExpanded(notification.id)
+                            }
+                            className="mt-2 text-sm font-medium text-blue-600 hover:text-blue-700"
                           >
-                            {expandedNotifications[notification.id] ? 'Thu gọn' : 'Xem thêm'}
+                            {expandedNotifications[notification.id]
+                              ? "Thu gọn"
+                              : "Xem thêm"}
                           </button>
                         )}
                       </div>
                     </div>
 
                     {/* File attachments */}
-                    {notification.xpath_files && notification.xpath_files.length > 0 && (
-                      <div className="mt-4">
-                        <div className="flex items-center gap-2 mb-3">
-                          <FaDownload className="w-4 h-4 text-gray-500" />
-                          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                            File đính kèm ({notification.xpath_files.length})
-                          </span>
+                    {notification.xpath_files &&
+                      notification.xpath_files.length > 0 && (
+                        <div className="mt-4">
+                          <div className="mb-3 flex items-center gap-2">
+                            <FaDownload className="h-4 w-4 text-gray-500" />
+                            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                              File đính kèm ({notification.xpath_files.length})
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                            {notification.xpath_files.map(
+                              (fileUrl: string, index: number) => {
+                                // Extract filename from URL
+                                const fileName =
+                                  fileUrl.split("/").pop() ||
+                                  `File ${index + 1}`;
+                                const fileExtension =
+                                  fileName.split(".").pop()?.toUpperCase() ||
+                                  "FILE";
+
+                                return (
+                                  <div
+                                    key={index}
+                                    className="flex items-center gap-3 rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-gray-600 dark:bg-gray-700"
+                                  >
+                                    <div className="flex-shrink-0">
+                                      <svg
+                                        className="h-8 w-8 text-blue-500"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        viewBox="0 0 24 24"
+                                      >
+                                        <path
+                                          strokeLinecap="round"
+                                          strokeLinejoin="round"
+                                          strokeWidth={2}
+                                          d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                                        />
+                                      </svg>
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                      <p className="truncate text-sm font-medium text-gray-900 dark:text-white">
+                                        {fileName}
+                                      </p>
+                                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                                        {fileExtension}
+                                      </p>
+                                    </div>
+                                    <button
+                                      onClick={() =>
+                                        window.open(fileUrl, "_blank")
+                                      }
+                                      className="rounded border border-blue-300 px-3 py-1 text-xs font-medium text-blue-600 hover:border-blue-400 hover:text-blue-700"
+                                    >
+                                      Tải xuống
+                                    </button>
+                                  </div>
+                                );
+                              },
+                            )}
+                          </div>
                         </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                          {notification.xpath_files.map((fileUrl: string, index: number) => {
-                            // Extract filename from URL
-                            const fileName = fileUrl.split('/').pop() || `File ${index + 1}`;
-                            const fileExtension = fileName.split('.').pop()?.toUpperCase() || 'FILE';
-                            
-                            return (
-                              <div key={index} className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
-                                <div className="flex-shrink-0">
-                                  <svg className="w-8 h-8 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                  </svg>
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                                    {fileName}
-                                  </p>
-                                  <p className="text-xs text-gray-500 dark:text-gray-400">
-                                    {fileExtension}
-                                  </p>
-                                </div>
-                                <button 
-                                  onClick={() => window.open(fileUrl, '_blank')}
-                                  className="px-3 py-1 text-xs font-medium text-blue-600 hover:text-blue-700 border border-blue-300 hover:border-blue-400 rounded"
-                                >
-                                  Tải xuống
-                                </button>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
+                      )}
                   </div>
 
                   {/* Comments Section */}
                   <div className="p-6">
-                    <div className="flex items-center gap-2 mb-4">
-                      <FaCommentDots className="w-4 h-4 text-gray-500" />
+                    <div className="mb-4 flex items-center gap-2">
+                      <FaCommentDots className="h-4 w-4 text-gray-500" />
                       <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                        Nhận xét từ lớp học ({notification.comments?.length || 0})
+                        Nhận xét từ lớp học (
+                        {notification.comments?.length || 0})
                       </span>
                     </div>
 
                     {/* Existing Comments */}
-                    {notification.comments && notification.comments.length > 0 && (
-                      <div className="space-y-4 mb-4">
-                        {notification.comments.map((comment, index: number) => (
-                          <div key={comment.id || index} className="flex items-start gap-3">
-                            <div className="flex-shrink-0">
-                              <div className="w-8 h-8 bg-gray-400 rounded-full flex items-center justify-center">
-                                {comment.user.avatar ? (
-                                  <img
-                                    src={comment.user.avatar}
-                                    alt={`${comment.user.first_name} ${comment.user.last_name}`}
-                                    className="w-8 h-8 rounded-full object-cover"
-                                  />
-                                ) : (
-                                  <span className="text-white text-xs font-medium">
-                                    {comment.user.first_name.charAt(0)}{comment.user.last_name.charAt(0)}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                            <div className="flex-1 bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
-                              <div className="flex items-center justify-between mb-1">
-                                <div className="flex items-center gap-2">
-                                  <span className="text-sm font-medium text-gray-900 dark:text-white">
-                                    {comment.user.first_name} {comment.user.last_name}
-                                  </span>
-                                  <span className="text-xs text-gray-500 dark:text-gray-400">
-                                    {new Date(comment.created_at).toLocaleString("vi-VN")}
-                                    {comment.updated_at && comment.updated_at !== comment.created_at && (
-                                      <span className="ml-1 text-xs text-blue-600 dark:text-blue-400">(đã chỉnh sửa)</span>
+                    {notification.comments &&
+                      notification.comments.length > 0 && (
+                        <div className="mb-4 space-y-4">
+                          {notification.comments.map(
+                            (comment, index: number) => (
+                              <div
+                                key={comment.id || index}
+                                className="flex items-start gap-3"
+                              >
+                                <div className="flex-shrink-0">
+                                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-400">
+                                    {comment.user.avatar ? (
+                                      <img
+                                        src={comment.user.avatar}
+                                        alt={`${comment.user.first_name} ${comment.user.last_name}`}
+                                        className="h-8 w-8 rounded-full object-cover"
+                                      />
+                                    ) : (
+                                      <span className="text-xs font-medium text-white">
+                                        {comment.user.first_name.charAt(0)}
+                                        {comment.user.last_name.charAt(0)}
+                                      </span>
                                     )}
-                                  </span>
-                                  {comment.user.role === 'TEACHER' && (
-                                    <span className="text-xs bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 px-2 py-1 rounded">
-                                      Giáo viên
-                                    </span>
-                                  )}
-                                </div>
-                                {/* Edit and Delete buttons - only show for comment owner */}
-                                {user?.id === comment.user.id && (
-                                  <div className="flex gap-1">
-                                    <button
-                                      onClick={() => handleEditComment(comment, notification.id)}
-                                      className="text-blue-500 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-900/20 p-1.5 rounded transition-colors duration-150"
-                                      title="Chỉnh sửa nhận xét"
-                                    >
-                                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                      </svg>
-                                    </button>
-                                    <button
-                                      onClick={() => handleDeleteComment(comment, notification.id)}
-                                      disabled={isDeletingComment[comment.id]}
-                                      className="text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 p-1.5 rounded disabled:opacity-50 transition-colors duration-150"
-                                      title="Xóa nhận xét"
-                                    >
-                                      {isDeletingComment[comment.id] ? (
-                                        <div className="animate-spin w-4 h-4 border-2 border-red-500 border-t-transparent rounded-full"></div>
-                                      ) : (
-                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                        </svg>
-                                      )}
-                                    </button>
                                   </div>
-                                )}
+                                </div>
+                                <div className="flex-1 rounded-lg bg-gray-50 p-3 dark:bg-gray-700">
+                                  <div className="mb-1 flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-sm font-medium text-gray-900 dark:text-white">
+                                        {comment.user.first_name}{" "}
+                                        {comment.user.last_name}
+                                      </span>
+                                      <span className="text-xs text-gray-500 dark:text-gray-400">
+                                        {new Date(
+                                          comment.created_at,
+                                        ).toLocaleString("vi-VN")}
+                                        {comment.updated_at &&
+                                          comment.updated_at !==
+                                            comment.created_at && (
+                                            <span className="ml-1 text-xs text-blue-600 dark:text-blue-400">
+                                              (đã chỉnh sửa)
+                                            </span>
+                                          )}
+                                      </span>
+                                      {comment.user.role === "TEACHER" && (
+                                        <span className="rounded bg-blue-100 px-2 py-1 text-xs text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                                          Giáo viên
+                                        </span>
+                                      )}
+                                    </div>
+                                    {/* Edit and Delete buttons - only show for comment owner */}
+                                    {user?.id === comment.user.id && (
+                                      <div className="flex gap-1">
+                                        <button
+                                          onClick={() =>
+                                            handleEditComment(
+                                              comment,
+                                              notification.id,
+                                            )
+                                          }
+                                          className="rounded p-1.5 text-blue-500 transition-colors duration-150 hover:bg-blue-50 hover:text-blue-700 dark:hover:bg-blue-900/20"
+                                          title="Chỉnh sửa nhận xét"
+                                        >
+                                          <svg
+                                            className="h-4 w-4"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            viewBox="0 0 24 24"
+                                          >
+                                            <path
+                                              strokeLinecap="round"
+                                              strokeLinejoin="round"
+                                              strokeWidth={2}
+                                              d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                                            />
+                                          </svg>
+                                        </button>
+                                        <button
+                                          onClick={() =>
+                                            handleDeleteComment(
+                                              comment,
+                                              notification.id,
+                                            )
+                                          }
+                                          disabled={
+                                            isDeletingComment[comment.id]
+                                          }
+                                          className="rounded p-1.5 text-red-500 transition-colors duration-150 hover:bg-red-50 hover:text-red-700 disabled:opacity-50 dark:hover:bg-red-900/20"
+                                          title="Xóa nhận xét"
+                                        >
+                                          {isDeletingComment[comment.id] ? (
+                                            <div className="h-4 w-4 animate-spin rounded-full border-2 border-red-500 border-t-transparent"></div>
+                                          ) : (
+                                            <svg
+                                              className="h-4 w-4"
+                                              fill="none"
+                                              stroke="currentColor"
+                                              viewBox="0 0 24 24"
+                                            >
+                                              <path
+                                                strokeLinecap="round"
+                                                strokeLinejoin="round"
+                                                strokeWidth={2}
+                                                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                                              />
+                                            </svg>
+                                          )}
+                                        </button>
+                                      </div>
+                                    )}
+                                  </div>
+                                  <p className="text-sm text-gray-700 dark:text-gray-300">
+                                    {comment.content}
+                                  </p>
+                                </div>
                               </div>
-                              <p className="text-sm text-gray-700 dark:text-gray-300">
-                                {comment.content}
-                              </p>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                            ),
+                          )}
+                        </div>
+                      )}
 
                     {/* Add Comment */}
                     <div className="flex items-start gap-3">
                       <div className="flex-shrink-0">
-                        <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
+                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-green-500">
                           {user?.avatar ? (
                             <img
                               src={user.avatar}
                               alt={`${user.first_name} ${user.last_name}`}
-                              className="w-8 h-8 rounded-full object-cover"
+                              className="h-8 w-8 rounded-full object-cover"
                             />
                           ) : (
-                            <span className="text-white text-xs font-medium">
-                              {user?.first_name?.charAt(0) || 'S'}{user?.last_name?.charAt(0) || ''}
+                            <span className="text-xs font-medium text-white">
+                              {user?.first_name?.charAt(0) || "S"}
+                              {user?.last_name?.charAt(0) || ""}
                             </span>
                           )}
                         </div>
@@ -1121,24 +1370,29 @@ const ClassRoomDetail = () => {
                       <div className="flex-1">
                         <textarea
                           value={newComments[notification.id] || ""}
-                          onChange={(e) => handleCommentChange(notification.id, e.target.value)}
+                          onChange={(e) =>
+                            handleCommentChange(notification.id, e.target.value)
+                          }
                           placeholder="Thêm nhận xét..."
-                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white resize-none"
+                          className="w-full resize-none rounded-lg border border-gray-300 px-3 py-2 focus:border-transparent focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
                           rows={3}
                         />
-                        <div className="flex justify-end mt-2">
+                        <div className="mt-2 flex justify-end">
                           <button
                             onClick={() => handleCommentSubmit(notification.id)}
-                            disabled={!newComments[notification.id]?.trim() || isSubmittingComment[notification.id]}
-                            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed rounded-lg flex items-center"
+                            disabled={
+                              !newComments[notification.id]?.trim() ||
+                              isSubmittingComment[notification.id]
+                            }
+                            className="flex items-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-400"
                           >
                             {isSubmittingComment[notification.id] ? (
                               <>
-                                <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full mr-2"></div>
+                                <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
                                 Đang gửi...
                               </>
                             ) : (
-                              'Gửi nhận xét'
+                              "Gửi nhận xét"
                             )}
                           </button>
                         </div>
@@ -1438,6 +1692,302 @@ const ClassRoomDetail = () => {
     );
   };
 
+  // Render the practice tab
+  const renderPracticeTab = () => {
+    if (!classroom) return null;
+
+    return (
+      <div className="mt-6 space-y-6">
+        {/* Header */}
+        <div>
+          <h3 className="mb-4 text-xl font-bold text-gray-800 dark:text-white">
+            Practice Quizzes ({publicQuizzes.length})
+          </h3>
+          <p className="text-gray-600 dark:text-gray-400">
+            Select quizzes and customize the number of questions for your
+            practice session.
+          </p>
+        </div>
+
+        {/* Public Quizzes List */}
+        {isLoadingPublicQuizzes ? (
+          // Loading skeleton
+          <div className="space-y-4">
+            {[...Array(3)].map((_, index) => (
+              <div
+                key={`quiz-skeleton-${index}`}
+                className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800"
+              >
+                <div className="flex items-start gap-4">
+                  <div className="h-12 w-12 flex-shrink-0 animate-pulse rounded-lg bg-gray-200 dark:bg-gray-700" />
+                  <div className="flex-1">
+                    <div className="mb-2 h-6 w-3/4 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+                    <div className="mb-2 h-4 w-full animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+                    <div className="h-4 w-1/2 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+                  </div>
+                  <div className="h-6 w-6 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : publicQuizzes.length === 0 ? (
+          // Empty state
+          <div className="rounded-lg border border-gray-200 bg-white p-8 text-center shadow-sm dark:border-gray-700 dark:bg-gray-800">
+            <FaGamepad className="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500" />
+            <h3 className="mt-4 text-lg font-semibold text-gray-700 dark:text-gray-300">
+              No practice quizzes available
+            </h3>
+            <p className="mt-2 text-gray-600 dark:text-gray-400">
+              There are no public quizzes available for practice in this
+              classroom yet.
+            </p>
+          </div>
+        ) : (
+          // Quiz list with selection
+          <div className="space-y-4">
+            {publicQuizzes.map((quiz) => (
+              <div
+                key={quiz.id}
+                className={`cursor-pointer rounded-lg border p-4 transition-all ${
+                  selectedQuizIds.includes(quiz.id)
+                    ? "border-blue-500 bg-blue-50 dark:border-blue-400 dark:bg-blue-900/20"
+                    : "border-gray-200 bg-white hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:hover:bg-gray-700"
+                }`}
+                onClick={() => handleQuizSelection(quiz.id)}
+              >
+                <div className="flex items-start gap-4">
+                  {/* Selection Checkbox */}
+                  <div className="mt-1 flex h-6 w-6 flex-shrink-0 items-center justify-center">
+                    <div
+                      className={`flex h-5 w-5 items-center justify-center rounded border-2 ${
+                        selectedQuizIds.includes(quiz.id)
+                          ? "border-blue-500 bg-blue-500"
+                          : "border-gray-300 dark:border-gray-600"
+                      }`}
+                    >
+                      {selectedQuizIds.includes(quiz.id) && (
+                        <FaCheck className="h-3 w-3 text-white" />
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Quiz Icon */}
+                  <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-lg bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-300">
+                    <FaGamepad className="h-6 w-6" />
+                  </div>
+
+                  {/* Quiz Details */}
+                  <div className="min-w-0 flex-1">
+                    <h5 className="text-lg font-semibold text-gray-800 dark:text-white">
+                      {quiz.name}
+                    </h5>
+                    {quiz.description && (
+                      <p className="mt-1 line-clamp-2 text-sm text-gray-600 dark:text-gray-400">
+                        {quiz.description}
+                      </p>
+                    )}
+                    <div className="mt-3 flex items-center gap-6 text-sm">
+                      <span className="flex items-center gap-1 text-green-600 dark:text-green-400">
+                        <FaQuestionCircle className="h-4 w-4" />
+                        {quiz.number_of_multiple_choice_questions} Multiple
+                        Choice
+                      </span>
+                      <span className="flex items-center gap-1 text-purple-600 dark:text-purple-400">
+                        <FaQuestionCircle className="h-4 w-4" />
+                        {quiz.number_of_matching_questions} Matching
+                      </span>
+                      <span
+                        className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium ${
+                          quiz.is_active
+                            ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300"
+                            : "bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300"
+                        }`}
+                      >
+                        {quiz.is_active ? "Active" : "Inactive"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Selected Quizzes Summary & Question Configuration */}
+        {selectedQuizIds.length > 0 && (
+          <div className="rounded-lg border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-800">
+            <h4 className="mb-4 text-lg font-semibold text-gray-800 dark:text-white">
+              Configure Practice Session ({selectedQuizIds.length} quiz
+              {selectedQuizIds.length > 1 ? "es" : ""} selected)
+            </h4>
+
+            {/* Available Questions Summary */}
+            <div className="mb-6 rounded-lg bg-blue-50 p-4 dark:bg-blue-900/20">
+              <h5 className="mb-2 text-sm font-medium text-blue-800 dark:text-blue-200">
+                Total Available Questions:
+              </h5>
+              <div className="flex items-center gap-6 text-sm">
+                <span className="text-green-700 dark:text-green-300">
+                  <strong>{totalMultipleChoiceAvailable}</strong> Multiple
+                  Choice questions
+                </span>
+                <span className="text-purple-700 dark:text-purple-300">
+                  <strong>{totalMatchingAvailable}</strong> Matching questions
+                </span>
+              </div>
+            </div>
+
+            <div className="space-y-6">
+              {/* Multiple Choice Quantity */}
+              {totalMultipleChoiceAvailable > 0 && (
+                <div>
+                  <label className="mb-3 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Multiple Choice Questions:{" "}
+                    <span className="font-semibold text-blue-600 dark:text-blue-400">
+                      {quantityMultipleChoice}
+                    </span>
+                  </label>
+                  <div className="flex items-center gap-4">
+                    <input
+                      type="range"
+                      min={0}
+                      max={totalMultipleChoiceAvailable}
+                      value={quantityMultipleChoice}
+                      onChange={(e) =>
+                        setQuantityMultipleChoice(Number(e.target.value))
+                      }
+                      className="slider h-2 flex-1 cursor-pointer appearance-none rounded-lg bg-gray-200 dark:bg-gray-700"
+                      style={{
+                        background: `linear-gradient(to right, #3B82F6 0%, #3B82F6 ${(quantityMultipleChoice / totalMultipleChoiceAvailable) * 100}%, #E5E7EB ${(quantityMultipleChoice / totalMultipleChoiceAvailable) * 100}%, #E5E7EB 100%)`,
+                      }}
+                    />
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        min={0}
+                        max={totalMultipleChoiceAvailable}
+                        value={quantityMultipleChoice}
+                        onChange={(e) =>
+                          setQuantityMultipleChoice(
+                            Math.min(
+                              Number(e.target.value),
+                              totalMultipleChoiceAvailable,
+                            ),
+                          )
+                        }
+                        className="w-20 rounded border border-gray-300 px-3 py-2 text-center text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                      />
+                      <span className="text-sm text-gray-500 dark:text-gray-400">
+                        / {totalMultipleChoiceAvailable}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Matching Quantity */}
+              {totalMatchingAvailable > 0 && (
+                <div>
+                  <label className="mb-3 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Matching Questions:{" "}
+                    <span className="font-semibold text-purple-600 dark:text-purple-400">
+                      {quantityMatching}
+                    </span>
+                  </label>
+                  <div className="flex items-center gap-4">
+                    <input
+                      type="range"
+                      min={0}
+                      max={totalMatchingAvailable}
+                      value={quantityMatching}
+                      onChange={(e) =>
+                        setQuantityMatching(Number(e.target.value))
+                      }
+                      className="slider h-2 flex-1 cursor-pointer appearance-none rounded-lg bg-gray-200 dark:bg-gray-700"
+                      style={{
+                        background: `linear-gradient(to right, #7C3AED 0%, #7C3AED ${(quantityMatching / totalMatchingAvailable) * 100}%, #E5E7EB ${(quantityMatching / totalMatchingAvailable) * 100}%, #E5E7EB 100%)`,
+                      }}
+                    />
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        min={0}
+                        max={totalMatchingAvailable}
+                        value={quantityMatching}
+                        onChange={(e) =>
+                          setQuantityMatching(
+                            Math.min(
+                              Number(e.target.value),
+                              totalMatchingAvailable,
+                            ),
+                          )
+                        }
+                        className="w-20 rounded border border-gray-300 px-3 py-2 text-center text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                      />
+                      <span className="text-sm text-gray-500 dark:text-gray-400">
+                        / {totalMatchingAvailable}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Practice Summary & Start Button */}
+              <div className="flex items-center justify-between rounded-lg bg-gradient-to-r from-blue-50 to-purple-50 p-4 dark:from-blue-900/20 dark:to-purple-900/20">
+                <div>
+                  <p className="text-sm font-medium text-gray-800 dark:text-gray-200">
+                    Practice Session Summary:
+                  </p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    <span className="font-semibold text-green-600 dark:text-green-400">
+                      {quantityMultipleChoice}
+                    </span>{" "}
+                    Multiple Choice +
+                    <span className="font-semibold text-purple-600 dark:text-purple-400">
+                      {" "}
+                      {quantityMatching}
+                    </span>{" "}
+                    Matching =
+                    <span className="font-semibold text-blue-600 dark:text-blue-400">
+                      {" "}
+                      {quantityMultipleChoice + quantityMatching}
+                    </span>{" "}
+                    total questions
+                  </p>
+                </div>
+                <Button
+                  variant="primary"
+                  onClick={handleCreatePractice}
+                  disabled={
+                    isCreatingPractice ||
+                    (quantityMultipleChoice === 0 && quantityMatching === 0)
+                  }
+                  className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
+                >
+                  <FaPlay className="h-4 w-4" />
+                  {isCreatingPractice ? "Creating..." : "Start Practice"}
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Load More Button */}
+        {publicQuizzesHasMore && !isLoadingPublicQuizzes && (
+          <div className="flex justify-center pt-4">
+            <Button
+              variant="outline"
+              onClick={loadMorePublicQuizzes}
+              className="flex items-center gap-2"
+            >
+              <span>Load More Quizzes</span>
+            </Button>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   if (isLoading) {
     return (
       <div className="mx-auto max-w-7xl px-4 py-8">
@@ -1500,13 +2050,17 @@ const ClassRoomDetail = () => {
         >
           <div className="absolute inset-0 flex items-end bg-gradient-to-t from-black/80 via-black/40 to-transparent p-6">
             <div>
-              <h1 className="text-3xl font-bold text-white">{classroom.name}</h1>
+              <h1 className="text-3xl font-bold text-white">
+                {classroom.name}
+              </h1>
               <p className="mt-2 text-lg text-gray-200">
                 {classroom.description}
               </p>
               <div className="mt-1 flex items-center gap-4 text-sm text-gray-300">
                 <span>Class Code: {classroom.class_code}</span>
-                <span>Created: {formatDate(new Date(classroom.created_at))}</span>
+                <span>
+                  Created: {formatDate(new Date(classroom.created_at))}
+                </span>
               </div>
             </div>
           </div>
@@ -1549,6 +2103,17 @@ const ClassRoomDetail = () => {
             <FaUsers className="h-4 w-4" />
             <span>{t("classroom.tabs.people")}</span>
           </button>
+          <button
+            onClick={() => setActiveTab("practice")}
+            className={`flex items-center gap-2 border-b-2 px-1 py-4 text-sm font-medium ${
+              activeTab === "practice"
+                ? "border-blue-500 text-blue-600 dark:border-blue-400 dark:text-blue-400"
+                : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400 dark:hover:border-gray-600 dark:hover:text-gray-200"
+            }`}
+          >
+            <FaGamepad className="h-4 w-4" />
+            <span>Practice</span>
+          </button>
         </nav>
       </div>
 
@@ -1557,6 +2122,7 @@ const ClassRoomDetail = () => {
         {activeTab === "stream" && renderStreamTab()}
         {activeTab === "classwork" && renderClassworkTab()}
         {activeTab === "people" && renderPeopleTab()}
+        {activeTab === "practice" && renderPracticeTab()}
       </div>
 
       {/* Toast */}

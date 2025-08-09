@@ -19,6 +19,7 @@ export default {
     notFound: "Page Not Found",
     quizWaitingRoom: "Quiz Waiting Room",
     quizTaking: "Quiz Taking",
+    quizPractice: "Quiz Practice",
   },
 
   // Common UI Elements

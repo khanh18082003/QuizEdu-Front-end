@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import {
@@ -30,6 +30,13 @@ const ClassRoomList = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isJoinDialogOpen, setIsJoinDialogOpen] = useState(false);
   const [classCode, setClassCode] = useState("");
+  // Infinite scroll states
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 9;
+  const [hasMore, setHasMore] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
+
   const [unenrollDialog, setUnenrollDialog] = useState<{
     isOpen: boolean;
     classId: string | null;
@@ -38,11 +45,6 @@ const ClassRoomList = () => {
     isOpen: false,
     classId: null,
     className: "",
-  });
-
-  const [pageable] = useState({
-    page: 1,
-    pageSize: 9,
   });
 
   const [toast, setToast] = useState({
@@ -80,19 +82,62 @@ const ClassRoomList = () => {
   useEffect(() => {
     const fetchClassrooms = async () => {
       try {
-        setIsLoading(true);
-        const response = await getClassrooms(pageable.page, pageable.pageSize);
-        setClassrooms(response.data.data);
+        if (page === 1) {
+          setIsLoading(true);
+        } else {
+          setIsLoadingMore(true);
+        }
+        const response = await getClassrooms(page, PAGE_SIZE);
+        const newData: Array<ClassRoomResponse> = response?.data?.data ?? [];
+
+        setClassrooms((prev) => {
+          if (page === 1) return newData;
+          const existingIds = new Set(prev.map((c) => c.id));
+          const merged = [
+            ...prev,
+            ...newData.filter((c) => !existingIds.has(c.id)),
+          ];
+          return merged;
+        });
+
+        setHasMore(newData.length >= PAGE_SIZE);
       } catch (error) {
         console.error("Error fetching classrooms:", error);
         showToast("Failed to show classrooms", "error");
       } finally {
-        setIsLoading(false);
+        if (page === 1) {
+          setIsLoading(false);
+        } else {
+          setIsLoadingMore(false);
+        }
       }
     };
 
     fetchClassrooms();
-  }, [pageable.page, pageable.pageSize]);
+  }, [page]);
+
+  // IntersectionObserver to load more when reaching the bottom
+  useEffect(() => {
+    if (searchQuery) return; // Disable infinite scroll while searching (client-side filter)
+    const el = loadMoreRef.current;
+    if (!el) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const first = entries[0];
+        if (first.isIntersecting && hasMore && !isLoading && !isLoadingMore) {
+          setPage((p) => p + 1);
+        }
+      },
+      { root: null, rootMargin: "200px", threshold: 0.1 },
+    );
+
+    observer.observe(el);
+    return () => {
+      observer.unobserve(el);
+      observer.disconnect();
+    };
+  }, [hasMore, isLoading, isLoadingMore, searchQuery]);
 
   // Filter classrooms based on search query
   const filteredClassrooms = searchQuery
@@ -126,9 +171,12 @@ const ClassRoomList = () => {
         setIsJoinDialogOpen(false);
         showToast("Join classroom successfully", "success");
 
-        // Refresh the classroom list to include the new classroom
-        const response = await getClassrooms(pageable.page, pageable.pageSize);
-        setClassrooms(response.data.data);
+        // Refresh the classroom list (reset to first page)
+        const response = await getClassrooms(1, PAGE_SIZE);
+        const newData: Array<ClassRoomResponse> = response?.data?.data ?? [];
+        setClassrooms(newData);
+        setPage(1);
+        setHasMore(newData.length >= PAGE_SIZE);
       } else {
         console.error("Failed to join classroom:", data.message);
       }
@@ -357,6 +405,67 @@ const ClassRoomList = () => {
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+
+          {/* Load more sentinel and bottom loader */}
+          {!searchQuery && (
+            <div className="mt-6 flex flex-col items-center">
+              {isLoadingMore && (
+                <div className="grid w-full gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                  {[1, 2, 3].map((item) => (
+                    <div
+                      key={`loading-more-${item}`}
+                      className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-md dark:border-gray-700 dark:bg-gray-800"
+                    >
+                      <SkeletonLoader
+                        height="120px"
+                        className="w-full"
+                        animation="pulse"
+                      />
+                      <div className="p-4 pt-8">
+                        <SkeletonLoader
+                          height="24px"
+                          width="70%"
+                          className="mb-3"
+                          animation="pulse"
+                        />
+                        <div className="mb-4 flex flex-col gap-2">
+                          <SkeletonLoader
+                            height="16px"
+                            width="50%"
+                            animation="pulse"
+                          />
+                          <SkeletonLoader
+                            height="16px"
+                            width="60%"
+                            animation="pulse"
+                          />
+                          <SkeletonLoader
+                            height="16px"
+                            width="40%"
+                            animation="pulse"
+                          />
+                        </div>
+                        <div className="flex justify-between">
+                          <SkeletonLoader
+                            height="32px"
+                            width="30%"
+                            animation="pulse"
+                          />
+                          <SkeletonLoader
+                            height="32px"
+                            width="25%"
+                            animation="pulse"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {/* Sentinel */}
+              {hasMore && <div ref={loadMoreRef} className="h-1 w-full" />}
             </div>
           )}
         </>

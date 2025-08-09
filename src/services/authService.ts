@@ -13,11 +13,6 @@ interface LoginRequest {
   device_token?: string; // Optional, can be used to specify device token for push notifications
 }
 
-// Interface for logout request
-interface LogoutRequest {
-  role: string;
-}
-
 export const loginUser = async (
   authenticationRequest: LoginRequest,
 ): Promise<SuccessApiResponse<TokenResponse>> => {
@@ -41,14 +36,9 @@ export const loginUser = async (
  * @param logoutRequest Request containing user role
  * @returns Promise with logout response
  */
-export const logoutUser = async (
-  logoutRequest: LogoutRequest,
-): Promise<SuccessApiResponse<void>> => {
+export const logoutUser = async (): Promise<SuccessApiResponse<void>> => {
   try {
-    const response = await api.post<SuccessApiResponse<void>>(
-      "/auth/logout",
-      logoutRequest,
-    );
+    const response = await api.post<SuccessApiResponse<void>>("/auth/logout");
     return response.data;
   } catch (error) {
     console.error("Logout failed:", error);

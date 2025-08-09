@@ -201,7 +201,7 @@ const TeacherLayout = () => {
   const handleLogout = async () => {
     try {
       // Call the logout API with the user role
-      await logoutUser({ role: "TEACHER" });
+      await logoutUser();
 
       // Clear authentication credentials (removes token from localStorage)
       clearAuthCredentials();
@@ -233,7 +233,7 @@ const TeacherLayout = () => {
 
       {/* Sidebar */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 flex flex-col border-r border-gray-100/40 bg-white shadow-lg transition-all duration-300 lg:static lg:translate-x-0 dark:border-gray-700/40 dark:bg-gray-800 ${
+        className={`fixed inset-y-0 left-0 z-50 flex flex-col overflow-hidden border-r border-gray-100/40 bg-white shadow-lg transition-[width] duration-300 ease-in-out lg:static lg:translate-x-0 dark:border-gray-700/40 dark:bg-gray-800 ${
           isSidebarCollapsed ? "w-16" : "w-72"
         } ${
           isMobileMenuOpen
@@ -248,7 +248,7 @@ const TeacherLayout = () => {
               🎓
             </div>
             {!isSidebarCollapsed && (
-              <h1 className="bg-gradient-to-r from-[var(--color-gradient-from)] to-[var(--color-gradient-to)] bg-clip-text text-2xl font-bold tracking-tight text-transparent">
+              <h1 className="bg-gradient-to-r from-[var(--color-gradient-from)] to-[var(--color-gradient-to)] bg-clip-text text-2xl font-bold tracking-tight text-transparent transition-opacity duration-200">
                 Quiz Edu
               </h1>
             )}
@@ -280,15 +280,17 @@ const TeacherLayout = () => {
               <Link
                 key={item.to}
                 to={item.to}
-                className={`group flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium transition-all ${
+                className={`group relative flex items-center gap-3 rounded-lg py-3 text-sm font-medium transition-colors ${
                   isActive
                     ? "bg-gradient-to-r from-[var(--color-gradient-from)] to-[var(--color-gradient-to)] text-white shadow-md"
-                    : "text-gray-700 hover:bg-gray-100/60 dark:text-gray-300 dark:hover:bg-gray-700/60"
-                } ${isSidebarCollapsed ? "justify-center" : ""}`}
+                    : "text-gray-700 hover:bg-gray-100/70 dark:text-gray-300 dark:hover:bg-gray-700/60"
+                } ${isSidebarCollapsed ? "justify-center px-2" : "px-4"}`}
                 title={isSidebarCollapsed ? item.label : ""}
               >
                 <span
-                  className={`${isActive ? "text-white" : "text-[var(--color-gradient-from)]"} ${isSidebarCollapsed ? "text-lg" : ""}`}
+                  className={`${
+                    isActive ? "text-white" : "text-[var(--color-gradient-to)]"
+                  } ${isSidebarCollapsed ? "text-lg" : ""} shrink-0`}
                 >
                   {item.icon}
                 </span>
@@ -306,12 +308,14 @@ const TeacherLayout = () => {
         {/* Bottom section */}
         <div className="mt-auto border-t border-gray-100/40 p-3 dark:border-gray-700/40">
           <button
-            className={`group flex w-full items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium text-red-600 transition-all hover:bg-red-50/80 dark:text-red-400 dark:hover:bg-red-900/20 ${isSidebarCollapsed ? "justify-center" : ""}`}
+            className={`group relative flex w-full items-center gap-3 rounded-lg text-sm font-medium text-red-600 transition-colors hover:bg-red-100 dark:text-red-400 dark:hover:bg-red-900/20 ${
+              isSidebarCollapsed ? "justify-center px-2 py-2" : "px-4 py-3"
+            }`}
             onClick={handleLogout}
             title={isSidebarCollapsed ? "Logout" : ""}
           >
             <FaSignOutAlt
-              className={`text-xl ${isSidebarCollapsed ? "text-lg" : ""}`}
+              className={`${isSidebarCollapsed ? "text-lg" : "text-xl"} shrink-0`}
             />
             {!isSidebarCollapsed && "Logout"}
             {isSidebarCollapsed && (
