@@ -32,6 +32,17 @@ export interface UpdateQuizRequest {
   is_public: boolean;
 }
 
+// Interface for public quiz in classroom
+export interface PublicQuiz {
+  id: string;
+  name: string;
+  description: string;
+  is_active: boolean;
+  is_public: boolean;
+  number_of_multiple_choice_questions: number;
+  number_of_matching_questions: number;
+}
+
 // Quiz Session interfaces
 export interface QuizSession {
   id: string;
@@ -180,7 +191,7 @@ export const getClassStudents = async (
     params: {
       page,
       page_size: pageSize,
-    }, 
+    },
   });
   return response.data;
 };
@@ -791,7 +802,7 @@ export const createQuizWithFormData = async (
 ): Promise<SuccessApiResponse<any>> => {
   const response = await axiosCustom.post("/quizzes", formData, {
     headers: {
-      'Content-Type': 'multipart/form-data',
+      "Content-Type": "multipart/form-data",
     },
   });
   return response.data;
@@ -804,7 +815,7 @@ export const addQuizTypeWithFormData = async (
 ): Promise<SuccessApiResponse<any>> => {
   const response = await axiosCustom.post(`/quizzes/${quizId}/add`, formData, {
     headers: {
-      'Content-Type': 'multipart/form-data',
+      "Content-Type": "multipart/form-data",
     },
   });
   return response.data;
@@ -836,12 +847,22 @@ export interface QuizQuestionMatchingItem {
   matching_type: "TEXT" | "IMAGE";
 }
 
+export interface QuizQuestionMatchingSection {
+  // Optional metadata describing the type pair for this section
+  match_pair?: {
+    itemAType?: "TEXT" | "IMAGE";
+    itemBType?: "TEXT" | "IMAGE";
+  };
+  item_a: QuizQuestionMatchingItem[];
+  item_b: QuizQuestionMatchingItem[];
+}
+
 export interface QuizQuestionMatchingQuiz {
   id: string;
   quiz_id: string;
   time_limit: number;
-  item_a: QuizQuestionMatchingItem[];
-  item_b: QuizQuestionMatchingItem[];
+  // New API shape: sections containing per-type matching data
+  sections: QuizQuestionMatchingSection[];
 }
 
 export interface QuizQuestionQuiz {
@@ -863,5 +884,87 @@ export const getQuizQuestions = async (
   quizId: string,
 ): Promise<SuccessApiResponse<QuizQuestionsResponse>> => {
   const response = await axiosCustom.get(`/quizzes/${quizId}/questions`);
+  return response.data;
+};
+
+// Practice quiz interfaces
+export interface PracticeQuizRequest {
+  quiz_ids: string[];
+  quantity_multiple_choice: number;
+  quantity_matching: number;
+}
+
+export interface PracticeAnswer {
+  answer_text: string;
+  correct: boolean;
+}
+
+export interface PracticeMultipleChoiceQuestion {
+  question_id: string;
+  question_text: string;
+  hint: string;
+  time_limit: number;
+  allow_multiple_answers: boolean;
+  points: number;
+  answers: PracticeAnswer[];
+}
+
+export interface PracticeMultipleChoiceQuiz {
+  id: string;
+  quiz_id: string;
+  questions: PracticeMultipleChoiceQuestion[];
+}
+
+export interface PracticeMatchingItem {
+  content: string;
+  matching_type: "TEXT" | "IMAGE";
+}
+
+export interface PracticeMatchingQuestion {
+  id: string;
+  item_a: PracticeMatchingItem;
+  item_b: PracticeMatchingItem;
+  points: number;
+}
+
+export interface PracticeMatchingQuiz {
+  id: string;
+  quiz_id: string;
+  time_limit: number;
+  questions: PracticeMatchingQuestion[];
+}
+
+export interface PracticeQuizResponse {
+  multiple_choice_quiz: PracticeMultipleChoiceQuiz;
+  matching_quiz: PracticeMatchingQuiz;
+}
+
+// API function to get practice quiz
+export const getPracticeQuiz = async (
+  request: PracticeQuizRequest,
+): Promise<SuccessApiResponse<PracticeQuizResponse>> => {
+  const response = await axiosCustom.get(`/quizzes/practice`, {
+    params: {
+      quiz_ids: request.quiz_ids.join(","),
+      quantity_multiple_choice: request.quantity_multiple_choice,
+      quantity_matching: request.quantity_matching,
+    },
+  });
+  return response.data;
+};
+
+// API function to get all public quizzes in a classroom
+export const getAllQuizIsPublicInClassroom = async (
+  classroom_id: string,
+  page: number = 1,
+  pageSize: number = 10,
+): Promise<SuccessApiResponse<PaginationResponse<PublicQuiz>>> => {
+  const response = await axiosCustom.get("/quizzes/all", {
+    params: {
+      classroom_id,
+      page,
+      page_size: pageSize,
+    },
+  });
   return response.data;
 };

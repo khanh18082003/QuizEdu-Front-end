@@ -14,6 +14,10 @@ import {
 import Button from "../ui/Button";
 import type { QuizSessionHistoryResponse } from "../../services/quizSessionService";
 
+// Fallback image (inline SVG) for broken or invalid image URLs
+const IMAGE_FALLBACK =
+  'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="160" height="96"><rect width="100%" height="100%" fill="%23e5e7eb"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="%236b7280" font-family="Arial" font-size="12">Image unavailable</text></svg>';
+
 interface QuizReviewModalProps {
   isVisible: boolean;
   historyData: QuizSessionHistoryResponse | null;
@@ -38,8 +42,14 @@ interface ProcessedQuestion {
   // For multiple choice
   options?: Array<{ text: string; isCorrect: boolean }>;
   allowMultiple?: boolean;
-  // For matching
-  pairs?: Array<{ itemA: string; itemB: string; isCorrect: boolean }>;
+  // For matching: include type to render image/text correctly
+  pairs?: Array<{
+    itemA: string;
+    itemB: string;
+    typeA: string;
+    typeB: string;
+    isCorrect: boolean;
+  }>;
   hint?: string;
 }
 
@@ -63,9 +73,35 @@ const QuizReviewModal: React.FC<QuizReviewModalProps> = ({
     // Process multiple choice questions
     if (historyData.multiple_choice_quiz?.questions) {
       historyData.multiple_choice_quiz.questions.forEach((mcQuestion) => {
-        const userParticipant = mcQuestion.answer_participants.find(
-          (p) => p.user_id === userId,
-        );
+        // Collect ALL answers from this user (for allow_multiple_answers there can be many)
+        const participantsForUser = (
+          mcQuestion.answer_participants || []
+        ).filter((p) => p.user_id === userId);
+        const userAnswersAll = participantsForUser
+          .map((p) => (typeof p.answer === "string" ? p.answer.trim() : ""))
+          .filter((a) => a.length > 0);
+        const userAnswersUnique = Array.from(new Set(userAnswersAll));
+
+        const correctAnswers = mcQuestion.answers
+          .filter((ans) => ans.correct)
+          .map((ans) => ans.answer_text);
+        const correctSet = new Set(correctAnswers);
+
+        let isCorrect = false;
+        let singlePicked: string | undefined;
+        if (mcQuestion.allow_multiple_answers) {
+          // Set equality: user must select all and only the correct answers
+          const userSet = new Set(userAnswersUnique);
+          if (userSet.size === correctSet.size && userSet.size > 0) {
+            isCorrect = [...userSet].every((a) => correctSet.has(a));
+          } else {
+            isCorrect = false;
+          }
+        } else {
+          // Single-answer: take the last non-empty submitted answer and compare
+          singlePicked = userAnswersAll[userAnswersAll.length - 1];
+          isCorrect = singlePicked ? correctSet.has(singlePicked) : false;
+        }
 
         const processedQuestion: ProcessedQuestion = {
           id: mcQuestion.question_id,
@@ -73,11 +109,12 @@ const QuizReviewModal: React.FC<QuizReviewModalProps> = ({
           question: mcQuestion.question_text,
           points: mcQuestion.points,
           hint: mcQuestion.hint,
-          userAnswer: userParticipant?.answer || null,
-          correctAnswer: mcQuestion.answers
-            .filter((ans) => ans.correct)
-            .map((ans) => ans.answer_text),
-          isCorrect: userParticipant?.correct || false,
+          // Show all selected answers for multi-select; single-select uses last or null
+          userAnswer: mcQuestion.allow_multiple_answers
+            ? userAnswersUnique
+            : singlePicked || null,
+          correctAnswer: correctAnswers,
+          isCorrect,
           options: mcQuestion.answers.map((ans) => ({
             text: ans.answer_text,
             isCorrect: ans.correct,
@@ -96,6 +133,14 @@ const QuizReviewModal: React.FC<QuizReviewModalProps> = ({
           (p) => p.user_id === userId,
         );
 
+      const userPairsDisplay: Array<{ itemA: string; itemB: string }> =
+        userParticipant?.answers
+          ? userParticipant.answers.map((ans) => ({
+              itemA: ans.item_a.content,
+              itemB: ans.item_b.content,
+            }))
+          : [];
+
       const matchingQuestion: ProcessedQuestion = {
         id: "matching",
         type: "matching",
@@ -104,16 +149,24 @@ const QuizReviewModal: React.FC<QuizReviewModalProps> = ({
           (sum, pair) => sum + pair.points,
           0,
         ),
-        userAnswer: userParticipant?.answers || [],
-        correctAnswer: historyData.matching_quiz.match_pairs,
+        userAnswer: userPairsDisplay,
+        correctAnswer: historyData.matching_quiz.match_pairs.map((pair) => ({
+          itemA: pair.item_a.content,
+          itemB: pair.item_b.content,
+        })),
         isCorrect: false, // Will be calculated below
         pairs: historyData.matching_quiz.match_pairs.map((pair) => {
           const userAnswer = userParticipant?.answers.find(
-            (ans) => ans.match_pair_id === pair.id,
+            (ans) =>
+              ans.match_pair_id === pair.id ||
+              (ans.item_a.content === pair.item_a.content &&
+                ans.item_b.content === pair.item_b.content),
           );
           return {
             itemA: pair.item_a.content,
             itemB: pair.item_b.content,
+            typeA: pair.item_a.matching_type,
+            typeB: pair.item_b.matching_type,
             isCorrect: userAnswer?.correct || false,
           };
         }),
@@ -149,10 +202,10 @@ const QuizReviewModal: React.FC<QuizReviewModalProps> = ({
   };
 
   const renderMultipleChoiceQuestion = (question: ProcessedQuestion) => {
-    const userAnswers = Array.isArray(question.userAnswer)
-      ? question.userAnswer
+    const userAnswers: string[] = Array.isArray(question.userAnswer)
+      ? (question.userAnswer as string[])
       : question.userAnswer
-        ? [question.userAnswer]
+        ? [question.userAnswer as string]
         : [];
 
     return (
@@ -293,9 +346,22 @@ const QuizReviewModal: React.FC<QuizReviewModalProps> = ({
               <div className="flex flex-1 items-center gap-4">
                 <div className="flex-1">
                   <div className="rounded bg-blue-100 p-2 text-center dark:bg-blue-900">
-                    <span className="text-sm font-medium text-blue-900 dark:text-blue-100">
-                      {pair.itemA}
-                    </span>
+                    {pair.typeA === "IMAGE" ? (
+                      <img
+                        src={pair.itemA}
+                        alt="Matching A"
+                        className="mx-auto h-24 max-w-full rounded object-contain"
+                        onError={(e) => {
+                          const img = e.currentTarget as HTMLImageElement;
+                          img.onerror = null;
+                          img.src = IMAGE_FALLBACK;
+                        }}
+                      />
+                    ) : (
+                      <span className="text-sm font-medium text-blue-900 dark:text-blue-100">
+                        {pair.itemA}
+                      </span>
+                    )}
                   </div>
                 </div>
                 <div className="flex items-center">
@@ -311,9 +377,22 @@ const QuizReviewModal: React.FC<QuizReviewModalProps> = ({
                 </div>
                 <div className="flex-1">
                   <div className="rounded bg-purple-100 p-2 text-center dark:bg-purple-900">
-                    <span className="text-sm font-medium text-purple-900 dark:text-purple-100">
-                      {pair.itemB}
-                    </span>
+                    {pair.typeB === "IMAGE" ? (
+                      <img
+                        src={pair.itemB}
+                        alt="Matching B"
+                        className="mx-auto h-24 max-w-full rounded object-contain"
+                        onError={(e) => {
+                          const img = e.currentTarget as HTMLImageElement;
+                          img.onerror = null;
+                          img.src = IMAGE_FALLBACK;
+                        }}
+                      />
+                    ) : (
+                      <span className="text-sm font-medium text-purple-900 dark:text-purple-100">
+                        {pair.itemB}
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>

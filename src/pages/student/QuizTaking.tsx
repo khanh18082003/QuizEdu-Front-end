@@ -41,6 +41,16 @@ import type {
   TeacherProfileResponse,
 } from "../../types/response";
 
+// Fallback image data URL for broken or non-http image sources
+const IMAGE_FALLBACK =
+  "data:image/svg+xml;utf8," +
+  encodeURIComponent(
+    `<svg xmlns='http://www.w3.org/2000/svg' width='120' height='80'>
+  <rect width='100%' height='100%' fill='#e5e7eb'/>
+  <text x='50%' y='50%' dominant-baseline='middle' text-anchor='middle' fill='#6b7280' font-size='12'>Image</text>
+</svg>`,
+  );
+
 // Interface for quiz taking state
 interface QuizTakingState {
   accessCode: string;
@@ -75,6 +85,8 @@ interface CombinedQuestion {
   // For matching
   item_a?: QuizQuestionMatchingItem[];
   item_b?: QuizQuestionMatchingItem[];
+  // Filter metadata for split matching sections
+  matchingFilter?: { itemAType: "TEXT" | "IMAGE"; itemBType: "TEXT" | "IMAGE" };
 }
 
 // User answer interface
@@ -123,6 +135,20 @@ const QuizTaking: React.FC = () => {
       itemBIndex: number;
     }>
   >([]);
+
+  // Toast for matching feedback
+  const [matchToast, setMatchToast] = useState<{
+    message: string;
+    type: "success" | "error" | "info";
+    isVisible: boolean;
+  }>({ message: "", type: "info", isVisible: false });
+
+  const showMatchToast = useCallback(
+    (message: string, type: "success" | "error" | "info" = "success") => {
+      setMatchToast({ message, type, isVisible: true });
+    },
+    [],
+  );
 
   const user = useSelector(
     (state: {
@@ -210,8 +236,14 @@ const QuizTaking: React.FC = () => {
                 return null;
               }
 
-              // Create a simple pair ID by combining the indices or using actual IDs if available
-              const pairId = itemA.id;
+              // Determine a reliable pair id:
+              // 1) Prefer itemA.id from API if present
+              // 2) Fallback to itemB.id if present
+              // 3) Fallback to a stable composite based on contents
+              let pairId: string | undefined = itemA.id || itemB.id;
+              if (!pairId) {
+                pairId = `${itemA.content}__${itemB.content}`;
+              }
 
               return {
                 match_pair_id: pairId,
@@ -311,14 +343,26 @@ const QuizTaking: React.FC = () => {
     }
   }, [currentQuestionIndex, allQuestions, userAnswers]);
 
-  // Calculate connection points for SVG lines
+  // Calculate connection points for SVG lines (stable & resize-aware)
   useEffect(() => {
     const updateConnectionPoints = () => {
+      const currentQuestion = allQuestions[currentQuestionIndex];
+      if (!currentQuestion || currentQuestion.type !== "matching") {
+        setConnectionPoints([]);
+        return;
+      }
+
       if (matchingPairs.length === 0) {
         setConnectionPoints([]);
         return;
       }
 
+      const container = document.querySelector(
+        ".matching-container",
+      ) as HTMLElement | null;
+      if (!container) return;
+
+      const containerRect = container.getBoundingClientRect();
       const newConnectionPoints: Array<{
         startX: number;
         startY: number;
@@ -328,59 +372,57 @@ const QuizTaking: React.FC = () => {
         itemBIndex: number;
       }> = [];
 
-      const container = document.querySelector(".matching-container");
-      if (!container) return;
-
-      const containerRect = container.getBoundingClientRect();
-
       matchingPairs.forEach((pair) => {
-        const currentQuestion = allQuestions[currentQuestionIndex];
-        if (!currentQuestion?.item_a || !currentQuestion?.item_b) return;
+        const aIdx =
+          currentQuestion.item_a?.findIndex(
+            (it) => it.content === pair.itemA,
+          ) ?? -1;
+        const bIdx =
+          currentQuestion.item_b?.findIndex(
+            (it) => it.content === pair.itemB,
+          ) ?? -1;
+        if (aIdx === -1 || bIdx === -1) return;
 
-        const itemAIndex = currentQuestion.item_a.findIndex(
-          (item) => item.content === pair.itemA,
-        );
-        const itemBIndex = currentQuestion.item_b.findIndex(
-          (item) => item.content === pair.itemB,
-        );
+        const aEl = document.getElementById(`item-a-${aIdx}`);
+        const bEl = document.getElementById(`item-b-${bIdx}`);
+        if (!aEl || !bEl) return;
+        const aRect = aEl.getBoundingClientRect();
+        const bRect = bEl.getBoundingClientRect();
 
-        if (itemAIndex === -1 || itemBIndex === -1) return;
-
-        const itemAElement = document.getElementById(`item-a-${itemAIndex}`);
-        const itemBElement = document.getElementById(`item-b-${itemBIndex}`);
-
-        if (itemAElement && itemBElement) {
-          const itemARect = itemAElement.getBoundingClientRect();
-          const itemBRect = itemBElement.getBoundingClientRect();
-
-          // Calculate relative positions within the container
-          const startX = itemARect.right - containerRect.left;
-          const startY =
-            itemARect.top + itemARect.height / 2 - containerRect.top;
-          const endX = itemBRect.left - containerRect.left;
-          const endY = itemBRect.top + itemBRect.height / 2 - containerRect.top;
-
-          newConnectionPoints.push({
-            startX,
-            startY,
-            endX,
-            endY,
-            itemAIndex,
-            itemBIndex,
-          });
-        }
+        newConnectionPoints.push({
+          startX: aRect.right - containerRect.left,
+          startY: aRect.top + aRect.height / 2 - containerRect.top,
+          endX: bRect.left - containerRect.left,
+          endY: bRect.top + bRect.height / 2 - containerRect.top,
+          itemAIndex: aIdx,
+          itemBIndex: bIdx,
+        });
       });
 
       setConnectionPoints(newConnectionPoints);
     };
 
-    // Delay to ensure DOM elements are rendered
-    const timeout = setTimeout(updateConnectionPoints, 100);
+    // Initial calculation after render
+    const timeout = setTimeout(updateConnectionPoints, 80);
 
-    window.addEventListener("resize", updateConnectionPoints);
+    // Observe container resize
+    const container = document.querySelector(
+      ".matching-container",
+    ) as HTMLElement | null;
+    let ro: ResizeObserver | null = null;
+    if (container && "ResizeObserver" in window) {
+      ro = new ResizeObserver(() => updateConnectionPoints());
+      ro.observe(container);
+    }
+
+    // Also recalc on window resize
+    const onResize = () => updateConnectionPoints();
+    window.addEventListener("resize", onResize);
+
     return () => {
       clearTimeout(timeout);
-      window.removeEventListener("resize", updateConnectionPoints);
+      if (ro) ro.disconnect();
+      window.removeEventListener("resize", onResize);
     };
   }, [matchingPairs, allQuestions, currentQuestionIndex]);
 
@@ -495,24 +537,42 @@ const QuizTaking: React.FC = () => {
           );
         }
 
-        // Process matching questions - treat entire matching quiz as one question
-        if (
-          quizData.data.matching_quiz?.item_a &&
-          quizData.data.matching_quiz.item_a.length > 0 &&
-          quizData.data.matching_quiz?.item_b &&
-          quizData.data.matching_quiz.item_b.length > 0
-        ) {
-          // Calculate total points for matching quiz
-          const totalMatchingPoints = quizData.data.matching_quiz.item_a.length; // 1 point per pair by default
+        // Process matching questions - use sections from API (per type-pair)
+        if (quizData.data.matching_quiz?.sections) {
+          const sections = quizData.data.matching_quiz.sections;
 
-          combinedQuestions.push({
-            id: "matching_quiz",
-            type: "matching",
-            question: "Ghép các cặp phù hợp",
-            points: totalMatchingPoints,
-            time_limit: quizData.data.matching_quiz.time_limit,
-            item_a: quizData.data.matching_quiz.item_a,
-            item_b: quizData.data.matching_quiz.item_b,
+          sections.forEach((section, idx) => {
+            const itemA = section.item_a || [];
+            const itemB = section.item_b || [];
+            const pairCount = Math.min(itemA.length, itemB.length);
+            if (pairCount <= 0) return;
+
+            const itemAType =
+              section.match_pair?.itemAType ||
+              itemA[0]?.matching_type ||
+              "TEXT";
+            const itemBType =
+              section.match_pair?.itemBType ||
+              itemB[0]?.matching_type ||
+              "TEXT";
+
+            const label = `${itemAType === "TEXT" ? "Text" : "Image"} ↔ ${
+              itemBType === "TEXT" ? "Text" : "Image"
+            }`;
+
+            // Shuffle column B per section
+            const shuffledB = [...itemB].sort(() => Math.random() - 0.5);
+
+            combinedQuestions.push({
+              id: `matching-section-${idx}`,
+              type: "matching",
+              question: `Ghép các cặp phù hợp · ${label}`,
+              points: pairCount, // 1 point per pair
+              time_limit: quizData.data.matching_quiz.time_limit,
+              item_a: itemA,
+              item_b: shuffledB,
+              matchingFilter: { itemAType, itemBType },
+            });
           });
         }
 
@@ -681,19 +741,44 @@ const QuizTaking: React.FC = () => {
   };
 
   const handleMatchingSelection = (item: string, type: "itemA" | "itemB") => {
+    const currentQuestion = allQuestions[currentQuestionIndex];
+    const totalPairs =
+      currentQuestion?.type === "matching"
+        ? Math.min(
+            currentQuestion.item_a?.length || 0,
+            currentQuestion.item_b?.length || 0,
+          )
+        : 0;
+
     if (type === "itemA") {
       if (matchingSelections.itemA === item) {
-        // Deselect if already selected
         setMatchingSelections((prev) => ({ ...prev, itemA: undefined }));
       } else {
         setMatchingSelections((prev) => ({ ...prev, itemA: item }));
-        // If both are selected, create a pair
         if (matchingSelections.itemB) {
           const newPair = { itemA: item, itemB: matchingSelections.itemB };
-          setMatchingPairs((prev) => [...prev, newPair]);
+          const pairExists = matchingPairs.some(
+            (p) => p.itemA === newPair.itemA && p.itemB === newPair.itemB,
+          );
+          if (!pairExists) {
+            const updated = matchingPairs.concat(newPair);
+            setMatchingPairs(updated);
+            // Save under current split question id
+            if (allQuestions[currentQuestionIndex]?.type === "matching") {
+              handleAnswerChange(
+                allQuestions[currentQuestionIndex].id,
+                updated,
+              );
+            }
+            showMatchToast("Ghép cặp thành công!", "success");
+            if (totalPairs > 0 && updated.length === totalPairs) {
+              showMatchToast(
+                "Bạn đã ghép xong tất cả cặp cho phần này!",
+                "success",
+              );
+            }
+          }
           setMatchingSelections({});
-          // Update answer
-          handleAnswerChange("matching_quiz", matchingPairs.concat(newPair));
         }
       }
     } else {
@@ -703,9 +788,27 @@ const QuizTaking: React.FC = () => {
         setMatchingSelections((prev) => ({ ...prev, itemB: item }));
         if (matchingSelections.itemA) {
           const newPair = { itemA: matchingSelections.itemA, itemB: item };
-          setMatchingPairs((prev) => [...prev, newPair]);
+          const pairExists = matchingPairs.some(
+            (p) => p.itemA === newPair.itemA && p.itemB === newPair.itemB,
+          );
+          if (!pairExists) {
+            const updated = matchingPairs.concat(newPair);
+            setMatchingPairs(updated);
+            if (allQuestions[currentQuestionIndex]?.type === "matching") {
+              handleAnswerChange(
+                allQuestions[currentQuestionIndex].id,
+                updated,
+              );
+            }
+            showMatchToast("Ghép cặp thành công!", "success");
+            if (totalPairs > 0 && updated.length === totalPairs) {
+              showMatchToast(
+                "Bạn đã ghép xong tất cả cặp cho phần này!",
+                "success",
+              );
+            }
+          }
           setMatchingSelections({});
-          handleAnswerChange("matching_quiz", matchingPairs.concat(newPair));
         }
       }
     }
@@ -828,8 +931,9 @@ const QuizTaking: React.FC = () => {
     }
 
     if (question.type === "matching") {
-      const itemsA = question.item_a?.map((item) => item.content) || [];
-      const itemsB = question.item_b?.map((item) => item.content) || [];
+      // Using objects to render text or images with fallbacks
+      const itemsA = question.item_a || [];
+      const itemsB = question.item_b || [];
 
       return (
         <div className="space-y-4">
@@ -911,17 +1015,21 @@ const QuizTaking: React.FC = () => {
                 </h3>
                 <div className="space-y-2">
                   {itemsA.map((item, index) => {
-                    const isSelected = matchingSelections.itemA === item;
+                    const isSelected =
+                      matchingSelections.itemA === item.content;
                     const isMatched = matchingPairs.some(
-                      (pair) => pair.itemA === item,
+                      (pair) => pair.itemA === item.content,
                     );
 
                     return (
                       <button
                         key={index}
                         id={`item-a-${index}`}
-                        onClick={() => handleMatchingSelection(item, "itemA")}
+                        onClick={() =>
+                          handleMatchingSelection(item.content, "itemA")
+                        }
                         disabled={isMatched}
+                        aria-pressed={isSelected}
                         className={`matching-item-hover matching-item-a-hover w-full rounded-lg border-2 p-3 text-left transition-all duration-200 ${
                           isMatched
                             ? "border-blue-500 bg-blue-50 dark:border-blue-400 dark:bg-blue-900/20"
@@ -943,7 +1051,22 @@ const QuizTaking: React.FC = () => {
                             {index + 1}
                           </div>
                           <span className="flex-1 text-sm font-medium text-gray-900 dark:text-white">
-                            {item}
+                            {item.matching_type === "IMAGE" ? (
+                              item.content ? (
+                                <img
+                                  src={item.content}
+                                  alt={`A-${index + 1}`}
+                                  className="h-12 w-20 rounded-lg object-contain"
+                                  onError={(e) =>
+                                    (e.currentTarget.src = IMAGE_FALLBACK)
+                                  }
+                                />
+                              ) : (
+                                <span className="text-gray-500">[Image]</span>
+                              )
+                            ) : (
+                              item.content
+                            )}
                           </span>
                           {isMatched && (
                             <div className="flex h-5 w-5 items-center justify-center rounded-full bg-green-500">
@@ -967,9 +1090,10 @@ const QuizTaking: React.FC = () => {
                 </h3>
                 <div className="space-y-2">
                   {itemsB.map((item, index) => {
-                    const isSelected = matchingSelections.itemB === item;
+                    const isSelected =
+                      matchingSelections.itemB === item.content;
                     const isMatched = matchingPairs.some(
-                      (pair) => pair.itemB === item,
+                      (pair) => pair.itemB === item.content,
                     );
 
                     const letter = String.fromCharCode(65 + index);
@@ -978,8 +1102,11 @@ const QuizTaking: React.FC = () => {
                       <button
                         key={index}
                         id={`item-b-${index}`}
-                        onClick={() => handleMatchingSelection(item, "itemB")}
+                        onClick={() =>
+                          handleMatchingSelection(item.content, "itemB")
+                        }
                         disabled={isMatched}
+                        aria-pressed={isSelected}
                         className={`matching-item-hover matching-item-b-hover w-full rounded-lg border-2 p-3 text-left transition-all duration-200 ${
                           isMatched
                             ? "border-purple-500 bg-purple-50 dark:border-purple-400 dark:bg-purple-900/20"
@@ -1001,7 +1128,22 @@ const QuizTaking: React.FC = () => {
                             {letter}
                           </div>
                           <span className="flex-1 text-sm font-medium text-gray-900 dark:text-white">
-                            {item}
+                            {item.matching_type === "IMAGE" ? (
+                              item.content ? (
+                                <img
+                                  src={item.content}
+                                  alt={`B-${letter}`}
+                                  className="h-12 w-20 rounded-lg object-contain"
+                                  onError={(e) =>
+                                    (e.currentTarget.src = IMAGE_FALLBACK)
+                                  }
+                                />
+                              ) : (
+                                <span className="text-gray-500">[Image]</span>
+                              )
+                            ) : (
+                              item.content
+                            )}
                           </span>
                           {isMatched && (
                             <div className="flex h-5 w-5 items-center justify-center rounded-full bg-green-500">
@@ -1020,44 +1162,23 @@ const QuizTaking: React.FC = () => {
             </div>
           </div>
 
-          {/* Compact Progress indicator */}
-          <div className="rounded-lg bg-gray-50 p-3 dark:bg-gray-800">
-            <div className="mb-2 flex items-center justify-between">
-              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                Tiến độ: {matchingPairs.length}/
-                {Math.min(
-                  question.item_a?.length || 0,
-                  question.item_b?.length || 0,
-                )}
-              </span>
-              <span className="text-sm text-gray-600 dark:text-gray-400">
-                {Math.round(
-                  (matchingPairs.length /
-                    Math.max(
-                      1,
-                      Math.min(
-                        question.item_a?.length || 0,
-                        question.item_b?.length || 0,
-                      ),
-                    )) *
-                    100,
-                )}
-                %
-              </span>
-            </div>
-            <div className="h-1.5 w-full rounded-full bg-gray-200 dark:bg-gray-700">
-              <div
-                className="h-1.5 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 transition-all duration-500"
-                style={{
-                  width: `${(matchingPairs.length / Math.max(1, Math.min(question.item_a?.length || 0, question.item_b?.length || 0))) * 100}%`,
-                }}
-              />
-            </div>
-          </div>
-
-          {/* Clear all pairs button */}
+          {/* Actions: Undo & Clear */}
           {matchingPairs.length > 0 && (
-            <div className="text-center">
+            <div className="flex items-center justify-center gap-3">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setMatchingPairs((prev) => {
+                    const next = prev.slice(0, -1);
+                    handleAnswerChange(question.id, next);
+                    return next;
+                  });
+                }}
+                className="px-4"
+              >
+                ↩️ Hoàn tác cặp cuối
+              </Button>
               <Button
                 variant="outline"
                 size="sm"
@@ -1286,10 +1407,14 @@ const QuizTaking: React.FC = () => {
                       Câu ghép đôi:
                     </span>
                     <span className="font-semibold text-gray-900 dark:text-white">
-                      {Math.min(
-                        quiz?.matching_quiz?.item_a?.length || 0,
-                        quiz?.matching_quiz?.item_b?.length || 0,
-                      )}
+                      {(() => {
+                        const sections = quiz?.matching_quiz?.sections || [];
+                        return sections.reduce((sum, s) => {
+                          const aLen = s.item_a?.length || 0;
+                          const bLen = s.item_b?.length || 0;
+                          return sum + Math.min(aLen, bLen);
+                        }, 0);
+                      })()}
                     </span>
                   </div>
                   <div className="flex justify-between">
@@ -1566,6 +1691,14 @@ const QuizTaking: React.FC = () => {
         type="error"
         message="⏰ Chỉ còn 10 giây để hoàn thành câu hỏi này!"
         onClose={() => setShowTimeWarning(false)}
+      />
+
+      {/* Matching action toasts */}
+      <Toast
+        isVisible={matchToast.isVisible}
+        type={matchToast.type}
+        message={matchToast.message}
+        onClose={() => setMatchToast((prev) => ({ ...prev, isVisible: false }))}
       />
 
       {/* Simple Score Modal */}

@@ -1,220 +1,389 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   FaSearch,
   FaTrophy,
   FaChalkboardTeacher,
   FaCalendarCheck,
   FaClipboardList,
+  FaBell,
+  FaCalendarAlt,
 } from "react-icons/fa";
 import InputField from "../../components/ui/InputField";
 import Button from "../../components/ui/Button";
 import { PAGE_TITLES, usePageTitle } from "../../utils/title";
-import { useTranslation } from "react-i18next";
+import {
+  getClassrooms,
+  getQuizSessionsInClassroom,
+  joinClassroom,
+  type ClassRoomResponse,
+} from "../../services/classroomService";
+import {
+  getAllNotifications,
+  type Notification,
+} from "../../services/notificationService";
+import type { QuizSessionDetailResponse } from "../../services/quizSessionService";
 
 const StudentHome = () => {
+  // Join class state
   const [roomCode, setRoomCode] = useState("");
   const [error, setError] = useState("");
+  const [isJoining, setIsJoining] = useState(false);
 
-  // Set page title
-  const { t } = useTranslation();
+  // Dashboard data state
+  const [isLoading, setIsLoading] = useState(true);
+  const [classrooms, setClassrooms] = useState<ClassRoomResponse[]>([]);
+  const [upcomingSessions, setUpcomingSessions] = useState<
+    QuizSessionDetailResponse[]
+  >([]);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+
   // Set page title
   usePageTitle(PAGE_TITLES.STUDENT_HOME);
 
-  const handleJoinRoom = (e: React.FormEvent) => {
+  useEffect(() => {
+    const load = async () => {
+      try {
+        setIsLoading(true);
+        const clsRes = await getClassrooms(1, 9);
+        const cls = clsRes.data.data || [];
+        setClassrooms(cls);
+
+        const topClasses = cls.slice(0, 3);
+        const [sessionsPerClass, notifsPerClass] = await Promise.all([
+          Promise.all(
+            topClasses.map(async (c) => {
+              try {
+                const res = await getQuizSessionsInClassroom(c.id, 1, 5);
+                return res.data.data || [];
+              } catch {
+                return [] as QuizSessionDetailResponse[];
+              }
+            }),
+          ),
+          Promise.all(
+            topClasses.map(async (c) => {
+              try {
+                const res = await getAllNotifications(c.id);
+                return res.data || [];
+              } catch {
+                return [] as Notification[];
+              }
+            }),
+          ),
+        ]);
+
+        const flatSessions: QuizSessionDetailResponse[] =
+          sessionsPerClass.flat();
+        const now = new Date();
+        const upcoming = flatSessions.filter((s) => {
+          const start = s.start_time ? new Date(s.start_time) : null;
+          const end = s.end_time ? new Date(s.end_time) : null;
+          return (
+            (start && start.getTime() > now.getTime()) ||
+            (!end && (s.status || "").toLowerCase().includes("wait"))
+          );
+        });
+        upcoming.sort(
+          (a, b) =>
+            new Date(a.start_time || 0).getTime() -
+            new Date(b.start_time || 0).getTime(),
+        );
+        setUpcomingSessions(upcoming.slice(0, 6));
+
+        const flatNotifs: Notification[] = notifsPerClass.flat();
+        flatNotifs.sort((a, b) => {
+          const aTime = new Date(a.created_at || 0).getTime();
+          const bTime = new Date(b.created_at || 0).getTime();
+          return bTime - aTime;
+        });
+        setNotifications(flatNotifs.slice(0, 6));
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    load();
+  }, []);
+
+  const stats = useMemo(() => {
+    const totalClasses = classrooms.length;
+    const activeClasses = classrooms.filter((c) => c.active).length;
+    const totalUpcoming = upcomingSessions.length;
+    const totalNotifs = notifications.length;
+    return { totalClasses, activeClasses, totalUpcoming, totalNotifs };
+  }, [classrooms, upcomingSessions, notifications]);
+
+  const handleJoinRoom = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Validate the room code - should be 6 digits
     if (!/^\d{6}$/.test(roomCode)) {
       setError("Room code must be 6 digits");
       return;
     }
 
-    // TODO: API call to join room
-    console.log(`Joining room with code: ${roomCode}`);
+    try {
+      setIsJoining(true);
+      setError("");
+      const res = await joinClassroom(roomCode);
+      if (res.code === "M000") {
+        setRoomCode("");
+        const clsRes = await getClassrooms(1, 9);
+        setClassrooms(clsRes.data.data || []);
+      } else {
+        setError(res.message || "Failed to join class");
+      }
+    } catch {
+      setError("Failed to join class");
+    } finally {
+      setIsJoining(false);
+    }
   };
 
-  const recentActivities = [
-    {
-      id: 1,
-      type: "quiz",
-      title: "Physics Quiz - Forces",
-      score: "85%",
-      date: "2 days ago",
-    },
-    {
-      id: 2,
-      type: "assignment",
-      title: "Math Assignment - Calculus",
-      score: "Pending",
-      date: "5 days ago",
-    },
-    {
-      id: 3,
-      type: "exam",
-      title: "Chemistry Final Exam",
-      score: "92%",
-      date: "1 week ago",
-    },
-  ];
+  const recentActivities = useMemo(() => {
+    const sessionActivities = upcomingSessions.slice(0, 4).map((s) => ({
+      id: s.id,
+      type: "session" as const,
+      title: s.name || "Upcoming Quiz Session",
+      date: s.start_time || s.end_time || "",
+    }));
+    const notifActivities = notifications.slice(0, 4).map((n) => ({
+      id: n.id,
+      type: "notification" as const,
+      title: n.description || "Class update",
+      date: (n.created_at || n.updated_at || "") as string,
+    }));
 
-  const upcomingEvents = [
-    {
-      id: 1,
-      type: "quiz",
-      title: "Biology Quiz - Cell Division",
-      date: "Tomorrow, 10:00 AM",
-    },
-    {
-      id: 2,
-      type: "exam",
-      title: "Literature Mid-term",
-      date: "Nov 15, 11:30 AM",
-    },
-  ];
+    return [...sessionActivities, ...notifActivities]
+      .filter((x) => x.date)
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      .slice(0, 6);
+  }, [upcomingSessions, notifications]);
+
+  const fmt = (d?: string) =>
+    d
+      ? new Date(d).toLocaleString(undefined, {
+          dateStyle: "medium",
+          timeStyle: "short",
+        })
+      : "";
 
   return (
-    <div>
-      <div className="mb-8 grid grid-cols-1 gap-6 lg:grid-cols-3">
-        {/* Join Class */}
-        <div className="col-span-1 rounded-lg bg-white p-6 shadow dark:bg-gray-800">
-          <h2 className="mb-4 text-xl font-bold text-gray-800 dark:text-white">
-            Join Class
-          </h2>
-          <form onSubmit={handleJoinRoom} className="space-y-4">
-            <InputField
-              id="roomCode"
-              label="Enter 6-digit room code"
-              type="text"
-              value={roomCode}
-              onChange={(e) => {
-                setRoomCode(e.target.value);
-                setError("");
-              }}
-              error={error}
-              icon={<FaSearch />}
-              className=""
-              maxLength={6}
-            />
-            <Button
-              type="submit"
-              variant="primary"
-              className="mt-8 w-full"
-              disabled={!roomCode}
+    <div className="space-y-8">
+      {/* Hero / Join section */}
+      <div className="relative overflow-hidden rounded-2xl border border-gray-100 bg-gradient-to-r from-[var(--color-gradient-from)] to-[var(--color-gradient-to)] p-6 shadow-lg dark:border-gray-700 dark:from-gray-800 dark:to-gray-700">
+        <div className="pointer-events-none absolute -top-10 -left-10 h-40 w-40 rounded-full bg-white/15 blur-2xl dark:bg-white/5" />
+        <div className="pointer-events-none absolute -right-12 -bottom-12 h-48 w-48 rounded-full bg-white/10 blur-3xl dark:bg-white/5" />
+        <div className="relative grid grid-cols-1 gap-6 md:grid-cols-3">
+          <div className="col-span-2 text-white">
+            <h1 className="text-2xl font-bold">Welcome back!</h1>
+            <p className="mt-1 text-white/90">
+              Join your class instantly with a 6-digit code or explore upcoming
+              sessions.
+            </p>
+            <form
+              onSubmit={handleJoinRoom}
+              className="mt-5 flex flex-col gap-3 sm:flex-row"
             >
-              Join Class
-            </Button>
-          </form>
-        </div>
-
-        {/* Statistics */}
-        <div className="col-span-1 rounded-lg bg-white p-6 shadow dark:bg-gray-800">
-          <h2 className="mb-4 text-xl font-bold text-gray-800 dark:text-white">
-            Your Stats
-          </h2>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="rounded-lg bg-blue-50 p-4 dark:bg-blue-900/20">
-              <div className="mb-2 flex items-center justify-center text-blue-500">
-                <FaTrophy size={24} />
+              <div className="flex-1">
+                <InputField
+                  id="roomCode"
+                  label="Enter 6-digit class code"
+                  type="text"
+                  value={roomCode}
+                  onChange={(e) => {
+                    setRoomCode(e.target.value);
+                    setError("");
+                  }}
+                  error={error}
+                  icon={<FaSearch />}
+                  maxLength={6}
+                  className="bg-white/90 text-gray-800 placeholder:text-gray-500 dark:bg-white/10 dark:text-white"
+                />
               </div>
-              <p className="text-center text-lg font-bold">87%</p>
-              <p className="text-center text-xs text-gray-600 dark:text-gray-400">
-                Average Score
-              </p>
-            </div>
-            <div className="rounded-lg bg-green-50 p-4 dark:bg-green-900/20">
-              <div className="mb-2 flex items-center justify-center text-green-500">
-                <FaClipboardList size={24} />
-              </div>
-              <p className="text-center text-lg font-bold">12</p>
-              <p className="text-center text-xs text-gray-600 dark:text-gray-400">
-                Quizzes Taken
-              </p>
-            </div>
-            <div className="rounded-lg bg-purple-50 p-4 dark:bg-purple-900/20">
-              <div className="mb-2 flex items-center justify-center text-purple-500">
-                <FaChalkboardTeacher size={24} />
-              </div>
-              <p className="text-center text-lg font-bold">5</p>
-              <p className="text-center text-xs text-gray-600 dark:text-gray-400">
-                Enrolled Classes
-              </p>
-            </div>
-            <div className="rounded-lg bg-amber-50 p-4 dark:bg-amber-900/20">
-              <div className="mb-2 flex items-center justify-center text-amber-500">
-                <FaCalendarCheck size={24} />
-              </div>
-              <p className="text-center text-lg font-bold">2</p>
-              <p className="text-center text-xs text-gray-600 dark:text-gray-400">
-                Upcoming Events
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* Recent Activities */}
-        <div className="col-span-1 rounded-lg bg-white p-6 shadow dark:bg-gray-800">
-          <h2 className="mb-4 text-xl font-bold text-gray-800 dark:text-white">
-            Recent Activities
-          </h2>
-          <div className="space-y-3">
-            {recentActivities.map((activity) => (
-              <div
-                key={activity.id}
-                className="rounded-lg border border-gray-100 p-3 hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700/50"
+              <Button
+                type="submit"
+                variant="secondary"
+                className="shrink-0"
+                disabled={!roomCode || isJoining}
               >
-                <h3 className="font-medium text-gray-800 dark:text-white">
-                  {activity.title}
-                </h3>
-                <div className="mt-1 flex items-center justify-between">
-                  <span className="text-xs text-gray-500 dark:text-gray-400">
-                    {activity.date}
-                  </span>
-                  <span
-                    className={`text-xs font-medium ${activity.score === "Pending" ? "text-amber-500" : "text-green-500"}`}
-                  >
-                    {activity.score}
-                  </span>
-                </div>
+                {isJoining ? "Joining..." : "Join Class"}
+              </Button>
+            </form>
+          </div>
+          <div className="col-span-1 grid grid-cols-2 gap-3">
+            <div className="rounded-xl bg-white/95 p-4 text-center shadow-sm backdrop-blur-sm dark:bg-gray-800/80">
+              <div className="mb-1 flex items-center justify-center text-[var(--color-gradient-from)] dark:text-[var(--color-gradient-to)]">
+                <FaChalkboardTeacher />
               </div>
-            ))}
+              <div className="text-2xl font-bold text-gray-800 dark:text-white">
+                {stats.totalClasses}
+              </div>
+              <div className="text-xs text-gray-500 dark:text-gray-400">
+                Classes
+              </div>
+            </div>
+            <div className="rounded-xl bg-white/95 p-4 text-center shadow-sm backdrop-blur-sm dark:bg-gray-800/80">
+              <div className="mb-1 flex items-center justify-center text-[var(--color-gradient-from)] dark:text-[var(--color-gradient-to)]">
+                <FaCalendarCheck />
+              </div>
+              <div className="text-2xl font-bold text-gray-800 dark:text-white">
+                {stats.totalUpcoming}
+              </div>
+              <div className="text-xs text-gray-500 dark:text-gray-400">
+                Upcoming
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Upcoming Events */}
-      <div className="rounded-lg bg-white p-6 shadow dark:bg-gray-800">
-        <h2 className="mb-4 text-xl font-bold text-gray-800 dark:text-white">
-          Upcoming Events
-        </h2>
-        {upcomingEvents.length > 0 ? (
-          <div className="space-y-4">
-            {upcomingEvents.map((event) => (
-              <div
-                key={event.id}
-                className="flex items-center justify-between rounded-lg border border-gray-100 p-4 hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700/50"
-              >
-                <div>
-                  <h3 className="font-medium text-gray-800 dark:text-white">
-                    {event.title}
-                  </h3>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">
-                    {event.date}
-                  </p>
-                </div>
-                <Button
-                  size="sm"
-                  variant={event.type === "exam" ? "danger" : "secondary"}
-                >
-                  {event.type === "exam" ? "Prepare" : "Review"}
-                </Button>
-              </div>
-            ))}
+      {/* Stats row */}
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+        <div className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+          <div className="mb-2 flex items-center justify-between text-gray-500 dark:text-gray-400">
+            <span>Active Classes</span>
+            <FaChalkboardTeacher />
           </div>
-        ) : (
-          <p className="text-center text-gray-500 dark:text-gray-400">
-            No upcoming events
-          </p>
-        )}
+          <div className="text-3xl font-bold text-gray-900 dark:text-white">
+            {stats.activeClasses}
+          </div>
+          <div className="text-xs text-gray-500 dark:text-gray-400">
+            of {stats.totalClasses} total
+          </div>
+        </div>
+        <div className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+          <div className="mb-2 flex items-center justify-between text-gray-500 dark:text-gray-400">
+            <span>Quizzes Taken</span>
+            <FaClipboardList />
+          </div>
+          <div className="text-3xl font-bold text-gray-900 dark:text-white">
+            {Math.max(0, stats.totalUpcoming - 1)}
+          </div>
+          <div className="text-xs text-gray-500 dark:text-gray-400">
+            recent activity
+          </div>
+        </div>
+        <div className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+          <div className="mb-2 flex items-center justify-between text-gray-500 dark:text-gray-400">
+            <span>Achievements</span>
+            <FaTrophy />
+          </div>
+          <div className="text-3xl font-bold text-gray-900 dark:text-white">
+            {Math.min(100, stats.totalClasses * 5)}%
+          </div>
+          <div className="text-xs text-gray-500 dark:text-gray-400">
+            learning progress
+          </div>
+        </div>
+        <div className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+          <div className="mb-2 flex items-center justify-between text-gray-500 dark:text-gray-400">
+            <span>Notifications</span>
+            <FaBell />
+          </div>
+          <div className="text-3xl font-bold text-gray-900 dark:text-white">
+            {stats.totalNotifs}
+          </div>
+          <div className="text-xs text-gray-500 dark:text-gray-400">
+            latest updates
+          </div>
+        </div>
+      </div>
+
+      {/* Content sections */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        {/* Recent */}
+        <div className="col-span-1 rounded-xl border border-gray-100 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+          <h2 className="mb-4 text-xl font-bold text-gray-800 dark:text-white">
+            Recent Activity
+          </h2>
+          {isLoading ? (
+            <div className="space-y-3">
+              {[...Array(4)].map((_, i) => (
+                <div
+                  key={i}
+                  className="h-16 animate-pulse rounded-lg bg-gray-100 dark:bg-gray-700"
+                />
+              ))}
+            </div>
+          ) : recentActivities.length ? (
+            <div className="space-y-3">
+              {recentActivities.map((a) => (
+                <div
+                  key={`${a.type}-${a.id}`}
+                  className="flex items-center justify-between rounded-lg border border-gray-100 p-4 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700/50"
+                >
+                  <div>
+                    <p className="font-medium text-gray-800 dark:text-white">
+                      {a.title}
+                    </p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      {fmt(a.date)}
+                    </p>
+                  </div>
+                  <span className="rounded-full bg-[var(--color-gradient-from)]/10 px-3 py-1 text-xs font-medium text-[var(--color-gradient-from)] dark:bg-[var(--color-gradient-to)]/10 dark:text-[var(--color-gradient-to)]">
+                    {a.type === "session" ? "Session" : "Notice"}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              Nothing new yet. Join a class to get started!
+            </p>
+          )}
+        </div>
+
+        {/* Upcoming */}
+        <div className="col-span-2 rounded-xl border border-gray-100 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-xl font-bold text-gray-800 dark:text-white">
+              Upcoming Events
+            </h2>
+            <div className="text-xs text-gray-500 dark:text-gray-400">
+              {upcomingSessions.length} scheduled
+            </div>
+          </div>
+          {isLoading ? (
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              {[...Array(4)].map((_, i) => (
+                <div
+                  key={i}
+                  className="h-24 animate-pulse rounded-lg bg-gray-100 dark:bg-gray-700"
+                />
+              ))}
+            </div>
+          ) : upcomingSessions.length ? (
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              {upcomingSessions.map((ev) => (
+                <div
+                  key={ev.id}
+                  className="flex items-center justify-between rounded-lg border border-gray-100 p-4 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700/50"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--color-gradient-from)]/15 text-[var(--color-gradient-from)] dark:bg-[var(--color-gradient-to)]/15 dark:text-[var(--color-gradient-to)]">
+                      <FaCalendarAlt />
+                    </div>
+                    <div>
+                      <p className="font-medium text-gray-800 dark:text-white">
+                        {ev.name || "Quiz Session"}
+                      </p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        {fmt(ev.start_time)}
+                      </p>
+                    </div>
+                  </div>
+                  <Button size="sm" variant="secondary">
+                    Details
+                  </Button>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              No upcoming events
+            </p>
+          )}
+        </div>
       </div>
     </div>
   );

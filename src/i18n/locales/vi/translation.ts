@@ -19,6 +19,7 @@ export default {
     notFound: "Không tìm thấy trang",
     quizWaitingRoom: "Phòng chờ làm bài",
     quizTaking: "Làm bài thi",
+    quizPractice: "Luyện tập Quiz",
   },
 
   // Common UI Elements

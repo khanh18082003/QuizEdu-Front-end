@@ -44,4 +44,5 @@ export const PAGE_TITLES = {
   NOT_FOUND: "pageTitle.notFound",
   QUIZ_WAITING_ROOM: "pageTitle.quizWaitingRoom",
   QUIZ_TAKING: "pageTitle.quizTaking",
+  QUIZ_PRACTICE: "pageTitle.quizPractice",
 } as const;
