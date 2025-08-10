@@ -167,7 +167,7 @@ const EditNotificationModal: React.FC<EditNotificationModalProps> = ({
                   })}
                 </div>
                 <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                  Lưu ý: File mới sẽ được thêm vào danh sách hiện tại. Không bắt buộc phải có file.
+                  ⚠️ Lưu ý: Nếu bạn chọn file mới, tất cả file hiện tại sẽ bị thay thế.
                 </p>
               </div>
             )}
@@ -191,7 +191,7 @@ const EditNotificationModal: React.FC<EditNotificationModalProps> = ({
                       <span className="font-semibold">Nhấp để chọn file</span> hoặc kéo thả
                     </p>
                     <p className="text-xs text-gray-500 dark:text-gray-400">
-                      Hỗ trợ nhiều file, tất cả định dạng. Không bắt buộc.
+                      📁 Chọn file mới sẽ thay thế toàn bộ file cũ. Không bắt buộc.
                     </p>
                   </div>
                   <input 
