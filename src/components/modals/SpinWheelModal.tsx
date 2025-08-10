@@ -15,6 +15,7 @@ const SpinWheelModal = ({ isOpen, onClose, students, onStudentSelected }: SpinWh
   const [isSpinning, setIsSpinning] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState<RegisterResponse | null>(null);
   const [rotation, setRotation] = useState(0);
+  const [baseRotation, setBaseRotation] = useState(0);
   const wheelRef = useRef<SVGSVGElement>(null);
   const spinDuration = 3000;
 
@@ -24,8 +25,20 @@ const SpinWheelModal = ({ isOpen, onClose, students, onStudentSelected }: SpinWh
       setAvailableStudents([...students]);
       setSelectedStudent(null);
       setRotation(0);
+      setBaseRotation(0);
     }
   }, [isOpen, students]);
+
+  // Continuous rotation when not spinning and no student selected
+  useEffect(() => {
+    if (!isSpinning && !selectedStudent && isOpen) {
+      const interval = setInterval(() => {
+        setBaseRotation(prev => (prev + 1) % 360);
+      }, 50); // Update every 50ms for smooth rotation (72ms per degree = ~5 seconds per full rotation)
+      
+      return () => clearInterval(interval);
+    }
+  }, [isSpinning, selectedStudent, isOpen]);
 
   // Calculate wheel segments
   const segmentAngle = availableStudents.length > 0 ? 360 / availableStudents.length : 0;
@@ -51,10 +64,14 @@ const SpinWheelModal = ({ isOpen, onClose, students, onStudentSelected }: SpinWh
   const getPointedStudent = () => {
     if (availableStudents.length === 0) return null;
     
-    // Pointer is at 3 o'clock (90 degrees), calculate which segment it points to
-    const normalizedAngle = (360 - (rotation % 360)) % 360;
-    const adjustedAngle = (normalizedAngle + 90) % 360; // Adjust for pointer position
-    const selectedIndex = Math.floor(adjustedAngle / segmentAngle) % availableStudents.length;
+    // Pointer is at 3 o'clock (0 degrees in math, pointing right)
+    // We need to find which segment the pointer is currently pointing to
+    const totalRotation = (baseRotation + rotation) % 360;
+    // Since the wheel rotates clockwise, we need to account for that
+    const pointerAngle = (360 - totalRotation) % 360;
+    
+    // Calculate which segment the pointer is pointing to
+    const selectedIndex = Math.floor(pointerAngle / segmentAngle) % availableStudents.length;
     return availableStudents[selectedIndex];
   };
 
@@ -67,23 +84,28 @@ const SpinWheelModal = ({ isOpen, onClose, students, onStudentSelected }: SpinWh
     setIsSpinning(true);
     setSelectedStudent(null);
 
+    // Start from current baseRotation
+    const currentTotal = baseRotation + rotation;
     // More realistic spin: 4-6 full rotations plus random angle
     const fullRotations = (4 + Math.random() * 2) * 360;
     const randomAngle = Math.random() * 360;
-    const totalRotation = rotation + fullRotations + randomAngle;
+    const totalRotation = currentTotal + fullRotations + randomAngle;
 
-    setRotation(totalRotation);
+    // Set rotation to the additional rotation needed
+    setRotation(totalRotation - baseRotation);
 
     // Calculate winner after spin completes
     setTimeout(() => {
-      const finalAngle = totalRotation % 360;
-      const normalizedAngle = (360 - finalAngle) % 360;
-      const adjustedAngle = (normalizedAngle + 90) % 360;
-      const selectedIndex = Math.floor(adjustedAngle / segmentAngle) % availableStudents.length;
+      const finalRotation = totalRotation % 360;
+      const pointerAngle = (360 - finalRotation) % 360;
+      const selectedIndex = Math.floor(pointerAngle / segmentAngle) % availableStudents.length;
       const winner = availableStudents[selectedIndex];
       
       setSelectedStudent(winner);
       setIsSpinning(false);
+      // Reset rotation for next spin, keeping the final position as new base
+      setBaseRotation(finalRotation);
+      setRotation(0);
     }, spinDuration);
   };
 
@@ -101,6 +123,7 @@ const SpinWheelModal = ({ isOpen, onClose, students, onStudentSelected }: SpinWh
     setAvailableStudents([...students]);
     setSelectedStudent(null);
     setRotation(0);
+    setBaseRotation(0);
   };
 
   // Remove student from wheel
@@ -151,7 +174,7 @@ const SpinWheelModal = ({ isOpen, onClose, students, onStudentSelected }: SpinWh
                         ref={wheelRef}
                         className="w-full h-full transition-transform"
                         style={{
-                          transform: `rotate(${rotation}deg)`,
+                          transform: `rotate(${baseRotation + rotation}deg)`,
                           transitionDuration: isSpinning ? `${spinDuration}ms` : '0ms',
                           transitionTimingFunction: isSpinning ? 'cubic-bezier(0.25, 0.46, 0.45, 0.94)' : 'ease'
                         }}
@@ -175,17 +198,25 @@ const SpinWheelModal = ({ isOpen, onClose, students, onStudentSelected }: SpinWh
                             `Z`
                           ].join(' ');
 
-                          // Calculate text position
+                          // Calculate text position - vertical text from edge towards center
                           const textAngle = startAngle + (endAngle - startAngle) / 2;
-                          const textRadius = 70;
-                          const textX = 100 + textRadius * Math.cos(textAngle);
-                          const textY = 100 + textRadius * Math.sin(textAngle);
-                          const textRotation = (textAngle * 180 / Math.PI + 90) % 360;
-
+                          
                           // Check if this student is being pointed to or selected
                           const isPointed = pointedStudent?.id === student.id && !isSpinning;
                           const isSelected = selectedStudent?.id === student.id;
                           const isHighlighted = isPointed || isSelected;
+
+                          // Prepare text for vertical display from edge to center
+                          const displayName = student.first_name; // Only use first name
+                          const maxChars = 8; // Limit characters for better fit
+                          const finalDisplayName = displayName.length > maxChars ? 
+                            displayName.substring(0, maxChars - 2) + '..' : 
+                            displayName;
+                          
+                          const nameChars = finalDisplayName.split('');
+                          const startRadius = 50; // Start position
+                          const endRadius = 75; // End position  
+                          const charSpacing = (endRadius - startRadius) / Math.max(1, nameChars.length - 1);
 
                           return (
                             <g key={student.id}>
@@ -204,23 +235,36 @@ const SpinWheelModal = ({ isOpen, onClose, students, onStudentSelected }: SpinWh
                                   filter: isHighlighted ? 'drop-shadow(0 0 10px rgba(0,0,0,0.5))' : 'none'
                                 }}
                               />
-                              <text
-                                x={textX}
-                                y={textY}
-                                fill="white"
-                                fontSize="10"
-                                fontWeight="bold"
-                                textAnchor="middle"
-                                dominantBaseline="middle"
-                                transform={`rotate(${textRotation > 90 && textRotation < 270 ? textRotation + 180 : textRotation} ${textX} ${textY})`}
-                                style={{ 
-                                  textShadow: '2px 2px 4px rgba(0,0,0,0.8)',
-                                  filter: 'drop-shadow(1px 1px 2px rgba(0,0,0,0.8))'
-                                }}
-                                className={`transition-all duration-300 ${isHighlighted ? 'animate-pulse' : ''}`}
-                              >
-                                {student.first_name} {student.last_name}
-                              </text>
+                              
+                              {/* Render each character vertically from center outward */}
+                              {nameChars.map((char, charIndex) => {
+                                const charRadius = startRadius + (charIndex * charSpacing);
+                                const charX = 100 + charRadius * Math.cos(textAngle);
+                                const charY = 100 + charRadius * Math.sin(textAngle);
+                                // Adjust rotation to make text easier to read
+                                const charRotation = (textAngle * 180 / Math.PI);
+                                
+                                return (
+                                  <text
+                                    key={charIndex}
+                                    x={charX}
+                                    y={charY}
+                                    fill="white"
+                                    fontSize="11"
+                                    fontWeight="bold"
+                                    textAnchor="middle"
+                                    dominantBaseline="middle"
+                                    transform={`rotate(${charRotation > 90 && charRotation < 270 ? charRotation + 180 : charRotation} ${charX} ${charY})`}
+                                    style={{ 
+                                      textShadow: '2px 2px 4px rgba(0,0,0,0.8)',
+                                      filter: 'drop-shadow(1px 1px 2px rgba(0,0,0,0.8))'
+                                    }}
+                                    className={`transition-all duration-300 ${isHighlighted ? 'animate-pulse' : ''}`}
+                                  >
+                                    {char}
+                                  </text>
+                                );
+                              })}
                             </g>
                           );
                         })}
@@ -268,7 +312,7 @@ const SpinWheelModal = ({ isOpen, onClose, students, onStudentSelected }: SpinWh
                     ) : (
                       <>
                         <FaPlay />
-                        Quay wheel
+                        Quay
                       </>
                     )}
                   </Button>

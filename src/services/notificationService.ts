@@ -126,7 +126,7 @@ export const createNotification = async (
 // Update notification request interface
 export interface UpdateNotificationRequest {
   description: string;
-  files?: File[];
+  files: File[]; // Luôn cần files array, có thể rỗng
 }
 
 // Update an existing notification
@@ -137,8 +137,8 @@ export const updateNotification = async (
   const formData = new FormData();
   formData.append('description', request.description);
   
-  // Add files if provided
-  if (request.files && request.files.length > 0) {
+  // Add files if any
+  if (request.files.length > 0) {
     request.files.forEach((file) => {
       formData.append('files', file);
     });

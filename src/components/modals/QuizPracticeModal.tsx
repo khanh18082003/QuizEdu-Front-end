@@ -434,18 +434,33 @@ const QuizPracticeModal = ({ isOpen, onClose, quiz, selectedStudent }: QuizPract
   };
 
   const getCorrectAnswersCount = () => {
-    // Only count correct answers for scoreable questions (exclude intro)
-    return results.filter(result => {
-      if (!result.isCorrect) return false;
-      
-      // Check if this result belongs to a scoreable question
+    // Calculate total achievable score units instead of just counting questions
+    let totalCorrectUnits = 0;
+    let totalPossibleUnits = 0;
+    
+    results.forEach(result => {
       const question = allQuestions.find(q => {
         const questionId = 'question_text' in q ? q.question_id : q.id;
         return questionId === result.questionId;
       });
       
-      return question && (question as any).type !== 'matching_intro';
-    }).length;
+      // Only count scoreable questions (exclude intro)
+      if (question && (question as any).type !== 'matching_intro') {
+        if ((question as any).type === 'matching') {
+          // For matching questions, count correct pairs vs total pairs
+          const correctPairs = (result as any).correctPairsCount || 0;
+          const totalPairs = (result as any).totalPairs || 1;
+          totalCorrectUnits += correctPairs;
+          totalPossibleUnits += totalPairs;
+        } else {
+          // For other questions, it's binary (0 or 1)
+          totalCorrectUnits += result.isCorrect ? 1 : 0;
+          totalPossibleUnits += 1;
+        }
+      }
+    });
+    
+    return totalPossibleUnits > 0 ? `${totalCorrectUnits}/${totalPossibleUnits}` : '0/0';
   };
   
   // Helper function to get only scoreable questions (exclude intro)
@@ -482,23 +497,11 @@ const QuizPracticeModal = ({ isOpen, onClose, quiz, selectedStudent }: QuizPract
   };
   
   const getScorePercentage = () => {
-    const scoreableQuestions = getScoreableQuestions();
-    if (scoreableQuestions.length === 0) return 0;
+    const maxScore = getMaxScore();
+    const currentScore = getTotalScore();
     
-    // Count correct answers for scoreable questions only
-    const scoreableCorrectCount = results.filter(result => {
-      if (!result.isCorrect) return false;
-      
-      // Check if this result belongs to a scoreable question
-      const question = allQuestions.find(q => {
-        const questionId = 'question_text' in q ? q.question_id : q.id;
-        return questionId === result.questionId;
-      });
-      
-      return question && (question as any).type !== 'matching_intro';
-    }).length;
-    
-    return Math.round((scoreableCorrectCount / scoreableQuestions.length) * 100);
+    if (maxScore === 0) return 0;
+    return Math.round((currentScore / maxScore) * 100);
   };
   
   const getPerformanceMessage = () => {
@@ -512,13 +515,21 @@ const QuizPracticeModal = ({ isOpen, onClose, quiz, selectedStudent }: QuizPract
 
   const getTotalScore = () => {
     return results.reduce((total, result) => {
-      if (result.isCorrect) {
-        const question = allQuestions.find(q => {
-          const questionId = 'question_text' in q ? q.question_id : q.id;
-          return questionId === result.questionId;
-        });
-        // Only add points if it's not a matching_intro question
-        if (question && (question as any).type !== 'matching_intro') {
+      const question = allQuestions.find(q => {
+        const questionId = 'question_text' in q ? q.question_id : q.id;
+        return questionId === result.questionId;
+      });
+      
+      // Only add points if it's not a matching_intro question
+      if (question && (question as any).type !== 'matching_intro') {
+        if (question && (question as any).type === 'matching') {
+          // For matching questions, calculate partial score based on correct pairs
+          const correctPairs = (result as any).correctPairsCount || 0;
+          const totalPairs = (result as any).totalPairs || 1;
+          const partialScore = (question?.points || 0) * (correctPairs / totalPairs);
+          return total + Math.round(partialScore);
+        } else if (result.isCorrect) {
+          // For other question types, only add points if fully correct
           return total + (question?.points || 0);
         }
       }
@@ -733,6 +744,8 @@ const QuizPracticeModal = ({ isOpen, onClose, quiz, selectedStudent }: QuizPract
     const userAnswer = userAnswers.find(a => a.questionId === currentQuestionId);
     let isCorrect = false;
     let correctAnswer: any = null;
+    let matchingCorrectCount: number | undefined = undefined;
+    let matchingTotalCount: number | undefined = undefined;
 
     if (currentQuestion && 'question_text' in currentQuestion) {
       // Multiple choice
@@ -749,22 +762,26 @@ const QuizPracticeModal = ({ isOpen, onClose, quiz, selectedStudent }: QuizPract
                    userAnswerIndices.every((idx, index) => idx === correctAnswerIndices[index]);
       }
     } else if (currentQuestion.type === 'matching') {
-      // Individual matching type - only check pairs for this specific type
+      // Individual matching type - calculate partial score based on correct pairs
       const currentMatchingQuestion = currentQuestion as any;
       const typeQuestions = currentMatchingQuestion.questions;
       correctAnswer = typeQuestions.map((q: any) => ({ itemA: q.item_a.content, itemB: q.item_b.content }));
       
       if (matchingPairs && matchingPairs.length > 0) {
-        // Check if user matched all pairs correctly for this type
+        // Count how many pairs user matched correctly
         const correctPairsCount = matchingPairs.filter(userPair => 
           correctAnswer.some((correctPair: any) => 
             userPair.itemA === correctPair.itemA && userPair.itemB === correctPair.itemB
           )
         ).length;
         
-        // User needs to match all pairs correctly for this type
-        isCorrect = correctPairsCount === typeQuestions.length && 
-                   matchingPairs.length === typeQuestions.length;
+        // Consider it correct if user has at least one correct pair
+        // The actual scoring will be calculated separately based on correct pairs ratio
+        isCorrect = correctPairsCount > 0;
+        
+        // Store counts for later use in result object
+        matchingCorrectCount = correctPairsCount;
+        matchingTotalCount = typeQuestions.length;
       }
     }
 
@@ -794,6 +811,12 @@ const QuizPracticeModal = ({ isOpen, onClose, quiz, selectedStudent }: QuizPract
       },
       correctAnswer
     };
+
+    // Add partial scoring info for matching questions
+    if (currentQuestion.type === 'matching' && matchingCorrectCount !== undefined && matchingTotalCount !== undefined) {
+      (result as any).correctPairsCount = matchingCorrectCount;
+      (result as any).totalPairs = matchingTotalCount;
+    }
 
     setResults(prev => {
       const existingIndex = prev.findIndex(r => r.questionId === currentQuestionId);
@@ -877,22 +900,27 @@ const QuizPracticeModal = ({ isOpen, onClose, quiz, selectedStudent }: QuizPract
   // Floating Animation Component
   const FloatingShapes = () => (
     <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
-      {[...Array(8)].map((_, i) => (
+      {[...Array(6)].map((_, i) => (
         <div
           key={i}
-          className={`absolute opacity-10 animate-bounce ${
-            i % 2 === 0 ? 'bg-blue-500 rounded-full' : 'bg-purple-500 transform rotate-45'
-          }`}
+          className="absolute opacity-10 bg-gradient-to-r from-blue-200 to-purple-200 rounded-full"
           style={{
-            width: `${20 + Math.random() * 40}px`,
-            height: `${20 + Math.random() * 40}px`,
-            left: `${Math.random() * 100}%`,
-            top: `${Math.random() * 100}%`,
-            animationDelay: `${Math.random() * 4}s`,
-            animationDuration: `${3 + Math.random() * 3}s`,
+            width: `${30 + i * 10}px`,
+            height: `${30 + i * 10}px`,
+            left: `${15 + i * 15}%`,
+            top: `${10 + i * 12}%`,
+            animation: `float ${15 + i * 2}s ease-in-out infinite`,
+            animationDelay: `${i * 2}s`,
           }}
         />
       ))}
+      
+      <style>{`
+        @keyframes float {
+          0%, 100% { transform: translateY(0px); }
+          50% { transform: translateY(-20px); }
+        }
+      `}</style>
     </div>
   );
 
@@ -1454,15 +1482,29 @@ const QuizPracticeModal = ({ isOpen, onClose, quiz, selectedStudent }: QuizPract
             </div>
             
             <div className="mt-4 p-3 bg-white dark:bg-gray-800 rounded border">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-600 dark:text-gray-400">Điểm số:</span>
-                <span className="font-bold text-lg">
-                  {matchingPairs.filter(pair => 
-                    questionData.some((q: any) => 
-                      q.item_a.content === pair.itemA && q.item_b.content === pair.itemB
-                    )
-                  ).length} / {questionData.length}
-                </span>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-gray-600 dark:text-gray-400">Cặp ghép đúng:</span>
+                  <span className="font-bold text-lg">
+                    {matchingPairs.filter(pair => 
+                      questionData.some((q: any) => 
+                        q.item_a.content === pair.itemA && q.item_b.content === pair.itemB
+                      )
+                    ).length} / {questionData.length}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-gray-600 dark:text-gray-400">Điểm số đạt được:</span>
+                  <span className="font-bold text-lg text-blue-600">
+                    {Math.round((question.points || 0) * (
+                      matchingPairs.filter(pair => 
+                        questionData.some((q: any) => 
+                          q.item_a.content === pair.itemA && q.item_b.content === pair.itemB
+                        )
+                      ).length / questionData.length
+                    ))} / {question.points || 0} điểm
+                  </span>
+                </div>
               </div>
             </div>
           </div>
@@ -1608,7 +1650,7 @@ const QuizPracticeModal = ({ isOpen, onClose, quiz, selectedStudent }: QuizPract
   // Final Summary Screen
   if (showFinalSummary) {
     return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="fixed inset-0 bg-gradient-to-br from-blue-50 to-purple-100 dark:from-gray-900 dark:to-blue-900 flex items-center justify-center z-50">
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full mx-4">
           <div className="text-center p-8 bg-gradient-to-r from-green-50 to-blue-50 dark:from-green-900/20 dark:to-blue-900/20 rounded-t-lg">
             <div className="w-20 h-20 bg-gradient-to-r from-green-500 to-blue-500 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -1644,7 +1686,7 @@ const QuizPracticeModal = ({ isOpen, onClose, quiz, selectedStudent }: QuizPract
             <div className="grid grid-cols-2 gap-6 mb-8">
               <div className="text-center">
                 <div className="text-3xl font-bold text-blue-600 dark:text-blue-400 mb-2">
-                  {getCorrectAnswersCount()}/{getScoreableQuestions().length}
+                  {getCorrectAnswersCount()}
                 </div>
                 <div className="text-sm text-gray-600 dark:text-gray-400">Câu trả lời đúng</div>
               </div>
@@ -1696,7 +1738,7 @@ const QuizPracticeModal = ({ isOpen, onClose, quiz, selectedStudent }: QuizPract
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div className="fixed inset-0 bg-gradient-to-br from-blue-50 to-purple-100 dark:from-gray-900 dark:to-blue-900 flex items-center justify-center z-50">
       {/* Floating background shapes */}
       <FloatingShapes />
       
@@ -1724,7 +1766,7 @@ const QuizPracticeModal = ({ isOpen, onClose, quiz, selectedStudent }: QuizPract
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20">
           <div>
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">{quiz.quiz.name}</h2>
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">{quiz?.quiz?.name || 'Quiz Practice'}</h2>
             {(() => {
               const displayInfo = getCurrentQuestionDisplayInfo();
               return (
