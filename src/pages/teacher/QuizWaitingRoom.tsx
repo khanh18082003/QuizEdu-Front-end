@@ -339,7 +339,7 @@ const QuizWaitingRoom = () => {
           <div className="flex items-center justify-between">
             <div className="flex items-center">
               <button
-                onClick={handleEndSession}
+                onClick={() => navigate(-1)}
                 disabled={isEndingSession}
                 className="mr-6 flex cursor-pointer items-center text-gray-600 transition-colors hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-50 dark:text-gray-400 dark:hover:text-white"
               >
@@ -395,7 +395,7 @@ const QuizWaitingRoom = () => {
           {/* Main Content */}
           <div className="space-y-8 lg:col-span-2">
             {/* Session Info Card */}
-            <div className="rounded-2xl bg-white p-8 shadow-xl dark:bg-gray-800">
+            <div className="rounded-2xl bg-white p-8 shadow-xl dark:bg-gray-800" style={{ animation: "fade-in-up 0.4s ease both" }}>
               <div className="mb-8 text-center">
                 <div className="mb-4 inline-flex h-16 w-16 items-center justify-center rounded-full bg-green-100 dark:bg-green-900">
                   <FaPlay className="text-xl text-green-600 dark:text-green-400" />
@@ -478,14 +478,20 @@ const QuizWaitingRoom = () => {
                   disabled={
                     isStartingQuiz ||
                     isEndingSession ||
+                    isQuizStarted ||
                     (studentsInLobby.length === 0 && students.length > 0)
                   }
-                  className="flex-1 cursor-pointer py-2.5 text-base disabled:cursor-not-allowed"
+                  className="flex-1 cursor-pointer py-2.5 text-base disabled:cursor-not-allowed disabled:saturate-50 disabled:grayscale"
                 >
                   {isStartingQuiz ? (
                     <>
                       <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
                       Đang bắt đầu...
+                    </>
+                  ) : isQuizStarted ? (
+                    <>
+                      <FaCheckCircle className="mr-2 text-sm" />
+                      Đã bắt đầu
                     </>
                   ) : (
                     <>
@@ -499,7 +505,7 @@ const QuizWaitingRoom = () => {
           </div>
 
           {/* Sidebar */}
-          <div className="space-y-6">
+          <div className="space-y-6" style={{ animation: "slide-in-from-right 0.5s ease both" }}>
             {/* Students Progress */}
             <div className="rounded-2xl bg-white p-6 shadow-xl dark:bg-gray-800">
               <div className="mb-6 flex items-center justify-between">

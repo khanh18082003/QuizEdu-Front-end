@@ -267,17 +267,13 @@ const QuizTaking: React.FC = () => {
         matching_answers: matchingAnswers as MatchingAnswerSubmission[],
       };
 
-      console.log("Submitting quiz answers:");
-      console.log("Multiple choice answers:", multipleChoiceAnswers);
-      console.log("Matching answers:", matchingAnswers);
-      console.log("Full submission data:", submissionData);
-
       const score = await submitQuizAnswer(submissionData);
 
       if (typeof score.data === "number") {
         setQuizScore(score.data);
         setShowResultsModal(true);
         setTimerActive(false); // Stop the timer
+        hasSubmittedRef.current = true; // Mark as submitted to avoid duplicate submissions
       } else {
         setError("Có lỗi xảy ra khi nộp bài. Vui lòng thử lại.");
       }
@@ -306,6 +302,8 @@ const QuizTaking: React.FC = () => {
 
   // Ref để tránh dependency issues với submitQuiz
   const submitQuizRef = useRef<() => Promise<void>>(async () => {});
+  // Track whether the quiz has already been submitted to avoid duplicate submissions
+  const hasSubmittedRef = useRef(false);
 
   // Cập nhật ref mỗi khi submitQuiz thay đổi
   useEffect(() => {
@@ -690,9 +688,14 @@ const QuizTaking: React.FC = () => {
       console.log("📡 Received CLOSE QUIZ signal:", shouldClose);
       if (shouldClose) {
         console.log("📡 Processing quiz close signal from teacher");
-        // Auto-submit the quiz when teacher closes the session
-        setTimerActive(false); // Stop the timer
-        // Use ref to call submitQuiz
+        // Stop the timer first
+        setTimerActive(false);
+        // If already submitted, do not submit again
+        if (hasSubmittedRef.current) {
+          console.log("⏭️ Skipping auto-submit: already submitted");
+          return;
+        }
+        // Use ref to call submitQuiz only when not yet submitted
         if (submitQuizRef.current) {
           await submitQuizRef.current();
         }
@@ -718,7 +721,7 @@ const QuizTaking: React.FC = () => {
   }, [sessionId]); // Chỉ dependency sessionId
 
   const handleBackToLobby = () => {
-    navigate("/student/classrooms");
+    navigate(-1);
   };
 
   const handleAnswerChange = (
@@ -1007,7 +1010,7 @@ const QuizTaking: React.FC = () => {
               })}
             </svg>
 
-            <div className="relative z-20 grid grid-cols-2 gap-6">
+            <div className="relative z-20 grid grid-cols-2 gap-10 md:gap-16">
               {/* Column A */}
               <div className="space-y-3">
                 <h3 className="text-base font-semibold text-blue-600 dark:text-blue-400">
@@ -1030,7 +1033,7 @@ const QuizTaking: React.FC = () => {
                         }
                         disabled={isMatched}
                         aria-pressed={isSelected}
-                        className={`matching-item-hover matching-item-a-hover w-full rounded-lg border-2 p-3 text-left transition-all duration-200 ${
+                        className={`matching-item-hover matching-item-a-hover w-full rounded-lg border-2 p-3 text-left transition-all duration-200 h-16 md:h-20 ${
                           isMatched
                             ? "border-blue-500 bg-blue-50 dark:border-blue-400 dark:bg-blue-900/20"
                             : isSelected
@@ -1107,7 +1110,7 @@ const QuizTaking: React.FC = () => {
                         }
                         disabled={isMatched}
                         aria-pressed={isSelected}
-                        className={`matching-item-hover matching-item-b-hover w-full rounded-lg border-2 p-3 text-left transition-all duration-200 ${
+                        className={`matching-item-hover matching-item-b-hover w-full rounded-lg border-2 p-3 text-left transition-all duration-200 h-16 md:h-20 ${
                           isMatched
                             ? "border-purple-500 bg-purple-50 dark:border-purple-400 dark:bg-purple-900/20"
                             : isSelected
@@ -1623,7 +1626,7 @@ const QuizTaking: React.FC = () => {
       </div>
 
       {/* Main Content - Enhanced Layout */}
-      <div className="mx-auto max-w-5xl px-6 py-4">
+      <div className="mx-auto max-w-7xl px-6 py-4">
         <div className="flex h-[calc(100vh-9rem)] flex-col rounded-xl bg-white shadow-lg ring-1 ring-gray-200 dark:bg-gray-800 dark:ring-gray-700">
           {/* Question Content - Maximized Area */}
           <div className="flex-1 overflow-y-auto p-6">
