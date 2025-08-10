@@ -49,7 +49,7 @@ const LanguageSwitcher = ({
       </button>
 
       {toggleOpen && (
-        <div className="ring-opacity-5 absolute right-0 z-10 mt-1 w-40 rounded-md bg-white shadow-lg ring-1 ring-black dark:bg-gray-800 dark:ring-gray-700">
+        <div className="absolute bottom-10 right-0 z-50 mt-1 w-40 rounded-md bg-white shadow-lg ring-1 ring-black/10 dark:bg-gray-800 dark:ring-white/10">
           <div className="py-1" role="menu">
             {LANGS.map((item) => (
               <button
@@ -57,7 +57,7 @@ const LanguageSwitcher = ({
                 onClick={() => handleChange(item.code)}
                 className={`flex w-full items-center px-4 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 ${
                   lang === item.code
-                    ? "bg-gray-100 text-[var(--color-gradient-from)] dark:bg-gray-700"
+                    ? "bg-gray-100 text-[var(--color-gradient-to)] dark:bg-gray-700"
                     : "text-gray-700 dark:text-gray-200"
                 }`}
                 role="menuitem"

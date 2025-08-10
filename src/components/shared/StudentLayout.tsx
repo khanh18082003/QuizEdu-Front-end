@@ -365,16 +365,16 @@ const StudentLayout = () => {
                     />
                   ) : (
                     <span className="font-medium">
-                      {user && user.display_name
-                        ? user.display_name.substring(0, 2).toUpperCase()
+                      {user && user.first_name && user.last_name
+                        ? user.first_name.substring(0, 1).toUpperCase() + user.last_name.substring(0, 1)
                         : ""}
                     </span>
                   )}
                 </div>
               </div>
-              {user && user.display_name && (
+              {user && (
                 <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                  {user.display_name}
+                  {user.display_name ? user.display_name : user.first_name}
                 </span>
               )}
             </div>

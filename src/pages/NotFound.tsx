@@ -1,10 +1,11 @@
-import { Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { FaExclamationTriangle } from "react-icons/fa";
 import { PAGE_TITLES, usePageTitle } from "../utils/title";
 import { useTranslation } from "react-i18next";
 
 const NotFound = () => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   // Set page title
   usePageTitle(PAGE_TITLES.NOT_FOUND);
 
@@ -17,12 +18,12 @@ const NotFound = () => {
       <p className="mb-6 text-gray-600 dark:text-gray-300">
         Sorry, the page you are looking for does not exist or has been moved.
       </p>
-      <Link
-        to="/"
+      <button
+        onClick={() => navigate(-1)}
         className="inline-block rounded-full bg-gradient-to-r from-[#5d7cff] to-[#7e51c2] px-6 py-3 font-semibold text-white shadow transition-colors hover:opacity-90"
       >
-        Go to Home
-      </Link>
+        {t("common.back")}
+      </button>
     </div>
   );
 };

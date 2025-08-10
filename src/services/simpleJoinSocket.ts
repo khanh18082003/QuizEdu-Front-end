@@ -102,10 +102,30 @@ export const connectSessionSocket = (
 };
 
 export const disconnectSessionSocket = () => {
-  if (sessionStompClient !== null) {
-    sessionStompClient.disconnect(() => {
-      console.log("🔌 Session WebSocket disconnected");
-    });
+  if (!sessionStompClient) return;
+
+  try {
+    // StompJS exposes `connected` boolean when the CONNECT frame has been received
+    const isConnected = Boolean(sessionStompClient?.connected);
+    const wsReadyState = sessionStompClient?.ws?.readyState; // 0=CONNECTING,1=OPEN,2=CLOSING,3=CLOSED
+    const isWsOpen = wsReadyState === 1;
+
+    if (isConnected || isWsOpen) {
+      sessionStompClient.disconnect(() => {
+        console.log("🔌 Session WebSocket disconnected");
+      });
+    } else {
+      // If not connected yet, just ensure underlying socket is closed if possible
+      try {
+        sessionStompClient?.ws?.close?.();
+      } catch {
+        // ignore
+      }
+      console.warn("disconnectSessionSocket called before connection established; no action taken");
+    }
+  } catch (err) {
+    console.warn("Ignoring disconnect error:", err);
+  } finally {
     sessionStompClient = null;
   }
 };
