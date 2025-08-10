@@ -41,10 +41,14 @@ const EditNotificationModal: React.FC<EditNotificationModalProps> = ({
     onClose();
   };
 
-  // Handle file selection
+  // Handle file selection - allow multiple files
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFiles = Array.from(event.target.files || []);
-    setFiles(prevFiles => [...prevFiles, ...selectedFiles]);
+    if (selectedFiles.length > 0) {
+      setFiles(prevFiles => [...prevFiles, ...selectedFiles]);
+      // Reset input để có thể chọn lại cùng file nếu cần
+      event.target.value = '';
+    }
   };
 
   // Remove file from selection
@@ -68,7 +72,7 @@ const EditNotificationModal: React.FC<EditNotificationModalProps> = ({
 
       const updateRequest: UpdateNotificationRequest = {
         description: description.trim(),
-        files: files.length > 0 ? files : undefined,
+        files: files, // Luôn gửi files array, rỗng nếu không có file
       };
 
       const response = await updateNotification(notification.id, updateRequest);
@@ -163,7 +167,7 @@ const EditNotificationModal: React.FC<EditNotificationModalProps> = ({
                   })}
                 </div>
                 <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                  Lưu ý: File mới sẽ được thêm vào danh sách hiện tại
+                  Lưu ý: File mới sẽ được thêm vào danh sách hiện tại. Không bắt buộc phải có file.
                 </p>
               </div>
             )}
@@ -187,7 +191,7 @@ const EditNotificationModal: React.FC<EditNotificationModalProps> = ({
                       <span className="font-semibold">Nhấp để chọn file</span> hoặc kéo thả
                     </p>
                     <p className="text-xs text-gray-500 dark:text-gray-400">
-                      Hỗ trợ tất cả các định dạng file
+                      Hỗ trợ nhiều file, tất cả định dạng. Không bắt buộc.
                     </p>
                   </div>
                   <input 
@@ -203,9 +207,18 @@ const EditNotificationModal: React.FC<EditNotificationModalProps> = ({
               {/* New Selected Files Display */}
               {files.length > 0 && (
                 <div className="mt-4 space-y-2">
-                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                    File mới được chọn:
-                  </p>
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                      File mới được chọn ({files.length}):
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setFiles([])}
+                      className="text-sm text-red-500 hover:text-red-700 font-medium"
+                    >
+                      Xóa tất cả
+                    </button>
+                  </div>
                   {files.map((file, index) => (
                     <div key={index} className="flex items-center justify-between p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
                       <div className="flex items-center gap-3">
