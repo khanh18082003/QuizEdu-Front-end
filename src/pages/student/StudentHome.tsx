@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type React from "react";
+
 import {
   FaSearch,
   FaChalkboardTeacher,
@@ -20,6 +21,7 @@ import {
   type Notification,
 } from "../../services/notificationService";
 import type { QuizSessionDetailResponse } from "../../services/quizSessionService";
+import { Link } from "react-router-dom";
 
 const StudentHome = () => {
   // Join class state
@@ -114,15 +116,16 @@ const StudentHome = () => {
   const handleJoinRoom = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!/^\d{6}$/.test(roomCode)) {
-      setError("Room code must be 6 digits");
+    const code = roomCode.toUpperCase();
+    if (!/^[A-Z0-9]{6}$/.test(code)) {
+      setError("Room code must be 6 characters (A-Z, 0-9)");
       return;
     }
 
     try {
       setIsJoining(true);
       setError("");
-      const res = await joinClassroom(roomCode);
+      const res = await joinClassroom(code);
       if (res.code === "M000") {
         setRoomCode("");
         const clsRes = await getClassrooms(1, 9);
@@ -179,24 +182,23 @@ const StudentHome = () => {
             <h1 className="mt-1 text-3xl font-extrabold md:text-4xl">
               Welcome back!
             </h1>
-            <p className="mt-2 max-w-xl text-white/90">
-              Join your class instantly with a 6-digit code or explore upcoming
-              sessions.
+            <h1 className="text-2xl font-bold">Welcome back!</h1>
+            <p className="mt-1 text-white/90">
+              Join your class instantly with a 6-character code (A-Z, 0-9) or explore upcoming sessions.
             </p>
             <form
               onSubmit={handleJoinRoom}
               className="mt-6 flex max-w-md flex-col gap-2 sm:flex-row sm:items-center"
             >
-              <label htmlFor="roomCodeInput" className="sr-only">
-                Enter 6-digit class code
-              </label>
-              <div className="relative flex-1 sm:max-w-xs">
-                <FaSearch className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[var(--color-gradient-to)]" />
-                <input
-                  id="roomCodeInput"
+              <div className="flex-1">
+                <InputField
+                  id="roomCode"
+                  label="Enter 6-character class code (A-Z, 0-9)"
+                  type="text"
                   value={roomCode}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                    setRoomCode(e.target.value);
+                  onChange={(e) => {
+                    const val = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "");
+                    setRoomCode(val);
                     setError("");
                   }}
                   maxLength={6}
@@ -249,10 +251,10 @@ const StudentHome = () => {
         </div>
       </div>
 
-      {/* Stats row - only 2 cards */}
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-        <div className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-          <div className="mb-1.5 flex items-center justify-between text-gray-500 dark:text-gray-400">
+      {/* Stats row */}
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <div className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+          <div className="mb-2 flex items-center justify-between text-gray-500 dark:text-gray-400">
             <span>Active Classes</span>
             <FaChalkboardTeacher className="text-2xl" />
           </div>
@@ -263,8 +265,20 @@ const StudentHome = () => {
             of {stats.totalClasses} total
           </div>
         </div>
-        <div className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-          <div className="mb-1.5 flex items-center justify-between text-gray-500 dark:text-gray-400">
+        <div className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+          <div className="mb-2 flex items-center justify-between text-gray-500 dark:text-gray-400">
+            <span>Upcoming Events</span>
+            <FaCalendarCheck />
+          </div>
+          <div className="text-3xl font-bold text-gray-900 dark:text-white">
+            {stats.totalUpcoming}
+          </div>
+          <div className="text-xs text-gray-500 dark:text-gray-400">
+            scheduled
+          </div>
+        </div>
+        <div className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+          <div className="mb-2 flex items-center justify-between text-gray-500 dark:text-gray-400">
             <span>Notifications</span>
             <FaBell className="text-2xl" />
           </div>
@@ -274,6 +288,82 @@ const StudentHome = () => {
           <div className="text-[11px] text-gray-500 dark:text-gray-400">
             latest updates
           </div>
+        </div>
+      </div>
+
+      {/* Classes + Announcements */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        {/* Your Classes */}
+        <div className="col-span-2 rounded-xl border border-gray-100 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-xl font-bold text-gray-800 dark:text-white">Your Classes</h2>
+            <Link to="/student/classrooms" className="text-xs font-medium text-[var(--color-gradient-from)] hover:underline dark:text-[var(--color-gradient-to)]">
+              View all
+            </Link>
+          </div>
+          {isLoading ? (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {[...Array(6)].map((_, i) => (
+                <div key={i} className="h-24 animate-pulse rounded-lg bg-gray-100 dark:bg-gray-700" />
+              ))}
+            </div>
+          ) : classrooms.length ? (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {classrooms.slice(0, 6).map((c) => (
+                <Link
+                  to={`/student/classroom/${c.id}`}
+                  key={c.id}
+                  className="group rounded-lg border border-gray-100 p-4 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700/50"
+                >
+                  <div className="flex items-start justify-between">
+                    <p className="font-semibold text-gray-800 dark:text-white line-clamp-1">
+                      {c.name || "Classroom"}
+                    </p>
+                    <span className={`ml-2 shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${c.active ? "bg-emerald-500/10 text-emerald-600 dark:bg-emerald-400/10 dark:text-emerald-300" : "bg-gray-500/10 text-gray-600 dark:bg-gray-400/10 dark:text-gray-300"}`}>
+                      {c.active ? "Active" : "Inactive"}
+                    </span>
+                  </div>
+                  <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                    <div>Code: <span className="font-medium text-gray-700 dark:text-gray-200">{c.class_code}</span></div>
+                    <div className="mt-1">Teacher: <span className="font-medium text-gray-700 dark:text-gray-200">{c.teacher?.display_name || [c.teacher?.first_name, c.teacher?.last_name].filter(Boolean).join(" ") || "—"}</span></div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-gray-500 dark:text-gray-400">You haven’t joined any classes yet. Enter a class code above to get started.</p>
+          )}
+        </div>
+
+        {/* Announcements */}
+        <div className="col-span-1 rounded-xl border border-gray-100 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-xl font-bold text-gray-800 dark:text-white">Announcements</h2>
+            <div className="text-xs text-gray-500 dark:text-gray-400">{notifications.length} new</div>
+          </div>
+          {isLoading ? (
+            <div className="space-y-3">
+              {[...Array(5)].map((_, i) => (
+                <div key={i} className="h-16 animate-pulse rounded-lg bg-gray-100 dark:bg-gray-700" />
+              ))}
+            </div>
+          ) : notifications.length ? (
+            <div className="space-y-3">
+              {notifications.slice(0, 5).map((n) => (
+                <div key={n.id} className="flex items-start gap-3 rounded-lg border border-gray-100 p-4 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700/50">
+                  <div className="mt-0.5 flex h-9 w-9 items-center justify-center rounded-full bg-[var(--color-gradient-from)]/15 text-[var(--color-gradient-from)] dark:bg-[var(--color-gradient-to)]/15 dark:text-[var(--color-gradient-to)]">
+                    <FaBell />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-gray-800 dark:text-white">{n.description || "Class update"}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">{fmt(n.created_at || n.updated_at)}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-gray-500 dark:text-gray-400">No announcements yet.</p>
+          )}
         </div>
       </div>
 

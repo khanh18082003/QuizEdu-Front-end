@@ -20,8 +20,7 @@ import type {
   TeacherProfileResponse,
 } from "../../types/response";
 import { UserRole } from "../../types/userRole";
-import { setPageTitle, PAGE_TITLES, usePageTitle } from "../../utils/title";
-import { useTranslation } from "react-i18next";
+import { PAGE_TITLES, usePageTitle } from "../../utils/title";
 
 interface StudentData {
   email: string;
@@ -40,7 +39,6 @@ interface StudentData {
 }
 
 export const StudentProfile = () => {
-  const { t } = useTranslation();
   // Set page title
   usePageTitle(PAGE_TITLES.STUDENT_PROFILE);
   const [isEditing, setIsEditing] = useState(false);
@@ -98,6 +96,7 @@ export const StudentProfile = () => {
     { value: "HIGH_SCHOOL", label: "THPT" },
     { value: "UNDERGRADUATE", label: "Đại học" },
     { value: "POSTGRADUATE", label: "Thạc sĩ" },
+    { value: "DOCTORATE", label: "Tiến sĩ" },
   ];
 
   const handleInputChange = (field: keyof StudentData, value: string) => {
@@ -217,16 +216,12 @@ export const StudentProfile = () => {
     }
   };
 
-  // Set page title on mount
-  useEffect(() => {
-    setPageTitle(PAGE_TITLES.STUDENT_PROFILE);
-  }, []);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-6 dark:from-gray-900 dark:to-gray-800">
-      <div className="mx-auto max-w-4xl">
+    <div className="space-y-8">
+      <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8">
         {/* Header */}
-        <div className="mb-8 rounded-2xl bg-white shadow-xl dark:bg-gray-800">
+        <div className="mb-8 rounded-2xl border border-gray-100 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
           <div className="relative h-32 rounded-t-2xl bg-gradient-to-r from-[var(--color-gradient-from)] to-[var(--color-gradient-to)]"></div>
           <div className="px-8 pb-8">
             <div className="-mt-16 mb-6 flex items-center justify-between">
@@ -309,7 +304,7 @@ export const StudentProfile = () => {
         </div>
 
         {/* Profile Information */}
-        <div className="rounded-2xl bg-white p-8 shadow-xl dark:bg-gray-800">
+        <div className="rounded-2xl border border-gray-100 bg-white p-8 shadow-sm dark:border-gray-700 dark:bg-gray-800">
           <h2 className="mb-8 text-2xl font-bold text-gray-900 dark:text-white">
             Thông tin cá nhân
           </h2>

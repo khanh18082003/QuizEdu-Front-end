@@ -139,25 +139,11 @@ const QuizPractice: React.FC = () => {
   // Get current question
   const currentQuestion = allQuestions[currentQuestionIndex];
 
-  // Debug: Track selectedAnswers changes
-  useEffect(() => {
-    console.log("=== SELECTED ANSWERS CHANGED ===");
-    console.log("Current selectedAnswers:", selectedAnswers);
-    console.log("Current question ID:", currentQuestion?.id);
-    console.log("Current question index:", currentQuestionIndex);
-    console.log("All userAnswers:", userAnswers);
-  }, [selectedAnswers, currentQuestion?.id, currentQuestionIndex, userAnswers]);
-
   // Load current question's answers when question changes
   useEffect(() => {
-    console.log("=== LOADING CURRENT QUESTION ANSWERS ===");
-    console.log("Current question index:", currentQuestionIndex);
-    console.log("Current question:", currentQuestion);
-
     if (!currentQuestion) return;
 
     const currentAnswer = userAnswers[currentQuestion.id];
-    console.log("Found existing answer for current question:", currentAnswer);
 
     if (currentAnswer) {
       if (currentQuestion.type === "multiple_choice") {
