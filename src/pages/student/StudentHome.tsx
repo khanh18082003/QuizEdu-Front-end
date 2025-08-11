@@ -1,14 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
+import type React from "react";
 import {
   FaSearch,
-  FaTrophy,
   FaChalkboardTeacher,
   FaCalendarCheck,
-  FaClipboardList,
   FaBell,
   FaCalendarAlt,
 } from "react-icons/fa";
-import InputField from "../../components/ui/InputField";
 import Button from "../../components/ui/Button";
 import { PAGE_TITLES, usePageTitle } from "../../utils/title";
 import {
@@ -169,131 +167,121 @@ const StudentHome = () => {
 
   return (
     <div className="space-y-8">
-      {/* Hero / Join section */}
-      <div className="relative overflow-hidden rounded-2xl border border-gray-100 bg-gradient-to-r from-[var(--color-gradient-from)] to-[var(--color-gradient-to)] p-6 shadow-lg dark:border-gray-700 dark:from-gray-800 dark:to-gray-700">
-        <div className="pointer-events-none absolute -top-10 -left-10 h-40 w-40 rounded-full bg-white/15 blur-2xl dark:bg-white/5" />
-        <div className="pointer-events-none absolute -right-12 -bottom-12 h-48 w-48 rounded-full bg-white/10 blur-3xl dark:bg-white/5" />
-        <div className="relative grid grid-cols-1 gap-6 md:grid-cols-3">
+      {/* Hero / Join section - refined */}
+      <div className="relative overflow-hidden rounded-3xl border border-gray-100 bg-gradient-to-br from-[var(--color-gradient-from)] to-[var(--color-gradient-to)] p-6 shadow-lg md:p-8 dark:border-gray-700 dark:from-gray-900 dark:to-gray-800">
+        <div className="pointer-events-none absolute -top-16 -left-16 h-56 w-56 rounded-full bg-white/15 blur-3xl dark:bg-white/5" />
+        <div className="pointer-events-none absolute -right-24 -bottom-20 h-72 w-72 rounded-full bg-white/10 blur-3xl dark:bg-white/5" />
+        <div className="relative grid grid-cols-1 gap-8 md:grid-cols-3">
           <div className="col-span-2 text-white">
-            <h1 className="text-2xl font-bold">Welcome back!</h1>
-            <p className="mt-1 text-white/90">
+            <p className="text-xs tracking-wide text-white/80 uppercase">
+              Your learning hub
+            </p>
+            <h1 className="mt-1 text-3xl font-extrabold md:text-4xl">
+              Welcome back!
+            </h1>
+            <p className="mt-2 max-w-xl text-white/90">
               Join your class instantly with a 6-digit code or explore upcoming
               sessions.
             </p>
             <form
               onSubmit={handleJoinRoom}
-              className="mt-5 flex flex-col gap-3 sm:flex-row"
+              className="mt-6 flex max-w-md flex-col gap-2 sm:flex-row sm:items-center"
             >
-              <div className="flex-1">
-                <InputField
-                  id="roomCode"
-                  label="Enter 6-digit class code"
-                  type="text"
+              <label htmlFor="roomCodeInput" className="sr-only">
+                Enter 6-digit class code
+              </label>
+              <div className="relative flex-1 sm:max-w-xs">
+                <FaSearch className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[var(--color-gradient-to)]" />
+                <input
+                  id="roomCodeInput"
                   value={roomCode}
-                  onChange={(e) => {
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
                     setRoomCode(e.target.value);
                     setError("");
                   }}
-                  error={error}
-                  icon={<FaSearch />}
                   maxLength={6}
-                  className="bg-white/90 text-gray-800 placeholder:text-gray-500 dark:bg-white/10 dark:text-white"
+                  placeholder="Enter 6-digit class code"
+                  className="h-12 w-full rounded-xl bg-white/95 pr-4 pl-10 text-sm text-gray-900 shadow-sm ring-0 outline-none placeholder:text-gray-500 focus:shadow-md focus:ring-2 focus:ring-white/50 dark:bg-white/10 dark:text-white"
                 />
               </div>
               <Button
                 type="submit"
                 variant="secondary"
-                className="shrink-0"
+                size="sm"
+                className="h-12 cursor-pointer rounded-xl px-4 text-sm"
                 disabled={!roomCode || isJoining}
+                isLoading={isJoining}
+                loadingText="Joining..."
               >
-                {isJoining ? "Joining..." : "Join Class"}
+                Join
               </Button>
             </form>
+            {error && <p className="mt-2 text-xs text-red-100/90">{error}</p>}
           </div>
-          <div className="col-span-1 grid grid-cols-2 gap-3">
-            <div className="rounded-xl bg-white/95 p-4 text-center shadow-sm backdrop-blur-sm dark:bg-gray-800/80">
-              <div className="mb-1 flex items-center justify-center text-[var(--color-gradient-from)] dark:text-[var(--color-gradient-to)]">
-                <FaChalkboardTeacher />
+          <div className="col-span-1 grid grid-cols-1 gap-3">
+            <div className="flex items-center gap-3 rounded-2xl bg-white/95 p-3 shadow-sm backdrop-blur-sm dark:bg-gray-800/80">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[var(--color-gradient-from)]/15 text-[var(--color-gradient-from)] dark:bg-[var(--color-gradient-to)]/15 dark:text-[var(--color-gradient-to)]">
+                <FaChalkboardTeacher className="text-2xl" />
               </div>
-              <div className="text-2xl font-bold text-gray-800 dark:text-white">
-                {stats.totalClasses}
-              </div>
-              <div className="text-xs text-gray-500 dark:text-gray-400">
-                Classes
+              <div>
+                <div className="text-[11px] leading-4 text-gray-500 dark:text-gray-400">
+                  Classes
+                </div>
+                <div className="text-lg font-bold text-gray-900 dark:text-white">
+                  {stats.totalClasses}
+                </div>
               </div>
             </div>
-            <div className="rounded-xl bg-white/95 p-4 text-center shadow-sm backdrop-blur-sm dark:bg-gray-800/80">
-              <div className="mb-1 flex items-center justify-center text-[var(--color-gradient-from)] dark:text-[var(--color-gradient-to)]">
-                <FaCalendarCheck />
+            <div className="flex items-center gap-3 rounded-2xl bg-white/95 p-3 shadow-sm backdrop-blur-sm dark:bg-gray-800/80">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[var(--color-gradient-from)]/15 text-[var(--color-gradient-from)] dark:bg-[var(--color-gradient-to)]/15 dark:text-[var(--color-gradient-to)]">
+                <FaCalendarCheck className="text-2xl" />
               </div>
-              <div className="text-2xl font-bold text-gray-800 dark:text-white">
-                {stats.totalUpcoming}
-              </div>
-              <div className="text-xs text-gray-500 dark:text-gray-400">
-                Upcoming
+              <div>
+                <div className="text-[11px] leading-4 text-gray-500 dark:text-gray-400">
+                  Upcoming
+                </div>
+                <div className="text-lg font-bold text-gray-900 dark:text-white">
+                  {stats.totalUpcoming}
+                </div>
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Stats row */}
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
-        <div className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-          <div className="mb-2 flex items-center justify-between text-gray-500 dark:text-gray-400">
+      {/* Stats row - only 2 cards */}
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+        <div className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+          <div className="mb-1.5 flex items-center justify-between text-gray-500 dark:text-gray-400">
             <span>Active Classes</span>
-            <FaChalkboardTeacher />
+            <FaChalkboardTeacher className="text-2xl" />
           </div>
-          <div className="text-3xl font-bold text-gray-900 dark:text-white">
+          <div className="text-xl font-bold text-gray-900 dark:text-white">
             {stats.activeClasses}
           </div>
-          <div className="text-xs text-gray-500 dark:text-gray-400">
+          <div className="text-[11px] text-gray-500 dark:text-gray-400">
             of {stats.totalClasses} total
           </div>
         </div>
-        <div className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-          <div className="mb-2 flex items-center justify-between text-gray-500 dark:text-gray-400">
-            <span>Quizzes Taken</span>
-            <FaClipboardList />
-          </div>
-          <div className="text-3xl font-bold text-gray-900 dark:text-white">
-            {Math.max(0, stats.totalUpcoming - 1)}
-          </div>
-          <div className="text-xs text-gray-500 dark:text-gray-400">
-            recent activity
-          </div>
-        </div>
-        <div className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-          <div className="mb-2 flex items-center justify-between text-gray-500 dark:text-gray-400">
-            <span>Achievements</span>
-            <FaTrophy />
-          </div>
-          <div className="text-3xl font-bold text-gray-900 dark:text-white">
-            {Math.min(100, stats.totalClasses * 5)}%
-          </div>
-          <div className="text-xs text-gray-500 dark:text-gray-400">
-            learning progress
-          </div>
-        </div>
-        <div className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-          <div className="mb-2 flex items-center justify-between text-gray-500 dark:text-gray-400">
+        <div className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+          <div className="mb-1.5 flex items-center justify-between text-gray-500 dark:text-gray-400">
             <span>Notifications</span>
-            <FaBell />
+            <FaBell className="text-2xl" />
           </div>
-          <div className="text-3xl font-bold text-gray-900 dark:text-white">
+          <div className="text-xl font-bold text-gray-900 dark:text-white">
             {stats.totalNotifs}
           </div>
-          <div className="text-xs text-gray-500 dark:text-gray-400">
+          <div className="text-[11px] text-gray-500 dark:text-gray-400">
             latest updates
           </div>
         </div>
       </div>
 
       {/* Content sections */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
         {/* Recent */}
-        <div className="col-span-1 rounded-xl border border-gray-100 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-          <h2 className="mb-4 text-xl font-bold text-gray-800 dark:text-white">
+        <div className="col-span-1 rounded-xl border border-gray-100 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+          <h2 className="mb-3 text-lg font-bold text-gray-800 dark:text-white">
             Recent Activity
           </h2>
           {isLoading ? (
@@ -310,7 +298,7 @@ const StudentHome = () => {
               {recentActivities.map((a) => (
                 <div
                   key={`${a.type}-${a.id}`}
-                  className="flex items-center justify-between rounded-lg border border-gray-100 p-4 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700/50"
+                  className="flex items-center justify-between rounded-lg border border-gray-100 p-3 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700/50"
                 >
                   <div>
                     <p className="font-medium text-gray-800 dark:text-white">
@@ -334,12 +322,12 @@ const StudentHome = () => {
         </div>
 
         {/* Upcoming */}
-        <div className="col-span-2 rounded-xl border border-gray-100 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-xl font-bold text-gray-800 dark:text-white">
+        <div className="col-span-2 rounded-xl border border-gray-100 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-lg font-bold text-gray-800 dark:text-white">
               Upcoming Events
             </h2>
-            <div className="text-xs text-gray-500 dark:text-gray-400">
+            <div className="text-[11px] text-gray-500 dark:text-gray-400">
               {upcomingSessions.length} scheduled
             </div>
           </div>
@@ -357,10 +345,10 @@ const StudentHome = () => {
               {upcomingSessions.map((ev) => (
                 <div
                   key={ev.id}
-                  className="flex items-center justify-between rounded-lg border border-gray-100 p-4 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700/50"
+                  className="flex items-center justify-between rounded-lg border border-gray-100 p-3 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700/50"
                 >
                   <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--color-gradient-from)]/15 text-[var(--color-gradient-from)] dark:bg-[var(--color-gradient-to)]/15 dark:text-[var(--color-gradient-to)]">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--color-gradient-from)]/15 text-[var(--color-gradient-from)] dark:bg-[var(--color-gradient-to)]/15 dark:text-[var(--color-gradient-to)]">
                       <FaCalendarAlt />
                     </div>
                     <div>
@@ -372,7 +360,7 @@ const StudentHome = () => {
                       </p>
                     </div>
                   </div>
-                  <Button size="sm" variant="secondary">
+                  <Button size="sm" variant="outline">
                     Details
                   </Button>
                 </div>
