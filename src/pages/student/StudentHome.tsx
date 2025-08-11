@@ -22,6 +22,7 @@ import {
 } from "../../services/notificationService";
 import type { QuizSessionDetailResponse } from "../../services/quizSessionService";
 import { Link } from "react-router-dom";
+import InputField from "../../components/ui/InputField";
 
 const StudentHome = () => {
   // Join class state
@@ -182,10 +183,6 @@ const StudentHome = () => {
             <h1 className="mt-1 text-3xl font-extrabold md:text-4xl">
               Welcome back!
             </h1>
-            <h1 className="text-2xl font-bold">Welcome back!</h1>
-            <p className="mt-1 text-white/90">
-              Join your class instantly with a 6-character code (A-Z, 0-9) or explore upcoming sessions.
-            </p>
             <form
               onSubmit={handleJoinRoom}
               className="mt-6 flex max-w-md flex-col gap-2 sm:flex-row sm:items-center"
@@ -197,7 +194,9 @@ const StudentHome = () => {
                   type="text"
                   value={roomCode}
                   onChange={(e) => {
-                    const val = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "");
+                    const val = e.target.value
+                      .toUpperCase()
+                      .replace(/[^A-Z0-9]/g, "");
                     setRoomCode(val);
                     setError("");
                   }}
@@ -296,15 +295,23 @@ const StudentHome = () => {
         {/* Your Classes */}
         <div className="col-span-2 rounded-xl border border-gray-100 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-xl font-bold text-gray-800 dark:text-white">Your Classes</h2>
-            <Link to="/student/classrooms" className="text-xs font-medium text-[var(--color-gradient-from)] hover:underline dark:text-[var(--color-gradient-to)]">
+            <h2 className="text-xl font-bold text-gray-800 dark:text-white">
+              Your Classes
+            </h2>
+            <Link
+              to="/student/classrooms"
+              className="text-xs font-medium text-[var(--color-gradient-from)] hover:underline dark:text-[var(--color-gradient-to)]"
+            >
               View all
             </Link>
           </div>
           {isLoading ? (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {[...Array(6)].map((_, i) => (
-                <div key={i} className="h-24 animate-pulse rounded-lg bg-gray-100 dark:bg-gray-700" />
+                <div
+                  key={i}
+                  className="h-24 animate-pulse rounded-lg bg-gray-100 dark:bg-gray-700"
+                />
               ))}
             </div>
           ) : classrooms.length ? (
@@ -316,53 +323,88 @@ const StudentHome = () => {
                   className="group rounded-lg border border-gray-100 p-4 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700/50"
                 >
                   <div className="flex items-start justify-between">
-                    <p className="font-semibold text-gray-800 dark:text-white line-clamp-1">
+                    <p className="line-clamp-1 font-semibold text-gray-800 dark:text-white">
                       {c.name || "Classroom"}
                     </p>
-                    <span className={`ml-2 shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${c.active ? "bg-emerald-500/10 text-emerald-600 dark:bg-emerald-400/10 dark:text-emerald-300" : "bg-gray-500/10 text-gray-600 dark:bg-gray-400/10 dark:text-gray-300"}`}>
+                    <span
+                      className={`ml-2 shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${c.active ? "bg-emerald-500/10 text-emerald-600 dark:bg-emerald-400/10 dark:text-emerald-300" : "bg-gray-500/10 text-gray-600 dark:bg-gray-400/10 dark:text-gray-300"}`}
+                    >
                       {c.active ? "Active" : "Inactive"}
                     </span>
                   </div>
                   <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                    <div>Code: <span className="font-medium text-gray-700 dark:text-gray-200">{c.class_code}</span></div>
-                    <div className="mt-1">Teacher: <span className="font-medium text-gray-700 dark:text-gray-200">{c.teacher?.display_name || [c.teacher?.first_name, c.teacher?.last_name].filter(Boolean).join(" ") || "—"}</span></div>
+                    <div>
+                      Code:{" "}
+                      <span className="font-medium text-gray-700 dark:text-gray-200">
+                        {c.class_code}
+                      </span>
+                    </div>
+                    <div className="mt-1">
+                      Teacher:{" "}
+                      <span className="font-medium text-gray-700 dark:text-gray-200">
+                        {c.teacher?.display_name ||
+                          [c.teacher?.first_name, c.teacher?.last_name]
+                            .filter(Boolean)
+                            .join(" ") ||
+                          "—"}
+                      </span>
+                    </div>
                   </div>
                 </Link>
               ))}
             </div>
           ) : (
-            <p className="text-sm text-gray-500 dark:text-gray-400">You haven’t joined any classes yet. Enter a class code above to get started.</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              You haven’t joined any classes yet. Enter a class code above to
+              get started.
+            </p>
           )}
         </div>
 
         {/* Announcements */}
         <div className="col-span-1 rounded-xl border border-gray-100 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-xl font-bold text-gray-800 dark:text-white">Announcements</h2>
-            <div className="text-xs text-gray-500 dark:text-gray-400">{notifications.length} new</div>
+            <h2 className="text-xl font-bold text-gray-800 dark:text-white">
+              Announcements
+            </h2>
+            <div className="text-xs text-gray-500 dark:text-gray-400">
+              {notifications.length} new
+            </div>
           </div>
           {isLoading ? (
             <div className="space-y-3">
               {[...Array(5)].map((_, i) => (
-                <div key={i} className="h-16 animate-pulse rounded-lg bg-gray-100 dark:bg-gray-700" />
+                <div
+                  key={i}
+                  className="h-16 animate-pulse rounded-lg bg-gray-100 dark:bg-gray-700"
+                />
               ))}
             </div>
           ) : notifications.length ? (
             <div className="space-y-3">
               {notifications.slice(0, 5).map((n) => (
-                <div key={n.id} className="flex items-start gap-3 rounded-lg border border-gray-100 p-4 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700/50">
+                <div
+                  key={n.id}
+                  className="flex items-start gap-3 rounded-lg border border-gray-100 p-4 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700/50"
+                >
                   <div className="mt-0.5 flex h-9 w-9 items-center justify-center rounded-full bg-[var(--color-gradient-from)]/15 text-[var(--color-gradient-from)] dark:bg-[var(--color-gradient-to)]/15 dark:text-[var(--color-gradient-to)]">
                     <FaBell />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-gray-800 dark:text-white">{n.description || "Class update"}</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">{fmt(n.created_at || n.updated_at)}</p>
+                    <p className="truncate text-sm font-medium text-gray-800 dark:text-white">
+                      {n.description || "Class update"}
+                    </p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      {fmt(n.created_at || n.updated_at)}
+                    </p>
                   </div>
                 </div>
               ))}
             </div>
           ) : (
-            <p className="text-sm text-gray-500 dark:text-gray-400">No announcements yet.</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              No announcements yet.
+            </p>
           )}
         </div>
       </div>
