@@ -22,7 +22,6 @@ import {
 } from "../../services/notificationService";
 import type { QuizSessionDetailResponse } from "../../services/quizSessionService";
 import { Link } from "react-router-dom";
-import InputField from "../../components/ui/InputField";
 
 const StudentHome = () => {
   // Join class state
@@ -187,13 +186,16 @@ const StudentHome = () => {
               onSubmit={handleJoinRoom}
               className="mt-6 flex max-w-md flex-col gap-2 sm:flex-row sm:items-center"
             >
-              <div className="flex-1">
-                <InputField
-                  id="roomCode"
-                  label="Enter 6-character class code (A-Z, 0-9)"
-                  type="text"
+              {/* Compact inline input to align with button */}
+              <label htmlFor="roomCodeInput" className="sr-only">
+                Enter 6-character class code (A-Z, 0-9)
+              </label>
+              <div className="relative flex-1 sm:max-w-xs">
+                <FaSearch className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[var(--color-gradient-to)]" />
+                <input
+                  id="roomCodeInput"
                   value={roomCode}
-                  onChange={(e) => {
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
                     const val = e.target.value
                       .toUpperCase()
                       .replace(/[^A-Z0-9]/g, "");
@@ -201,7 +203,7 @@ const StudentHome = () => {
                     setError("");
                   }}
                   maxLength={6}
-                  placeholder="Enter 6-digit class code"
+                  placeholder="Enter 6-character class code"
                   className="h-12 w-full rounded-xl bg-white/95 pr-4 pl-10 text-sm text-gray-900 shadow-sm ring-0 outline-none placeholder:text-gray-500 focus:shadow-md focus:ring-2 focus:ring-white/50 dark:bg-white/10 dark:text-white"
                 />
               </div>
@@ -214,7 +216,7 @@ const StudentHome = () => {
                 isLoading={isJoining}
                 loadingText="Joining..."
               >
-                Join
+                Join class
               </Button>
             </form>
             {error && <p className="mt-2 text-xs text-red-100/90">{error}</p>}

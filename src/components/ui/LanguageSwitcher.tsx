@@ -15,6 +15,7 @@ const LanguageSwitcher = ({
   const { i18n, t } = useTranslation();
   const [lang, setLang] = useState(() => localStorage.getItem("lang") || "vi");
   const [toggleOpen, setToggleOpen] = useState(false);
+  const [dropUp, setDropUp] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -24,8 +25,42 @@ const LanguageSwitcher = ({
         setToggleOpen(false);
       }
     };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setToggleOpen(false);
+    };
     document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [toggleOpen]);
+
+  // Dynamically decide to show dropdown above or below based on available space
+  useEffect(() => {
+    if (!toggleOpen) return;
+
+    const computePlacement = () => {
+      const el = ref.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const spaceAbove = rect.top;
+      // Estimate menu height (items * itemHeight + padding). Keep conservative.
+      const estimatedMenuHeight = Math.min(300, 44 * LANGS.length + 12);
+      const shouldDropUp =
+        spaceBelow < estimatedMenuHeight && spaceAbove > spaceBelow;
+      setDropUp(shouldDropUp);
+    };
+
+    computePlacement();
+    window.addEventListener("resize", computePlacement);
+    // Use capture to catch scrolls on parents as well
+    window.addEventListener("scroll", computePlacement, true);
+    return () => {
+      window.removeEventListener("resize", computePlacement);
+      window.removeEventListener("scroll", computePlacement, true);
+    };
   }, [toggleOpen]);
 
   const handleChange = (code: string) => {
@@ -38,19 +73,30 @@ const LanguageSwitcher = ({
     }
   };
 
+  const menuPositionClasses = dropUp ? "bottom-full mb-2" : "top-full mt-2";
+
   return (
     <div ref={ref} className="relative">
       <button
+        id="language-menu-button"
         onClick={() => setToggleOpen(!toggleOpen)}
         className="flex items-center gap-2 rounded-full bg-gray-100 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600"
+        aria-haspopup="menu"
+        aria-expanded={toggleOpen}
+        aria-controls="language-menu"
       >
         <FaGlobe className="h-3.5 w-3.5" />
         {LANGS.find((l) => l.code === lang)?.label || "Language"}
       </button>
 
       {toggleOpen && (
-        <div className="absolute bottom-10 right-0 z-50 mt-1 w-40 rounded-md bg-white shadow-lg ring-1 ring-black/10 dark:bg-gray-800 dark:ring-white/10">
-          <div className="py-1" role="menu">
+        <div
+          id="language-menu"
+          aria-labelledby="language-menu-button"
+          role="menu"
+          className={`absolute right-0 z-50 w-40 rounded-md bg-white shadow-lg ring-1 ring-black/10 dark:bg-gray-800 dark:ring-white/10 ${menuPositionClasses}`}
+        >
+          <div className="py-1">
             {LANGS.map((item) => (
               <button
                 key={item.code}
