@@ -15,7 +15,7 @@ const RegisterOptions = () => {
         <h1 className="mb-2 text-3xl font-bold text-gray-900 dark:text-white">
           Join QuizEdu
         </h1>
-        <p className="text-gray-600 dark:text-gray-300">
+        <p className="text-gray dark:text-gray-300">
           Choose your account type to get started
         </p>
       </div>
@@ -61,12 +61,9 @@ const RegisterOptions = () => {
       </div>
 
       <div className="mt-8 text-center">
-        <p className="text-gray-600 dark:text-gray-300">
+        <p className="text-black dark:text-gray-300">
           Already have an account?{" "}
-          <Link
-            to="/login"
-            className="text-[var(--color-gradient-from)] hover:underline"
-          >
+          <Link to="/authentication/login" className="hover:underline">
             Sign in
           </Link>
         </p>

@@ -43,8 +43,8 @@ export const getAllNotifications = async (
 ): Promise<SuccessApiResponse<Notification[]>> => {
   const response = await axiosCustom.get(`/notifications/getAll`, {
     params: {
-      class_id: classId
-    }
+      class_id: classId,
+    },
   });
   return response.data;
 };
@@ -76,9 +76,12 @@ export const submitNotificationComment = async (
   notificationId: string,
   content: string,
 ): Promise<SuccessApiResponse<CommentResponse>> => {
-  const response = await axiosCustom.post(`/notifications/${notificationId}/comment`, {
-    content: content
-  });
+  const response = await axiosCustom.post(
+    `/notifications/${notificationId}/comment`,
+    {
+      content: content,
+    },
+  );
   return response.data;
 };
 
@@ -105,19 +108,19 @@ export const createNotification = async (
   request: CreateNotificationRequest,
 ): Promise<SuccessApiResponse<NotificationResponse>> => {
   const formData = new FormData();
-  formData.append('description', request.description);
-  formData.append('classId', request.class_id); // Backend expects classId in form data
-  
+  formData.append("description", request.description);
+  formData.append("classId", request.class_id); // Backend expects classId in form data
+  formData.append("replaceFiles", "false");
   // Add files if provided
   if (request.files && request.files.length > 0) {
     request.files.forEach((file) => {
-      formData.append('files', file);
+      formData.append("files", file);
     });
   }
 
-  const response = await axiosCustom.post('/notifications', formData, {
+  const response = await axiosCustom.post("/notifications", formData, {
     headers: {
-      'Content-Type': 'multipart/form-data',
+      "Content-Type": "multipart/form-data",
     },
   });
   return response.data;
@@ -135,22 +138,22 @@ export const updateNotification = async (
   request: UpdateNotificationRequest,
 ): Promise<SuccessApiResponse<NotificationResponse>> => {
   const formData = new FormData();
-  formData.append('description', request.description);
-  
+  formData.append("description", request.description);
+
   // Tự động set replaceFiles = true nếu có file mới
   const replaceFiles = request.files.length > 0;
-  formData.append('replaceFiles', replaceFiles.toString());
-  
+  formData.append("replaceFiles", replaceFiles.toString());
+
   // Add files if any
   if (request.files.length > 0) {
     request.files.forEach((file) => {
-      formData.append('files', file);
+      formData.append("files", file);
     });
   }
 
   const response = await axiosCustom.put(`/notifications/${id}`, formData, {
     headers: {
-      'Content-Type': 'multipart/form-data',
+      "Content-Type": "multipart/form-data",
     },
   });
   return response.data;
@@ -169,7 +172,9 @@ export const deleteComment = async (
   notificationId: string,
   commentId: string,
 ): Promise<SuccessApiResponse<void>> => {
-  const response = await axiosCustom.delete(`/notifications/${notificationId}/comment/${commentId}`);
+  const response = await axiosCustom.delete(
+    `/notifications/${notificationId}/comment/${commentId}`,
+  );
   return response.data;
 };
 
@@ -179,8 +184,11 @@ export const updateComment = async (
   commentId: string,
   content: string,
 ): Promise<SuccessApiResponse<CommentResponse>> => {
-  const response = await axiosCustom.put(`/notifications/${notificationId}/comment/${commentId}`, {
-    content: content
-  });
+  const response = await axiosCustom.put(
+    `/notifications/${notificationId}/comment/${commentId}`,
+    {
+      content: content,
+    },
+  );
   return response.data;
 };

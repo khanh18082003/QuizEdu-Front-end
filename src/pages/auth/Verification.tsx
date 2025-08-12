@@ -260,14 +260,7 @@ const Verification = () => {
           console.error("Account verification error:", error);
           const errorCode = error?.response?.data?.code;
 
-          if (errorCode === "U103") {
-            setError("Code has been used already. Please request a new code.");
-          } else if (errorCode === "U104") {
-            setError("Code has expired. Please request a new code.");
-          } else if (
-            errorCode === "M100" &&
-            error?.response?.data?.status === 401
-          ) {
+          if (errorCode === "M100" && error?.response?.data?.status === 401) {
             setError(
               "Invalid code or expired time. Please request a new code.",
             );

@@ -72,7 +72,24 @@ const QuizReviewModal: React.FC<QuizReviewModalProps> = ({
 
     // Process multiple choice questions
     if (historyData.multiple_choice_quiz?.questions) {
-      historyData.multiple_choice_quiz.questions.forEach((mcQuestion) => {
+      historyData.multiple_choice_quiz.questions.forEach((mcQuestion, idx) => {
+        // Guard: if mcQuestion is null/undefined, record as incorrect with no answer
+        if (!mcQuestion) {
+          questions.push({
+            id: `mc-${idx}`,
+            type: "multiple_choice",
+            question: "Câu hỏi không khả dụng",
+            points: 0,
+            hint: undefined,
+            userAnswer: null,
+            correctAnswer: [],
+            isCorrect: false,
+            options: [],
+            allowMultiple: false,
+          });
+          return;
+        }
+
         // Collect ALL answers from this user (for allow_multiple_answers there can be many)
         const participantsForUser = (
           mcQuestion.answer_participants || []

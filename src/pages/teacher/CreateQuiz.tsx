@@ -4,17 +4,17 @@ import Button from "../../components/ui/Button";
 import InputField from "../../components/ui/InputField";
 import Toast from "../../components/ui/Toast";
 import LoadingOverlay from "../../components/ui/LoadingOverlay";
-import { 
+import {
   createQuizWithFormData,
   type CreateMultipleChoiceQuestion,
   type CreateMatchingQuestion,
   type CreateFillInBlankQuestion,
-  type CreateTrueFalseQuestion
+  type CreateTrueFalseQuestion,
 } from "../../services/quizService";
-import { 
-  FaPlus, 
-  FaTrash, 
-  FaSave, 
+import {
+  FaPlus,
+  FaTrash,
+  FaSave,
   FaArrowLeft,
   FaCheck,
   FaTimes,
@@ -22,7 +22,7 @@ import {
   FaClipboardList,
   FaToggleOn,
   FaToggleOff,
-  FaExclamationTriangle
+  FaExclamationTriangle,
 } from "react-icons/fa";
 
 // Extended interface to support file uploads and grouped matching
@@ -45,7 +45,7 @@ const CreateQuiz = () => {
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<QuizType | "basic">("basic");
-  
+
   // Toast state
   const [toast, setToast] = useState<{
     message: string;
@@ -70,22 +70,27 @@ const CreateQuiz = () => {
   });
 
   // Multiple Choice Questions
-  const [multipleChoiceQuestions, setMultipleChoiceQuestions] = useState<CreateMultipleChoiceQuestion[]>([]);
-  
+  const [multipleChoiceQuestions, setMultipleChoiceQuestions] = useState<
+    CreateMultipleChoiceQuestion[]
+  >([]);
+
   // Matching Questions organized by groups
   const [matchingGroups, setMatchingGroups] = useState<MatchingGroup[]>([]);
   const [matchingTimeLimit, setMatchingTimeLimit] = useState(60);
-  
-  // Fill in Blank Questions (for future development)
-  const [fillInBlankQuestions, _setFillInBlankQuestions] = useState<CreateFillInBlankQuestion[]>([]);
-  
-  // True/False Questions (for future development)
-  const [trueFalseQuestions, _setTrueFalseQuestions] = useState<CreateTrueFalseQuestion[]>([]);
 
-  const handleInputChange = (field: string, value: any) => {
-    setBasicInfo(prev => ({
+  // Fill in Blank Questions (for future development)
+  const [fillInBlankQuestions] = useState<CreateFillInBlankQuestion[]>([]);
+
+  // True/False Questions (for future development)
+  const [trueFalseQuestions] = useState<CreateTrueFalseQuestion[]>([]);
+
+  const handleInputChange = <K extends keyof typeof basicInfo>(
+    field: K,
+    value: (typeof basicInfo)[K],
+  ) => {
+    setBasicInfo((prev) => ({
       ...prev,
-      [field]: value
+      [field]: value,
     }));
   };
 
@@ -101,24 +106,64 @@ const CreateQuiz = () => {
         { answer_text: "", correct: true },
         { answer_text: "", correct: false },
         { answer_text: "", correct: false },
-        { answer_text: "", correct: false }
-      ]
+        { answer_text: "", correct: false },
+      ],
     };
     setMultipleChoiceQuestions([...multipleChoiceQuestions, newQuestion]);
   };
 
-  const updateMultipleChoiceQuestion = (index: number, field: string, value: any) => {
+  const updateMultipleChoiceQuestion = <
+    K extends keyof CreateMultipleChoiceQuestion,
+  >(
+    index: number,
+    field: K,
+    value: CreateMultipleChoiceQuestion[K],
+  ) => {
     const updated = [...multipleChoiceQuestions];
+
+    // If toggling to single-answer mode, keep only the first correct answer
+    if (field === "allow_multiple_answers" && value === false) {
+      const firstCorrectIndex = updated[index].answers.findIndex(
+        (a) => a.correct,
+      );
+      updated[index].answers = updated[index].answers.map((a, i) => ({
+        ...a,
+        correct: firstCorrectIndex !== -1 && i === firstCorrectIndex,
+      }));
+    }
+
     updated[index] = { ...updated[index], [field]: value };
     setMultipleChoiceQuestions(updated);
   };
 
-  const updateMultipleChoiceAnswer = (questionIndex: number, answerIndex: number, field: string, value: any) => {
+  type MCAnswer = CreateMultipleChoiceQuestion["answers"][number];
+  const updateMultipleChoiceAnswer = <K extends keyof MCAnswer>(
+    questionIndex: number,
+    answerIndex: number,
+    field: K,
+    value: MCAnswer[K],
+  ) => {
     const updated = [...multipleChoiceQuestions];
-    updated[questionIndex].answers[answerIndex] = {
-      ...updated[questionIndex].answers[answerIndex],
-      [field]: value
-    };
+
+    // In single-answer mode, selecting a correct answer unselects others
+    if (
+      field === "correct" &&
+      value === true &&
+      !updated[questionIndex].allow_multiple_answers
+    ) {
+      updated[questionIndex].answers = updated[questionIndex].answers.map(
+        (a, i) => ({
+          ...a,
+          correct: i === answerIndex,
+        }),
+      );
+    } else {
+      updated[questionIndex].answers[answerIndex] = {
+        ...updated[questionIndex].answers[answerIndex],
+        [field]: value,
+      };
+    }
+
     setMultipleChoiceQuestions(updated);
   };
 
@@ -128,16 +173,22 @@ const CreateQuiz = () => {
     setMultipleChoiceQuestions(updated);
   };
 
-  const removeAnswerFromMultipleChoice = (questionIndex: number, answerIndex: number) => {
+  const removeAnswerFromMultipleChoice = (
+    questionIndex: number,
+    answerIndex: number,
+  ) => {
     const updated = [...multipleChoiceQuestions];
-    if (updated[questionIndex].answers.length > 2) { // Keep at least 2 answers
+    if (updated[questionIndex].answers.length > 2) {
+      // Keep at least 2 answers
       updated[questionIndex].answers.splice(answerIndex, 1);
       setMultipleChoiceQuestions(updated);
     }
   };
 
   const removeMultipleChoiceQuestion = (index: number) => {
-    setMultipleChoiceQuestions(multipleChoiceQuestions.filter((_, i) => i !== index));
+    setMultipleChoiceQuestions(
+      multipleChoiceQuestions.filter((_, i) => i !== index),
+    );
   };
 
   // Matching Functions
@@ -146,108 +197,147 @@ const CreateQuiz = () => {
       id: `group_${Date.now()}`,
       type_combination: typeCombination,
       points_per_pair: 1,
-      questions: []
+      questions: [],
     };
-    
+
     // Add minimum 2 empty questions
     for (let i = 0; i < 2; i++) {
-      const [typeA, typeB] = typeCombination.split('-');
+      const [typeA, typeB] = typeCombination.split("-");
       newGroup.questions.push({
         content_a: "",
         type_a: typeA as "TEXT" | "IMAGE",
         content_b: "",
-        type_b: typeB as "TEXT" | "IMAGE", 
+        type_b: typeB as "TEXT" | "IMAGE",
         points: 1,
         file_a: undefined,
-        file_b: undefined
+        file_b: undefined,
       });
     }
-    
+
     setMatchingGroups([...matchingGroups, newGroup]);
   };
 
-  const updateMatchingGroup = (groupId: string, field: string, value: any) => {
-    setMatchingGroups(prev => prev.map(group => 
-      group.id === groupId ? { ...group, [field]: value } : group
-    ));
+  const updateMatchingGroup = <K extends keyof MatchingGroup>(
+    groupId: string,
+    field: K,
+    value: MatchingGroup[K],
+  ) => {
+    setMatchingGroups((prev) =>
+      prev.map((group) =>
+        group.id === groupId ? { ...group, [field]: value } : group,
+      ),
+    );
   };
 
   const addQuestionToGroup = (groupId: string) => {
-    setMatchingGroups(prev => prev.map(group => {
-      if (group.id === groupId && group.questions.length < 5) {
-        const [typeA, typeB] = group.type_combination.split('-');
-        const newQuestion: CreateMatchingQuestionWithFile = {
-          content_a: "",
-          type_a: typeA as "TEXT" | "IMAGE",
-          content_b: "",
-          type_b: typeB as "TEXT" | "IMAGE",
-          points: group.points_per_pair,
-          file_a: undefined,
-          file_b: undefined
-        };
-        return { ...group, questions: [...group.questions, newQuestion] };
-      }
-      return group;
-    }));
+    setMatchingGroups((prev) =>
+      prev.map((group) => {
+        if (group.id === groupId && group.questions.length < 5) {
+          const [typeA, typeB] = group.type_combination.split("-");
+          const newQuestion: CreateMatchingQuestionWithFile = {
+            content_a: "",
+            type_a: typeA as "TEXT" | "IMAGE",
+            content_b: "",
+            type_b: typeB as "TEXT" | "IMAGE",
+            points: group.points_per_pair,
+            file_a: undefined,
+            file_b: undefined,
+          };
+          return { ...group, questions: [...group.questions, newQuestion] };
+        }
+        return group;
+      }),
+    );
   };
 
   const removeQuestionFromGroup = (groupId: string, questionIndex: number) => {
-    setMatchingGroups(prev => prev.map(group => {
-      if (group.id === groupId && group.questions.length > 2) {
-        const updatedQuestions = group.questions.filter((_, index) => index !== questionIndex);
-        return { ...group, questions: updatedQuestions };
-      }
-      return group;
-    }));
+    setMatchingGroups((prev) =>
+      prev.map((group) => {
+        if (group.id === groupId && group.questions.length > 2) {
+          const updatedQuestions = group.questions.filter(
+            (_, index) => index !== questionIndex,
+          );
+          return { ...group, questions: updatedQuestions };
+        }
+        return group;
+      }),
+    );
   };
 
-  const updateQuestionInGroup = (groupId: string, questionIndex: number, field: string, value: any) => {
-    setMatchingGroups(prev => prev.map(group => {
-      if (group.id === groupId) {
-        const updatedQuestions = group.questions.map((question, index) =>
-          index === questionIndex ? { ...question, [field]: value } : question
-        );
-        return { ...group, questions: updatedQuestions };
-      }
-      return group;
-    }));
+  const updateQuestionInGroup = <
+    K extends keyof CreateMatchingQuestionWithFile,
+  >(
+    groupId: string,
+    questionIndex: number,
+    field: K,
+    value: CreateMatchingQuestionWithFile[K],
+  ) => {
+    setMatchingGroups((prev) =>
+      prev.map((group) => {
+        if (group.id === groupId) {
+          const updatedQuestions = group.questions.map((question, index) =>
+            index === questionIndex
+              ? { ...question, [field]: value }
+              : question,
+          );
+          return { ...group, questions: updatedQuestions };
+        }
+        return group;
+      }),
+    );
   };
 
-  const handleGroupFileUpload = (groupId: string, questionIndex: number, field: 'file_a' | 'file_b', file: File | null) => {
-    setMatchingGroups(prev => prev.map(group => {
-      if (group.id === groupId) {
-        const updatedQuestions = group.questions.map((question, index) => {
-          if (index === questionIndex) {
-            const updatedQuestion = { ...question, [field]: file };
-            // Clear corresponding content when file is selected
-            if (file) {
-              const contentField = field === 'file_a' ? 'content_a' : 'content_b';
-              updatedQuestion[contentField] = '';
+  const handleGroupFileUpload = (
+    groupId: string,
+    questionIndex: number,
+    field: "file_a" | "file_b",
+    file: File | null,
+  ) => {
+    setMatchingGroups((prev) =>
+      prev.map((group) => {
+        if (group.id === groupId) {
+          const updatedQuestions = group.questions.map((question, index) => {
+            if (index === questionIndex) {
+              const updatedQuestion = { ...question, [field]: file };
+              // Clear corresponding content when file is selected
+              if (file) {
+                const contentField =
+                  field === "file_a" ? "content_a" : "content_b";
+                updatedQuestion[contentField] = "";
+              }
+              return updatedQuestion;
             }
-            return updatedQuestion;
-          }
-          return question;
-        });
-        return { ...group, questions: updatedQuestions };
-      }
-      return group;
-    }));
+            return question;
+          });
+          return { ...group, questions: updatedQuestions };
+        }
+        return group;
+      }),
+    );
   };
 
-  const clearGroupFile = (groupId: string, questionIndex: number, field: 'file_a' | 'file_b') => {
-    setMatchingGroups(prev => prev.map(group => {
-      if (group.id === groupId) {
-        const updatedQuestions = group.questions.map((question, index) =>
-          index === questionIndex ? { ...question, [field]: undefined } : question
-        );
-        return { ...group, questions: updatedQuestions };
-      }
-      return group;
-    }));
+  const clearGroupFile = (
+    groupId: string,
+    questionIndex: number,
+    field: "file_a" | "file_b",
+  ) => {
+    setMatchingGroups((prev) =>
+      prev.map((group) => {
+        if (group.id === groupId) {
+          const updatedQuestions = group.questions.map((question, index) =>
+            index === questionIndex
+              ? { ...question, [field]: undefined }
+              : question,
+          );
+          return { ...group, questions: updatedQuestions };
+        }
+        return group;
+      }),
+    );
   };
 
   const removeMatchingGroup = (groupId: string) => {
-    setMatchingGroups(matchingGroups.filter(group => group.id !== groupId));
+    setMatchingGroups(matchingGroups.filter((group) => group.id !== groupId));
   };
 
   const handleSubmit = async () => {
@@ -263,56 +353,117 @@ const CreateQuiz = () => {
 
       // Create FormData for file upload support
       const formData = new FormData();
-      
+
       // Add basic info
-      formData.append('name', basicInfo.name);
-      formData.append('description', basicInfo.description);
-      formData.append('isActive', basicInfo.is_active.toString());
+      formData.append("name", basicInfo.name);
+      formData.append("description", basicInfo.description);
+      formData.append("isActive", basicInfo.is_active.toString());
       formData.append("isPublic", basicInfo.is_public.toString());
 
       // Add multiple choice questions if they exist
       if (multipleChoiceQuestions.length > 0) {
-        multipleChoiceQuestions.forEach((question, qIndex) => {
-          formData.append(`multipleChoiceQuiz.questions[${qIndex}].questionText`, question.question_text);
-          formData.append(`multipleChoiceQuiz.questions[${qIndex}].hint`, question.hint);
-          formData.append(`multipleChoiceQuiz.questions[${qIndex}].timeLimit`, question.time_limit.toString());
-          formData.append(`multipleChoiceQuiz.questions[${qIndex}].allowMultipleAnswers`, question.allow_multiple_answers.toString());
-          formData.append(`multipleChoiceQuiz.questions[${qIndex}].points`, question.points.toString());
-          
+        // Normalize MC questions: if single-answer mode, enforce at most one correct
+        const processedMultipleChoiceQuestions = multipleChoiceQuestions.map(
+          (q) => {
+            if (q.allow_multiple_answers) return q;
+            const firstCorrectIndex = q.answers.findIndex((a) => a.correct);
+            const normalizedAnswers = q.answers.map((a, i) => ({
+              ...a,
+              correct: firstCorrectIndex !== -1 && i === firstCorrectIndex,
+            }));
+            return { ...q, answers: normalizedAnswers };
+          },
+        );
+
+        processedMultipleChoiceQuestions.forEach((question, qIndex) => {
+          formData.append(
+            `multipleChoiceQuiz.questions[${qIndex}].questionText`,
+            question.question_text,
+          );
+          formData.append(
+            `multipleChoiceQuiz.questions[${qIndex}].hint`,
+            question.hint,
+          );
+          formData.append(
+            `multipleChoiceQuiz.questions[${qIndex}].timeLimit`,
+            question.time_limit.toString(),
+          );
+          formData.append(
+            `multipleChoiceQuiz.questions[${qIndex}].allowMultipleAnswers`,
+            question.allow_multiple_answers.toString(),
+          );
+          formData.append(
+            `multipleChoiceQuiz.questions[${qIndex}].points`,
+            question.points.toString(),
+          );
+
           question.answers.forEach((answer, aIndex) => {
-            formData.append(`multipleChoiceQuiz.questions[${qIndex}].answers[${aIndex}].answerText`, answer.answer_text);
-            formData.append(`multipleChoiceQuiz.questions[${qIndex}].answers[${aIndex}].correct`, answer.correct.toString());
+            formData.append(
+              `multipleChoiceQuiz.questions[${qIndex}].answers[${aIndex}].answerText`,
+              answer.answer_text,
+            );
+            formData.append(
+              `multipleChoiceQuiz.questions[${qIndex}].answers[${aIndex}].correct`,
+              answer.correct.toString(),
+            );
           });
         });
       }
 
       // Add matching questions if they exist
       if (matchingGroups.length > 0) {
-        formData.append('matchingQuiz.timeLimit', matchingTimeLimit.toString());
-        
+        formData.append("matchingQuiz.timeLimit", matchingTimeLimit.toString());
+
         let questionIndex = 0;
         matchingGroups.forEach((group) => {
           group.questions.forEach((question) => {
-            formData.append(`matchingQuiz.questions[${questionIndex}].points`, group.points_per_pair.toString());
-            
+            formData.append(
+              `matchingQuiz.questions[${questionIndex}].points`,
+              group.points_per_pair.toString(),
+            );
+
             // Handle side A
             if (question.file_a) {
-              formData.append(`matchingQuiz.questions[${questionIndex}].fileContentA`, question.file_a);
-              formData.append(`matchingQuiz.questions[${questionIndex}].typeA`, 'IMAGE');
+              formData.append(
+                `matchingQuiz.questions[${questionIndex}].fileContentA`,
+                question.file_a,
+              );
+              formData.append(
+                `matchingQuiz.questions[${questionIndex}].typeA`,
+                "IMAGE",
+              );
             } else if (question.content_a) {
-              formData.append(`matchingQuiz.questions[${questionIndex}].contentA`, question.content_a);
-              formData.append(`matchingQuiz.questions[${questionIndex}].typeA`, 'TEXT');
+              formData.append(
+                `matchingQuiz.questions[${questionIndex}].contentA`,
+                question.content_a,
+              );
+              formData.append(
+                `matchingQuiz.questions[${questionIndex}].typeA`,
+                "TEXT",
+              );
             }
 
             // Handle side B
             if (question.file_b) {
-              formData.append(`matchingQuiz.questions[${questionIndex}].fileContentB`, question.file_b);
-              formData.append(`matchingQuiz.questions[${questionIndex}].typeB`, 'IMAGE');
+              formData.append(
+                `matchingQuiz.questions[${questionIndex}].fileContentB`,
+                question.file_b,
+              );
+              formData.append(
+                `matchingQuiz.questions[${questionIndex}].typeB`,
+                "IMAGE",
+              );
             } else if (question.content_b) {
-              formData.append(`matchingQuiz.questions[${questionIndex}].contentB`, question.content_b);
-              formData.append(`matchingQuiz.questions[${questionIndex}].typeB`, 'TEXT');
+              formData.append(
+                `matchingQuiz.questions[${questionIndex}].contentB`,
+                question.content_b,
+              );
+              formData.append(
+                `matchingQuiz.questions[${questionIndex}].typeB`,
+                "TEXT",
+              );
             }
-            
+
             questionIndex++;
           });
         });
@@ -320,24 +471,25 @@ const CreateQuiz = () => {
 
       // TODO: Replace with actual FormData API call
       // For now, we'll use the existing API but this should be updated to handle FormData
-      console.log('FormData to be sent:');
-      console.log('Basic info state:', basicInfo);
-      console.log('is_public value:', basicInfo.is_public);
-      console.log('is_public type:', typeof basicInfo.is_public);
-      
+      console.log("FormData to be sent:");
+      console.log("Basic info state:", basicInfo);
+      console.log("is_public value:", basicInfo.is_public);
+      console.log("is_public type:", typeof basicInfo.is_public);
+
       for (const [key, value] of formData.entries()) {
-        console.log(`${key}: ${value instanceof File ? `[FILE: ${value.name}]` : value}`);
+        console.log(
+          `${key}: ${value instanceof File ? `[FILE: ${value.name}]` : value}`,
+        );
       }
 
       // Use the new FormData API
       await createQuizWithFormData(formData);
       showToast("Tạo quiz thành công! Bạn có thể thêm câu hỏi sau.", "success");
-      
+
       // Navigate back to quiz management after a delay
       setTimeout(() => {
         navigate("/teacher/quizzes");
       }, 1500);
-
     } catch (error) {
       console.error("Error creating quiz:", error);
       showToast("Có lỗi xảy ra khi tạo quiz", "error");
@@ -347,18 +499,31 @@ const CreateQuiz = () => {
   };
 
   const calculateTotalQuestions = () => {
-    const matchingQuestionsCount = matchingGroups.reduce((total, group) => total + group.questions.length, 0);
-    return multipleChoiceQuestions.length + 
-           matchingQuestionsCount + 
-           fillInBlankQuestions.length + 
-           trueFalseQuestions.length;
+    const matchingQuestionsCount = matchingGroups.reduce(
+      (total, group) => total + group.questions.length,
+      0,
+    );
+    return (
+      multipleChoiceQuestions.length +
+      matchingQuestionsCount +
+      fillInBlankQuestions.length +
+      trueFalseQuestions.length
+    );
   };
 
   const calculateTotalPoints = () => {
-    const mcPoints = multipleChoiceQuestions.reduce((sum, q) => sum + q.points, 0);
-    const matchingPoints = matchingGroups.reduce((sum, group) => 
-      sum + (group.questions.length * group.points_per_pair), 0);
-    const fillPoints = fillInBlankQuestions.reduce((sum, q) => sum + q.points, 0);
+    const mcPoints = multipleChoiceQuestions.reduce(
+      (sum, q) => sum + q.points,
+      0,
+    );
+    const matchingPoints = matchingGroups.reduce(
+      (sum, group) => sum + group.questions.length * group.points_per_pair,
+      0,
+    );
+    const fillPoints = fillInBlankQuestions.reduce(
+      (sum, q) => sum + q.points,
+      0,
+    );
     const tfPoints = trueFalseQuestions.reduce((sum, q) => sum + q.points, 0);
     return mcPoints + matchingPoints + fillPoints + tfPoints;
   };
@@ -369,7 +534,7 @@ const CreateQuiz = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="mb-8">
           <div className="flex items-center justify-between">
@@ -386,13 +551,15 @@ const CreateQuiz = () => {
                 <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
                   Tạo Quiz Mới
                 </h1>
-                <p className="text-gray-600 dark:text-gray-400 mt-2">
-                  {calculateTotalQuestions()} câu hỏi • {calculateTotalPoints()} điểm
-                  {calculateTotalQuestions() === 0 && " • Có thể thêm câu hỏi sau"}
+                <p className="mt-2 text-gray-600 dark:text-gray-400">
+                  {calculateTotalQuestions()} câu hỏi • {calculateTotalPoints()}{" "}
+                  điểm
+                  {calculateTotalQuestions() === 0 &&
+                    " • Có thể thêm câu hỏi sau"}
                 </p>
               </div>
             </div>
-            <Button 
+            <Button
               onClick={handleSubmit}
               className="flex items-center gap-2"
               disabled={!basicInfo.name.trim() || !basicInfo.description.trim()}
@@ -404,11 +571,11 @@ const CreateQuiz = () => {
         </div>
 
         {/* Navigation Tabs */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 mb-6">
+        <div className="mb-6 rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
           <div className="flex overflow-x-auto">
             <button
               onClick={() => setActiveTab("basic")}
-              className={`px-6 py-4 whitespace-nowrap font-medium text-sm border-b-2 transition-colors ${
+              className={`border-b-2 px-6 py-4 text-sm font-medium whitespace-nowrap transition-colors ${
                 activeTab === "basic"
                   ? "border-blue-500 text-blue-600 dark:text-blue-400"
                   : "border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
@@ -421,7 +588,7 @@ const CreateQuiz = () => {
             </button>
             <button
               onClick={() => setActiveTab("multiple_choice")}
-              className={`px-6 py-4 whitespace-nowrap font-medium text-sm border-b-2 transition-colors ${
+              className={`border-b-2 px-6 py-4 text-sm font-medium whitespace-nowrap transition-colors ${
                 activeTab === "multiple_choice"
                   ? "border-blue-500 text-blue-600 dark:text-blue-400"
                   : "border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
@@ -434,7 +601,7 @@ const CreateQuiz = () => {
             </button>
             <button
               onClick={() => setActiveTab("matching")}
-              className={`px-6 py-4 whitespace-nowrap font-medium text-sm border-b-2 transition-colors ${
+              className={`border-b-2 px-6 py-4 text-sm font-medium whitespace-nowrap transition-colors ${
                 activeTab === "matching"
                   ? "border-blue-500 text-blue-600 dark:text-blue-400"
                   : "border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
@@ -442,12 +609,17 @@ const CreateQuiz = () => {
             >
               <div className="flex items-center gap-2">
                 <FaQuestionCircle />
-                Ghép đôi ({matchingGroups.reduce((total, group) => total + group.questions.length, 0)})
+                Ghép đôi (
+                {matchingGroups.reduce(
+                  (total, group) => total + group.questions.length,
+                  0,
+                )}
+                )
               </div>
             </button>
             <button
               onClick={() => setActiveTab("fill_in_blank")}
-              className={`px-6 py-4 whitespace-nowrap font-medium text-sm border-b-2 transition-colors ${
+              className={`border-b-2 px-6 py-4 text-sm font-medium whitespace-nowrap transition-colors ${
                 activeTab === "fill_in_blank"
                   ? "border-blue-500 text-blue-600 dark:text-blue-400"
                   : "border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
@@ -460,7 +632,7 @@ const CreateQuiz = () => {
             </button>
             <button
               onClick={() => setActiveTab("true_false")}
-              className={`px-6 py-4 whitespace-nowrap font-medium text-sm border-b-2 transition-colors ${
+              className={`border-b-2 px-6 py-4 text-sm font-medium whitespace-nowrap transition-colors ${
                 activeTab === "true_false"
                   ? "border-blue-500 text-blue-600 dark:text-blue-400"
                   : "border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
@@ -475,13 +647,13 @@ const CreateQuiz = () => {
         </div>
 
         {/* Content */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+        <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
           {activeTab === "basic" && (
             <div className="space-y-6">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+              <h3 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">
                 Thông tin cơ bản
               </h3>
-              
+
               <InputField
                 label="Tên Quiz"
                 type="text"
@@ -490,28 +662,32 @@ const CreateQuiz = () => {
                 placeholder="Nhập tên quiz..."
                 required
               />
-              
+
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
                   Mô tả
                 </label>
                 <textarea
                   value={basicInfo.description}
-                  onChange={(e) => handleInputChange("description", e.target.value)}
+                  onChange={(e) =>
+                    handleInputChange("description", e.target.value)
+                  }
                   placeholder="Nhập mô tả quiz..."
                   rows={4}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-transparent focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
                   required
                 />
               </div>
-              
+
               <div className="flex items-center gap-3">
                 <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
                   Trạng thái hoạt động
                 </label>
                 <button
                   type="button"
-                  onClick={() => handleInputChange("is_active", !basicInfo.is_active)}
+                  onClick={() =>
+                    handleInputChange("is_active", !basicInfo.is_active)
+                  }
                   className="flex items-center gap-2"
                 >
                   {basicInfo.is_active ? (
@@ -524,14 +700,16 @@ const CreateQuiz = () => {
                   </span>
                 </button>
               </div>
-              
+
               <div className="flex items-center gap-3">
                 <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
                   Chế độ công khai
                 </label>
                 <button
                   type="button"
-                  onClick={() => handleInputChange("is_public", !basicInfo.is_public)}
+                  onClick={() =>
+                    handleInputChange("is_public", !basicInfo.is_public)
+                  }
                   className="flex items-center gap-2"
                 >
                   {basicInfo.is_public ? (
@@ -544,17 +722,18 @@ const CreateQuiz = () => {
                   </span>
                 </button>
               </div>
-              
-              <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+
+              <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-900/20">
                 <div className="flex items-start gap-3">
-                  <FaQuestionCircle className="text-blue-500 mt-0.5 flex-shrink-0" />
+                  <FaQuestionCircle className="mt-0.5 flex-shrink-0 text-blue-500" />
                   <div>
-                    <h4 className="text-sm font-medium text-blue-900 dark:text-blue-200 mb-1">
+                    <h4 className="mb-1 text-sm font-medium text-blue-900 dark:text-blue-200">
                       Thông tin về câu hỏi
                     </h4>
                     <p className="text-sm text-blue-700 dark:text-blue-300">
-                      Bạn có thể tạo quiz chỉ với thông tin cơ bản và thêm câu hỏi sau khi lưu. 
-                      Sử dụng các tab bên trên để thêm câu hỏi trắc nghiệm, ghép đôi hoặc các loại khác.
+                      Bạn có thể tạo quiz chỉ với thông tin cơ bản và thêm câu
+                      hỏi sau khi lưu. Sử dụng các tab bên trên để thêm câu hỏi
+                      trắc nghiệm, ghép đôi hoặc các loại khác.
                     </p>
                   </div>
                 </div>
@@ -568,38 +747,44 @@ const CreateQuiz = () => {
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
                   Câu hỏi trắc nghiệm ({multipleChoiceQuestions.length})
                 </h3>
-                <Button onClick={addMultipleChoiceQuestion} className="flex items-center gap-2">
+                <Button
+                  onClick={addMultipleChoiceQuestion}
+                  className="flex items-center gap-2"
+                >
                   <FaPlus />
                   Thêm câu hỏi
                 </Button>
               </div>
 
               {multipleChoiceQuestions.length === 0 ? (
-                <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-                  <FaQuestionCircle className="text-4xl mx-auto mb-4 opacity-50" />
+                <div className="py-8 text-center text-gray-500 dark:text-gray-400">
+                  <FaQuestionCircle className="mx-auto mb-4 text-4xl opacity-50" />
                   <p>Chưa có câu hỏi trắc nghiệm nào</p>
                   <p className="text-sm">Nhấn "Thêm câu hỏi" để bắt đầu</p>
                 </div>
               ) : (
                 <div className="space-y-6">
                   {multipleChoiceQuestions.map((question, qIndex) => (
-                    <div key={qIndex} className="border border-gray-200 dark:border-gray-600 rounded-lg p-4 bg-gray-50 dark:bg-gray-700/30">
-                      <div className="flex items-center justify-between mb-4">
-                        <h4 className="font-medium text-gray-900 dark:text-white text-lg">
+                    <div
+                      key={qIndex}
+                      className="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-600 dark:bg-gray-700/30"
+                    >
+                      <div className="mb-4 flex items-center justify-between">
+                        <h4 className="text-lg font-medium text-gray-900 dark:text-white">
                           Câu hỏi {qIndex + 1}
                         </h4>
                         <div className="flex items-center gap-2">
-                          <span className="text-xs bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 px-2 py-1 rounded">
+                          <span className="rounded bg-blue-100 px-2 py-1 text-xs text-blue-800 dark:bg-blue-900 dark:text-blue-200">
                             {question.points} điểm
                           </span>
-                          <span className="text-xs bg-gray-100 text-gray-700 dark:bg-gray-600 dark:text-gray-300 px-2 py-1 rounded">
+                          <span className="rounded bg-gray-100 px-2 py-1 text-xs text-gray-700 dark:bg-gray-600 dark:text-gray-300">
                             {question.time_limit}s
                           </span>
                           <Button
                             variant="outline"
                             size="sm"
                             onClick={() => removeMultipleChoiceQuestion(qIndex)}
-                            className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20"
+                            className="text-red-600 hover:bg-red-50 hover:text-red-700 dark:hover:bg-red-900/20"
                             title="Xóa câu hỏi"
                           >
                             <FaTrash />
@@ -607,13 +792,19 @@ const CreateQuiz = () => {
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                      <div className="mb-4 grid grid-cols-1 gap-4 md:grid-cols-2">
                         <div className="md:col-span-2">
                           <InputField
                             label="Câu hỏi"
                             type="text"
                             value={question.question_text}
-                            onChange={(e) => updateMultipleChoiceQuestion(qIndex, "question_text", e.target.value)}
+                            onChange={(e) =>
+                              updateMultipleChoiceQuestion(
+                                qIndex,
+                                "question_text",
+                                e.target.value,
+                              )
+                            }
                             placeholder="Nhập câu hỏi..."
                           />
                         </div>
@@ -621,14 +812,26 @@ const CreateQuiz = () => {
                           label="Gợi ý"
                           type="text"
                           value={question.hint}
-                          onChange={(e) => updateMultipleChoiceQuestion(qIndex, "hint", e.target.value)}
+                          onChange={(e) =>
+                            updateMultipleChoiceQuestion(
+                              qIndex,
+                              "hint",
+                              e.target.value,
+                            )
+                          }
                           placeholder="Nhập gợi ý..."
                         />
                         <InputField
                           label="Thời gian (giây)"
                           type="number"
                           value={question.time_limit}
-                          onChange={(e) => updateMultipleChoiceQuestion(qIndex, "time_limit", parseInt(e.target.value) || 30)}
+                          onChange={(e) =>
+                            updateMultipleChoiceQuestion(
+                              qIndex,
+                              "time_limit",
+                              parseInt(e.target.value) || 30,
+                            )
+                          }
                           min="10"
                           max="300"
                         />
@@ -636,7 +839,13 @@ const CreateQuiz = () => {
                           label="Điểm"
                           type="number"
                           value={question.points}
-                          onChange={(e) => updateMultipleChoiceQuestion(qIndex, "points", parseInt(e.target.value) || 1)}
+                          onChange={(e) =>
+                            updateMultipleChoiceQuestion(
+                              qIndex,
+                              "points",
+                              parseInt(e.target.value) || 1,
+                            )
+                          }
                           min="1"
                           max="20"
                         />
@@ -646,7 +855,13 @@ const CreateQuiz = () => {
                           </label>
                           <button
                             type="button"
-                            onClick={() => updateMultipleChoiceQuestion(qIndex, "allow_multiple_answers", !question.allow_multiple_answers)}
+                            onClick={() =>
+                              updateMultipleChoiceQuestion(
+                                qIndex,
+                                "allow_multiple_answers",
+                                !question.allow_multiple_answers,
+                              )
+                            }
                             className="flex items-center gap-2"
                           >
                             {question.allow_multiple_answers ? (
@@ -659,7 +874,7 @@ const CreateQuiz = () => {
                       </div>
 
                       <div>
-                        <div className="flex items-center justify-between mb-2">
+                        <div className="mb-2 flex items-center justify-between">
                           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                             Các đáp án
                           </label>
@@ -675,12 +890,24 @@ const CreateQuiz = () => {
                         </div>
                         <div className="space-y-2">
                           {question.answers.map((answer, aIndex) => (
-                            <div key={aIndex} className="flex items-center gap-3">
+                            <div
+                              key={aIndex}
+                              className="flex items-center gap-3"
+                            >
                               <button
                                 type="button"
-                                onClick={() => updateMultipleChoiceAnswer(qIndex, aIndex, "correct", !answer.correct)}
+                                onClick={() =>
+                                  updateMultipleChoiceAnswer(
+                                    qIndex,
+                                    aIndex,
+                                    "correct",
+                                    !answer.correct,
+                                  )
+                                }
                                 className="flex-shrink-0"
-                                title={answer.correct ? "Đáp án đúng" : "Đáp án sai"}
+                                title={
+                                  answer.correct ? "Đáp án đúng" : "Đáp án sai"
+                                }
                               >
                                 {answer.correct ? (
                                   <FaCheck className="text-green-500" />
@@ -688,21 +915,33 @@ const CreateQuiz = () => {
                                   <FaTimes className="text-gray-400" />
                                 )}
                               </button>
-                              <span className="flex-shrink-0 text-sm font-medium text-gray-600 dark:text-gray-400 w-6">
+                              <span className="w-6 flex-shrink-0 text-sm font-medium text-gray-600 dark:text-gray-400">
                                 {String.fromCharCode(65 + aIndex)}.
                               </span>
                               <input
                                 type="text"
                                 value={answer.answer_text}
-                                onChange={(e) => updateMultipleChoiceAnswer(qIndex, aIndex, "answer_text", e.target.value)}
+                                onChange={(e) =>
+                                  updateMultipleChoiceAnswer(
+                                    qIndex,
+                                    aIndex,
+                                    "answer_text",
+                                    e.target.value,
+                                  )
+                                }
                                 placeholder={`Đáp án ${String.fromCharCode(65 + aIndex)}...`}
-                                className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                                className="flex-1 rounded-lg border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
                               />
                               {question.answers.length > 2 && (
                                 <button
                                   type="button"
-                                  onClick={() => removeAnswerFromMultipleChoice(qIndex, aIndex)}
-                                  className="flex-shrink-0 p-1 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 rounded"
+                                  onClick={() =>
+                                    removeAnswerFromMultipleChoice(
+                                      qIndex,
+                                      aIndex,
+                                    )
+                                  }
+                                  className="flex-shrink-0 rounded p-1 text-red-500 hover:bg-red-50 hover:text-red-700 dark:hover:bg-red-900/20"
                                   title="Xóa đáp án"
                                 >
                                   <FaTrash className="text-xs" />
@@ -723,11 +962,16 @@ const CreateQuiz = () => {
             <div className="space-y-6">
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                  Câu hỏi ghép đôi ({matchingGroups.reduce((total, group) => total + group.questions.length, 0)} cặp)
+                  Câu hỏi ghép đôi (
+                  {matchingGroups.reduce(
+                    (total, group) => total + group.questions.length,
+                    0,
+                  )}{" "}
+                  cặp)
                 </h3>
                 <div className="flex items-center gap-2">
-                  <select 
-                    className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white"
+                  <select
+                    className="rounded-lg border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
                     onChange={(e) => {
                       if (e.target.value) {
                         addMatchingGroup(e.target.value);
@@ -745,12 +989,14 @@ const CreateQuiz = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+              <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-2">
                 <InputField
                   label="Thời gian cho toàn bộ bài (giây)"
                   type="number"
                   value={matchingTimeLimit}
-                  onChange={(e) => setMatchingTimeLimit(parseInt(e.target.value) || 60)}
+                  onChange={(e) =>
+                    setMatchingTimeLimit(parseInt(e.target.value) || 60)
+                  }
                   min="30"
                   max="600"
                 />
@@ -761,33 +1007,59 @@ const CreateQuiz = () => {
               </div>
 
               {matchingGroups.length === 0 ? (
-                <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-                  <FaQuestionCircle className="text-4xl mx-auto mb-4 opacity-50" />
+                <div className="py-8 text-center text-gray-500 dark:text-gray-400">
+                  <FaQuestionCircle className="mx-auto mb-4 text-4xl opacity-50" />
                   <p>Chưa có nhóm ghép đôi nào</p>
-                  <p className="text-sm">Chọn loại ghép đôi từ dropdown để bắt đầu</p>
+                  <p className="text-sm">
+                    Chọn loại ghép đôi từ dropdown để bắt đầu
+                  </p>
                 </div>
               ) : (
                 <div className="space-y-6">
                   {matchingGroups.map((group) => {
                     const typeConfig = {
-                      'TEXT-TEXT': { icon: '📝', label: 'Text - Text', color: 'blue' },
-                      'TEXT-IMAGE': { icon: '📝🖼️', label: 'Text - Image', color: 'purple' },
-                      'IMAGE-TEXT': { icon: '🖼️📝', label: 'Image - Text', color: 'indigo' },
-                      'IMAGE-IMAGE': { icon: '🖼️', label: 'Image - Image', color: 'pink' }
-                    }[group.type_combination] || { icon: '❓', label: group.type_combination, color: 'gray' };
+                      "TEXT-TEXT": {
+                        icon: "📝",
+                        label: "Text - Text",
+                        color: "blue",
+                      },
+                      "TEXT-IMAGE": {
+                        icon: "📝🖼️",
+                        label: "Text - Image",
+                        color: "purple",
+                      },
+                      "IMAGE-TEXT": {
+                        icon: "🖼️📝",
+                        label: "Image - Text",
+                        color: "indigo",
+                      },
+                      "IMAGE-IMAGE": {
+                        icon: "🖼️",
+                        label: "Image - Image",
+                        color: "pink",
+                      },
+                    }[group.type_combination] || {
+                      icon: "❓",
+                      label: group.type_combination,
+                      color: "gray",
+                    };
 
                     return (
-                      <div key={group.id} className="border border-gray-200 dark:border-gray-600 rounded-lg p-6 bg-gray-50 dark:bg-gray-700/30">
+                      <div
+                        key={group.id}
+                        className="rounded-lg border border-gray-200 bg-gray-50 p-6 dark:border-gray-600 dark:bg-gray-700/30"
+                      >
                         {/* Group Header */}
-                        <div className="flex items-center justify-between mb-4">
+                        <div className="mb-4 flex items-center justify-between">
                           <div className="flex items-center gap-3">
                             <span className="text-2xl">{typeConfig.icon}</span>
                             <div>
-                              <h4 className="font-medium text-gray-900 dark:text-white text-lg">
+                              <h4 className="text-lg font-medium text-gray-900 dark:text-white">
                                 {typeConfig.label}
                               </h4>
                               <p className="text-sm text-gray-600 dark:text-gray-400">
-                                {group.questions.length} cặp • {group.points_per_pair} điểm/cặp
+                                {group.questions.length} cặp •{" "}
+                                {group.points_per_pair} điểm/cặp
                               </p>
                             </div>
                           </div>
@@ -796,17 +1068,23 @@ const CreateQuiz = () => {
                               label=""
                               type="number"
                               value={group.points_per_pair}
-                              onChange={(e) => updateMatchingGroup(group.id, 'points_per_pair', parseInt(e.target.value) || 1)}
+                              onChange={(e) =>
+                                updateMatchingGroup(
+                                  group.id,
+                                  "points_per_pair",
+                                  parseInt(e.target.value) || 1,
+                                )
+                              }
                               min="1"
                               max="10"
                               placeholder="Điểm/cặp"
                               className="w-20"
                             />
                             <Button
-                              variant="outline" 
+                              variant="outline"
                               size="sm"
                               onClick={() => removeMatchingGroup(group.id)}
-                              className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20"
+                              className="text-red-600 hover:bg-red-50 hover:text-red-700 dark:hover:bg-red-900/20"
                               title="Xóa nhóm"
                             >
                               <FaTrash />
@@ -817,8 +1095,11 @@ const CreateQuiz = () => {
                         {/* Questions in Group */}
                         <div className="space-y-4">
                           {group.questions.map((question, questionIndex) => (
-                            <div key={questionIndex} className="border border-gray-300 dark:border-gray-500 rounded-lg p-4 bg-white dark:bg-gray-800">
-                              <div className="flex items-center justify-between mb-3">
+                            <div
+                              key={questionIndex}
+                              className="rounded-lg border border-gray-300 bg-white p-4 dark:border-gray-500 dark:bg-gray-800"
+                            >
+                              <div className="mb-3 flex items-center justify-between">
                                 <h5 className="font-medium text-gray-800 dark:text-gray-200">
                                   Cặp {questionIndex + 1}
                                 </h5>
@@ -828,17 +1109,22 @@ const CreateQuiz = () => {
                                     size="sm"
                                     onClick={() => addQuestionToGroup(group.id)}
                                     disabled={group.questions.length >= 5}
-                                    className="text-green-600 hover:text-green-700 text-xs"
+                                    className="text-xs text-green-600 hover:text-green-700"
                                     title="Thêm cặp"
                                   >
                                     <FaPlus />
                                   </Button>
                                   <Button
                                     variant="outline"
-                                    size="sm" 
-                                    onClick={() => removeQuestionFromGroup(group.id, questionIndex)}
+                                    size="sm"
+                                    onClick={() =>
+                                      removeQuestionFromGroup(
+                                        group.id,
+                                        questionIndex,
+                                      )
+                                    }
                                     disabled={group.questions.length <= 2}
-                                    className="text-red-600 hover:text-red-700 text-xs"
+                                    className="text-xs text-red-600 hover:text-red-700"
                                     title="Xóa cặp"
                                   >
                                     <FaTrash />
@@ -846,30 +1132,43 @@ const CreateQuiz = () => {
                                 </div>
                               </div>
 
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                                 {/* Side A */}
                                 <div className="space-y-2">
                                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                                     Nội dung A ({question.type_a})
                                   </label>
-                                  
+
                                   {question.type_a === "TEXT" ? (
                                     <input
                                       type="text"
                                       value={question.content_a}
-                                      onChange={(e) => updateQuestionInGroup(group.id, questionIndex, "content_a", e.target.value)}
+                                      onChange={(e) =>
+                                        updateQuestionInGroup(
+                                          group.id,
+                                          questionIndex,
+                                          "content_a",
+                                          e.target.value,
+                                        )
+                                      }
                                       placeholder="Nhập nội dung A..."
-                                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
+                                      className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-transparent focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
                                     />
                                   ) : (
                                     <div className="space-y-2">
                                       {question.file_a ? (
-                                        <div className="flex items-center gap-2 p-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
-                                          <span className="text-sm text-green-700 dark:text-green-300 truncate">
+                                        <div className="flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 p-2 dark:border-green-800 dark:bg-green-900/20">
+                                          <span className="truncate text-sm text-green-700 dark:text-green-300">
                                             {question.file_a.name}
                                           </span>
                                           <button
-                                            onClick={() => clearGroupFile(group.id, questionIndex, 'file_a')}
+                                            onClick={() =>
+                                              clearGroupFile(
+                                                group.id,
+                                                questionIndex,
+                                                "file_a",
+                                              )
+                                            }
                                             className="text-red-500 hover:text-red-700"
                                             title="Xóa file"
                                           >
@@ -880,8 +1179,15 @@ const CreateQuiz = () => {
                                         <input
                                           type="file"
                                           accept="image/*"
-                                          onChange={(e) => handleGroupFileUpload(group.id, questionIndex, 'file_a', e.target.files?.[0] || null)}
-                                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                                          onChange={(e) =>
+                                            handleGroupFileUpload(
+                                              group.id,
+                                              questionIndex,
+                                              "file_a",
+                                              e.target.files?.[0] || null,
+                                            )
+                                          }
+                                          className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
                                         />
                                       )}
                                     </div>
@@ -893,24 +1199,37 @@ const CreateQuiz = () => {
                                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                                     Nội dung B ({question.type_b})
                                   </label>
-                                  
+
                                   {question.type_b === "TEXT" ? (
                                     <input
                                       type="text"
                                       value={question.content_b}
-                                      onChange={(e) => updateQuestionInGroup(group.id, questionIndex, "content_b", e.target.value)}
+                                      onChange={(e) =>
+                                        updateQuestionInGroup(
+                                          group.id,
+                                          questionIndex,
+                                          "content_b",
+                                          e.target.value,
+                                        )
+                                      }
                                       placeholder="Nhập nội dung B..."
-                                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
+                                      className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-transparent focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
                                     />
                                   ) : (
                                     <div className="space-y-2">
                                       {question.file_b ? (
-                                        <div className="flex items-center gap-2 p-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
-                                          <span className="text-sm text-green-700 dark:text-green-300 truncate">
+                                        <div className="flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 p-2 dark:border-green-800 dark:bg-green-900/20">
+                                          <span className="truncate text-sm text-green-700 dark:text-green-300">
                                             {question.file_b.name}
                                           </span>
                                           <button
-                                            onClick={() => clearGroupFile(group.id, questionIndex, 'file_b')}
+                                            onClick={() =>
+                                              clearGroupFile(
+                                                group.id,
+                                                questionIndex,
+                                                "file_b",
+                                              )
+                                            }
                                             className="text-red-500 hover:text-red-700"
                                             title="Xóa file"
                                           >
@@ -921,8 +1240,15 @@ const CreateQuiz = () => {
                                         <input
                                           type="file"
                                           accept="image/*"
-                                          onChange={(e) => handleGroupFileUpload(group.id, questionIndex, 'file_b', e.target.files?.[0] || null)}
-                                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                                          onChange={(e) =>
+                                            handleGroupFileUpload(
+                                              group.id,
+                                              questionIndex,
+                                              "file_b",
+                                              e.target.files?.[0] || null,
+                                            )
+                                          }
+                                          className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
                                         />
                                       )}
                                     </div>
@@ -934,10 +1260,12 @@ const CreateQuiz = () => {
                         </div>
 
                         {/* Add/Remove Questions Info */}
-                        <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                        <div className="mt-4 rounded-lg border border-blue-200 bg-blue-50 p-3 dark:border-blue-800 dark:bg-blue-900/20">
                           <p className="text-sm text-blue-700 dark:text-blue-300">
-                            📋 Mỗi nhóm có từ 2-5 cặp. Hiện tại: {group.questions.length}/5 cặp
-                            {group.questions.length < 5 && " • Có thể thêm cặp mới"}
+                            📋 Mỗi nhóm có từ 2-5 cặp. Hiện tại:{" "}
+                            {group.questions.length}/5 cặp
+                            {group.questions.length < 5 &&
+                              " • Có thể thêm cặp mới"}
                             {group.questions.length > 2 && " • Có thể xóa cặp"}
                           </p>
                         </div>
@@ -950,25 +1278,27 @@ const CreateQuiz = () => {
           )}
 
           {activeTab === "fill_in_blank" && (
-            <div className="text-center py-12">
-              <FaExclamationTriangle className="text-6xl text-yellow-500 mx-auto mb-4" />
-              <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+            <div className="py-12 text-center">
+              <FaExclamationTriangle className="mx-auto mb-4 text-6xl text-yellow-500" />
+              <h3 className="mb-2 text-xl font-semibold text-gray-900 dark:text-white">
                 Tính năng đang được phát triển
               </h3>
               <p className="text-gray-600 dark:text-gray-400">
-                Chức năng tạo câu hỏi điền từ sẽ được bổ sung trong phiên bản tiếp theo
+                Chức năng tạo câu hỏi điền từ sẽ được bổ sung trong phiên bản
+                tiếp theo
               </p>
             </div>
           )}
 
           {activeTab === "true_false" && (
-            <div className="text-center py-12">
-              <FaExclamationTriangle className="text-6xl text-yellow-500 mx-auto mb-4" />
-              <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+            <div className="py-12 text-center">
+              <FaExclamationTriangle className="mx-auto mb-4 text-6xl text-yellow-500" />
+              <h3 className="mb-2 text-xl font-semibold text-gray-900 dark:text-white">
                 Tính năng đang được phát triển
               </h3>
               <p className="text-gray-600 dark:text-gray-400">
-                Chức năng tạo câu hỏi đúng/sai sẽ được bổ sung trong phiên bản tiếp theo
+                Chức năng tạo câu hỏi đúng/sai sẽ được bổ sung trong phiên bản
+                tiếp theo
               </p>
             </div>
           )}

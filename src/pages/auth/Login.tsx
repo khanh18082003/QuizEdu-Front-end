@@ -153,6 +153,18 @@ const Login = () => {
           }
         })
         .catch((error) => {
+          if (error.response.data.code === "M117") {
+            navigate("/authentication/verification", {
+              state: {
+                response: {
+                  email,
+                  role: role.toUpperCase(),
+                },
+                password,
+              },
+            });
+            return;
+          }
           console.error("Login failed:", error);
           setErrors({ email: "Login failed. Please try again." });
         })
@@ -183,7 +195,7 @@ const Login = () => {
           <h1 className="mb-2 text-3xl font-bold text-gray-900 dark:text-white">
             Welcome Back
           </h1>
-          <p className="text-gray-600 dark:text-gray-300">
+          <p className="text-black dark:text-gray-300">
             Sign in to continue your learning journey
           </p>
         </div>
@@ -246,7 +258,7 @@ const Login = () => {
           <Button
             variant="outline"
             fullWidth
-            className="mb-6 flex items-center justify-center gap-2"
+            className="mb-6 flex cursor-pointer items-center justify-center gap-2"
             onClick={handleGoogleLogin}
           >
             <FaGoogle className="text-[#4285F4]" />
@@ -359,11 +371,11 @@ const Login = () => {
         </div>
 
         <div className="mt-6 text-center">
-          <p className="text-gray-600 dark:text-gray-300">
+          <p className="text-gray dark:text-gray-300">
             Don't have an account?{" "}
             <Link
               to="/authentication/register"
-              className="text-[var(--color-gradient-from)] hover:underline"
+              className="font-bold text-[var(--color-gradient-from)] hover:underline"
             >
               Create an account
             </Link>

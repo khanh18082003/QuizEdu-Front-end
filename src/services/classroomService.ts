@@ -4,9 +4,7 @@ import type {
   TeacherProfileResponse,
 } from "../types/response";
 import api from "../utils/axiosCustom";
-import type {
-  QuizSessionDetailResponse,
-} from "./quizSessionService";
+import type { QuizSessionDetailResponse } from "./quizSessionService";
 import type { RegisterResponse } from "./userService";
 
 // Interface for classroom data
@@ -206,9 +204,9 @@ export interface AssignQuizToClassroomRequest {
  */
 export const assignQuizToClassroom = async (
   data: AssignQuizToClassroomRequest,
-): Promise<SuccessApiResponse<any>> => {
+): Promise<SuccessApiResponse<unknown>> => {
   try {
-    const response = await api.post<SuccessApiResponse<any>>(
+    const response = await api.post<SuccessApiResponse<unknown>>(
       `/classrooms/assignQuizToClassroom`,
       data,
     );
@@ -264,6 +262,7 @@ export const getQuizSessionsInClassroom = async (
   classroomId: string,
   page: number = 1,
   pageSize: number = 3,
+  filters: Array<string> = [],
 ): Promise<
   SuccessApiResponse<PaginationResponse<QuizSessionDetailResponse>>
 > => {
@@ -271,7 +270,7 @@ export const getQuizSessionsInClassroom = async (
     const response = await api.get<
       SuccessApiResponse<PaginationResponse<QuizSessionDetailResponse>>
     >(
-      `/classrooms/${classroomId}/quizSessions?page=${page}&pageSize=${pageSize}`,
+      `/classrooms/${classroomId}/quizSessions?page=${page}&pageSize=${pageSize}&filters=${filters.join(",")}`,
     );
     return response.data;
   } catch (error) {
@@ -292,14 +291,14 @@ export interface InviteStudentsRequest {
 export const inviteStudents = async (
   classroomId: string,
   studentEmails: string[],
-): Promise<SuccessApiResponse<any>> => {
+): Promise<SuccessApiResponse<unknown>> => {
   try {
     const requestData: InviteStudentsRequest = {
       student_emails: studentEmails,
       class_room_id: classroomId,
     };
 
-    const response = await api.post<SuccessApiResponse<any>>(
+    const response = await api.post<SuccessApiResponse<unknown>>(
       "/classrooms/invited-students",
       requestData,
     );
@@ -324,6 +323,24 @@ export const removeStudentFromClassroom = async (
     return response.data;
   } catch (error) {
     console.error("Error removing student from classroom:", error);
+    throw error;
+  }
+};
+
+/**
+ * Delete a quiz from a classroom
+ */
+export const deleteQuizInClassroom = async (
+  classroomId: string,
+  quizId: string,
+): Promise<SuccessApiResponse<void>> => {
+  try {
+    const response = await api.delete<SuccessApiResponse<void>>(
+      `/classrooms/${classroomId}/quizSessions/${quizId}`,
+    );
+    return response.data;
+  } catch (error) {
+    console.error("Error deleting quiz in classroom:", error);
     throw error;
   }
 };

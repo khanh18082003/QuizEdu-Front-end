@@ -92,7 +92,10 @@ export default {
     teachers: "Teachers",
     students: "Students",
     studentsCount: "students",
-    allTopics: "All topics",
+    allTopics: "Newest Sessions",
+    completedTopics: "Completed Sessions",
+    lobbyTopics: "Lobby Sessions",
+    activeTopics: "Active Sessions",
     assignedWork: "Assigned work",
   },
 

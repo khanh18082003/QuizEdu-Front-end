@@ -48,6 +48,7 @@ import type {
   StudentProfileResponse,
   TeacherProfileResponse,
 } from "../../types/response";
+import { deleteQuizInClassroom } from "../../services/classroomService";
 
 const ClassDetailPage = () => {
   const { classId } = useParams<{ classId: string }>();
@@ -157,6 +158,12 @@ const ClassDetailPage = () => {
     type: "info",
     isVisible: false,
   });
+
+  // Delete quiz from classroom states
+  const [isDeleteQuizModalOpen, setIsDeleteQuizModalOpen] = useState(false);
+  const [selectedQuizForDelete, setSelectedQuizForDelete] =
+    useState<ClassroomQuiz | null>(null);
+  const [isDeletingQuiz, setIsDeletingQuiz] = useState(false);
 
   const showToast = (message: string, type: "success" | "error" | "info") => {
     setToast({ message, type, isVisible: true });
@@ -363,6 +370,35 @@ const ClassDetailPage = () => {
   const handleCreateSession = (quiz: ClassroomQuiz) => {
     setSelectedQuizForSession(quiz);
     setShowConfirmCreateSession(true);
+  };
+
+  // Open confirm delete quiz modal
+  const handleDeleteQuizClick = (quiz: ClassroomQuiz) => {
+    setSelectedQuizForDelete(quiz);
+    setIsDeleteQuizModalOpen(true);
+  };
+
+  const confirmDeleteQuiz = async () => {
+    if (!classId || !selectedQuizForDelete) return;
+    try {
+      setIsDeletingQuiz(true);
+      await deleteQuizInClassroom(classId, selectedQuizForDelete.id);
+
+      // Remove quiz from local state
+      setQuizzes((prev) =>
+        prev.filter((q) => q.id !== selectedQuizForDelete.id),
+      );
+
+      showToast("Đã xóa quiz khỏi lớp học", "success");
+      setIsDeleteQuizModalOpen(false);
+      setSelectedQuizForDelete(null);
+    } catch (error) {
+      console.error("Error deleting quiz in classroom:", error);
+      // Show specific toast per requirement
+      showToast("Quiz đã được tạo session", "error");
+    } finally {
+      setIsDeletingQuiz(false);
+    }
   };
 
   const confirmCreateSession = async () => {
@@ -1103,6 +1139,14 @@ const ClassDetailPage = () => {
                           <span className="hidden sm:inline">Tạo Session</span>
                           <span className="sm:hidden">Session</span>
                         </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleDeleteQuizClick(quiz)}
+                          className="flex-1 border-red-300 text-red-600 hover:border-red-400 hover:text-red-700 sm:flex-none"
+                        >
+                          Xóa
+                        </Button>
                       </div>
                     </div>
                   </div>
@@ -1206,7 +1250,7 @@ const ClassDetailPage = () => {
                       strokeLinecap="round"
                       strokeLinejoin="round"
                       strokeWidth={1}
-                      d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                      d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
                     />
                   </svg>
                   <h3 className="mt-4 text-lg font-semibold text-gray-700 dark:text-gray-300">
@@ -2141,6 +2185,40 @@ const ClassDetailPage = () => {
         onConfirm={confirmEditComment}
         comment={selectedCommentForEdit?.comment || null}
       />
+
+      {/* Delete Quiz Confirm Modal */}
+      {isDeleteQuizModalOpen && selectedQuizForDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl dark:bg-gray-800">
+            <h3 className="mb-2 text-lg font-semibold text-gray-900 dark:text-white">
+              Xóa quiz khỏi lớp?
+            </h3>
+            <p className="mb-4 text-sm text-gray-600 dark:text-gray-300">
+              Bạn có chắc muốn xóa "{selectedQuizForDelete.name}" khỏi lớp này?
+              Hành động này không xóa quiz khỏi hệ thống và có thể thêm lại sau.
+            </p>
+            <div className="mt-6 flex items-center justify-end gap-3">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setIsDeleteQuizModalOpen(false);
+                  setSelectedQuizForDelete(null);
+                }}
+                disabled={isDeletingQuiz}
+              >
+                Hủy
+              </Button>
+              <Button
+                onClick={confirmDeleteQuiz}
+                disabled={isDeletingQuiz}
+                className="bg-red-600 hover:bg-red-700"
+              >
+                {isDeletingQuiz ? "Đang xóa..." : "Xóa"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

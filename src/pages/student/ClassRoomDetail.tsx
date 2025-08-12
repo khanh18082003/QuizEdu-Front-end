@@ -15,9 +15,6 @@ import {
   FaBell,
   FaDownload,
   FaCommentDots,
-  FaGamepad,
-  FaQuestionCircle,
-  FaCheck,
 } from "react-icons/fa";
 import Button from "../../components/ui/Button";
 import SkeletonLoader from "../../components/ui/SkeletonLoader";
@@ -30,12 +27,6 @@ import {
   getQuizSessionsInClassroom,
   type ClassRoomResponse,
 } from "../../services/classroomService";
-import {
-  getAllQuizIsPublicInClassroom,
-  getPracticeQuiz,
-  type PublicQuiz,
-  type PracticeQuizRequest,
-} from "../../services/quizService";
 import type { RegisterResponse } from "../../services/userService";
 import type {
   StudentProfileResponse,
@@ -63,6 +54,11 @@ import EditCommentModal from "../../components/modals/EditCommentModal";
 // Default classroom image
 const defaultClassroomImage =
   "https://gstatic.com/classroom/themes/img_graduation.jpg";
+
+// Extend comment to carry notificationId for delete/edit flows
+type NotificationCommentWithNotificationId = NotificationComment & {
+  notificationId: string;
+};
 
 // Quiz session status enum matching backend
 type QuizSessionStatus = "LOBBY" | "ACTIVE" | "COMPLETED" | "PAUSED";
@@ -220,7 +216,7 @@ const transformClassroomData = (
   };
 };
 
-type TabType = "stream" | "classwork" | "people" | "practice";
+type TabType = "stream" | "classwork" | "people";
 
 const ClassRoomDetail = () => {
   const { id } = useParams<{ id: string }>();
@@ -263,7 +259,7 @@ const ClassRoomDetail = () => {
   const [isDeleteCommentModalOpen, setIsDeleteCommentModalOpen] =
     useState(false);
   const [selectedCommentForDelete, setSelectedCommentForDelete] =
-    useState<NotificationComment | null>(null);
+    useState<NotificationCommentWithNotificationId | null>(null);
   const [isEditCommentModalOpen, setIsEditCommentModalOpen] = useState(false);
   const [selectedCommentForEdit, setSelectedCommentForEdit] = useState<{
     comment: NotificationComment;
@@ -296,17 +292,12 @@ const ClassRoomDetail = () => {
   const [quizSessionsHasMore, setQuizSessionsHasMore] = useState(true);
   const [isLoadingMoreSessions, setIsLoadingMoreSessions] = useState(false);
 
-  // Public quizzes state for practice tab
-  const [publicQuizzes, setPublicQuizzes] = useState<PublicQuiz[]>([]);
-  const [publicQuizzesPage, setPublicQuizzesPage] = useState(1);
-  const [publicQuizzesHasMore, setPublicQuizzesHasMore] = useState(true);
-  const [isLoadingPublicQuizzes, setIsLoadingPublicQuizzes] = useState(false);
-
-  // Practice tab state
-  const [selectedQuizIds, setSelectedQuizIds] = useState<string[]>([]);
-  const [quantityMultipleChoice, setQuantityMultipleChoice] = useState(5);
-  const [quantityMatching, setQuantityMatching] = useState(3);
-  const [isCreatingPractice, setIsCreatingPractice] = useState(false);
+  // Classwork filter state
+  const PAGE_SIZE = 3;
+  const [sessionFilter, setSessionFilter] = useState<
+    "all" | "LOBBY" | "ACTIVE" | "COMPLETED"
+  >("all");
+  const [isApplyingFilter, setIsApplyingFilter] = useState(false);
 
   // Quiz result modal state
   const [isQuizReviewModalOpen, setIsQuizReviewModalOpen] = useState(false);
@@ -320,94 +311,6 @@ const ClassRoomDetail = () => {
     type: "success" | "error" | "info" = "info",
   ) => {
     setToast({ message, type, isVisible: true });
-  };
-
-  // Calculate available question counts from selected quizzes
-  const selectedQuizzes = publicQuizzes.filter((quiz) =>
-    selectedQuizIds.includes(quiz.id),
-  );
-  const totalMultipleChoiceAvailable = selectedQuizzes.reduce(
-    (sum, quiz) => sum + quiz.number_of_multiple_choice_questions,
-    0,
-  );
-  const totalMatchingAvailable = selectedQuizzes.reduce(
-    (sum, quiz) => sum + quiz.number_of_matching_questions,
-    0,
-  );
-
-  // Auto-adjust quantities when selection changes
-  useEffect(() => {
-    if (quantityMultipleChoice > totalMultipleChoiceAvailable) {
-      setQuantityMultipleChoice(
-        Math.min(quantityMultipleChoice, totalMultipleChoiceAvailable),
-      );
-    }
-    if (quantityMatching > totalMatchingAvailable) {
-      setQuantityMatching(Math.min(quantityMatching, totalMatchingAvailable));
-    }
-  }, [
-    selectedQuizIds,
-    totalMultipleChoiceAvailable,
-    totalMatchingAvailable,
-    quantityMultipleChoice,
-    quantityMatching,
-  ]);
-
-  // Handle quiz selection
-  const handleQuizSelection = (quizId: string) => {
-    setSelectedQuizIds((prev) =>
-      prev.includes(quizId)
-        ? prev.filter((id) => id !== quizId)
-        : [...prev, quizId],
-    );
-  };
-
-  // Handle creating practice quiz
-  const handleCreatePractice = async () => {
-    if (selectedQuizIds.length === 0) {
-      showToast("Please select at least one quiz", "error");
-      return;
-    }
-
-    if (quantityMultipleChoice === 0 && quantityMatching === 0) {
-      showToast("Please select at least one question", "error");
-      return;
-    }
-
-    try {
-      setIsCreatingPractice(true);
-
-      const request: PracticeQuizRequest = {
-        quiz_ids: selectedQuizIds,
-        quantity_multiple_choice: quantityMultipleChoice,
-        quantity_matching: quantityMatching,
-      };
-
-      const response = await getPracticeQuiz(request);
-
-      if (response.code === "M000" && response.data) {
-        // Navigate to practice page instead of opening modal
-        navigate("/student/quiz-practice", {
-          state: {
-            practiceData: response.data,
-            classroomId: id,
-            classroomName: classroom?.name || "Classroom",
-          },
-        });
-
-        // Reset selections
-        setSelectedQuizIds([]);
-        setQuantityMultipleChoice(5);
-        setQuantityMatching(3);
-      } else {
-        showToast("Failed to create practice quiz", "error");
-      }
-    } catch (error) {
-      console.error("Error creating practice quiz:", error);
-      showToast("Failed to create practice quiz", "error");
-    } finally {
-      setIsCreatingPractice(false);
-    }
   };
 
   // Load more quiz sessions function
@@ -424,7 +327,8 @@ const ClassRoomDetail = () => {
       const quizSessionsResponse = await getQuizSessionsInClassroom(
         id,
         nextPage,
-        3,
+        PAGE_SIZE,
+        sessionFilter === "all" ? [] : [sessionFilter],
       );
 
       if (quizSessionsResponse.code === "M000" && quizSessionsResponse.data) {
@@ -475,39 +379,8 @@ const ClassRoomDetail = () => {
     quizSessionsPage,
     quizSessionsData,
     classroom,
+    sessionFilter,
   ]);
-
-  // Load more public quizzes function
-  const loadMorePublicQuizzes = useCallback(async () => {
-    if (!id || isLoadingPublicQuizzes || !publicQuizzesHasMore) return;
-
-    try {
-      setIsLoadingPublicQuizzes(true);
-      const nextPage = publicQuizzesPage + 1;
-
-      const publicQuizzesResponse = await getAllQuizIsPublicInClassroom(
-        id,
-        nextPage,
-        10,
-      );
-
-      if (publicQuizzesResponse.code === "M000" && publicQuizzesResponse.data) {
-        const newQuizzes = publicQuizzesResponse.data.data;
-
-        // Update public quizzes data
-        setPublicQuizzes((prev) => [...prev, ...newQuizzes]);
-        setPublicQuizzesPage(nextPage);
-
-        // Check if there are more pages
-        setPublicQuizzesHasMore(nextPage < publicQuizzesResponse.data.pages);
-      }
-    } catch (error) {
-      console.error("Error loading more public quizzes:", error);
-      showToast("Failed to load more quizzes", "error");
-    } finally {
-      setIsLoadingPublicQuizzes(false);
-    }
-  }, [id, isLoadingPublicQuizzes, publicQuizzesHasMore, publicQuizzesPage]);
 
   // Update URL when tab changes
   useEffect(() => {
@@ -794,11 +667,11 @@ const ClassRoomDetail = () => {
     notificationId: string,
   ) => {
     // Create an extended comment object with notificationId for deletion
-    const commentWithNotificationId = {
+    const commentWithNotificationId: NotificationCommentWithNotificationId = {
       ...comment,
       notificationId: notificationId,
     };
-    setSelectedCommentForDelete(commentWithNotificationId as any);
+    setSelectedCommentForDelete(commentWithNotificationId);
     setIsDeleteCommentModalOpen(true);
   };
 
@@ -806,7 +679,7 @@ const ClassRoomDetail = () => {
     if (!selectedCommentForDelete) return;
 
     // Get the notificationId from the extended object
-    const notificationId = (selectedCommentForDelete as any).notificationId;
+    const notificationId = selectedCommentForDelete.notificationId;
     if (!notificationId) return;
 
     try {
@@ -926,17 +799,17 @@ const ClassRoomDetail = () => {
         }
 
         // Call APIs separately
-        const [
-          classroomInfoResponse,
-          studentsResponse,
-          quizSessionsResponse,
-          publicQuizzesResponse,
-        ] = await Promise.all([
-          getClassroomInfo(id),
-          getClassroomStudents(id),
-          getQuizSessionsInClassroom(id),
-          getAllQuizIsPublicInClassroom(id, 1, 10),
-        ]);
+        const [classroomInfoResponse, studentsResponse, quizSessionsResponse] =
+          await Promise.all([
+            getClassroomInfo(id),
+            getClassroomStudents(id),
+            getQuizSessionsInClassroom(
+              id,
+              1,
+              PAGE_SIZE,
+              sessionFilter === "all" ? [] : [sessionFilter],
+            ),
+          ]);
 
         // Check if all API calls were successful
         if (
@@ -945,9 +818,7 @@ const ClassRoomDetail = () => {
           studentsResponse.code === "M000" &&
           studentsResponse.data &&
           quizSessionsResponse.code === "M000" &&
-          quizSessionsResponse.data &&
-          publicQuizzesResponse.code === "M000" &&
-          publicQuizzesResponse.data
+          quizSessionsResponse.data
         ) {
           const transformedData = transformClassroomData(
             classroomInfoResponse.data,
@@ -960,18 +831,20 @@ const ClassRoomDetail = () => {
           setQuizSessionsData(quizSessionsResponse.data.data);
           setQuizSessionsPage(1);
           setQuizSessionsHasMore(1 < quizSessionsResponse.data.pages);
-          console.log("quiz sessions:", quizSessionsData);
-          // Initialize public quizzes pagination state
-          setPublicQuizzes(publicQuizzesResponse.data.data);
-          setPublicQuizzesPage(1);
-          setPublicQuizzesHasMore(1 < publicQuizzesResponse.data.pages);
-          console.log("public quizzes:", publicQuizzes);
+
+          // Debug: Log transformed data
+          console.log("Transformed classroom data:", transformedData);
+          console.log("Quiz sessions pagination info:", {
+            currentPage: quizSessionsResponse.data.page,
+            totalPages: quizSessionsResponse.data.pages,
+            hasMore: 1 < quizSessionsResponse.data.pages,
+            totalSessions: quizSessionsResponse.data.total,
+          });
         } else {
           setError(
             classroomInfoResponse.message ||
               studentsResponse.message ||
               quizSessionsResponse.message ||
-              publicQuizzesResponse.message ||
               "Failed to fetch classroom details",
           );
         }
@@ -995,11 +868,12 @@ const ClassRoomDetail = () => {
         setError("Failed to fetch classroom details");
       } finally {
         setIsLoading(false);
+        setIsApplyingFilter(false);
       }
     };
 
     fetchClassroomDetails();
-  }, [id, navigate]);
+  }, [id, navigate, sessionFilter]);
 
   // Infinite scroll effect for quiz sessions
   useEffect(() => {
@@ -1060,6 +934,17 @@ const ClassRoomDetail = () => {
 
   const handleGoBack = () => {
     navigate("/student/classrooms");
+  };
+
+  // Handle filter change
+  const handleFilterChange = (
+    value: "all" | "LOBBY" | "ACTIVE" | "COMPLETED",
+  ) => {
+    setIsApplyingFilter(true);
+    setSessionFilter(value);
+    // Reset pagination state so infinite scroll starts from page 1
+    setQuizSessionsPage(1);
+    setQuizSessionsHasMore(true);
   };
 
   // Render the stream tab (announcements/feed and notifications)
@@ -1415,12 +1300,28 @@ const ClassRoomDetail = () => {
     return (
       <div className="mt-6">
         <div className="mb-6">
-          <select
-            className="w-full max-w-xs rounded-md border border-gray-300 bg-white px-3 py-2 shadow-sm focus:border-[var(--color-gradient-to)] focus:ring-1 focus:ring-[var(--color-gradient-from)] focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-            defaultValue="all"
-          >
-            <option value="all">{t("classroom.allTopics")}</option>
-          </select>
+          <div className="flex items-center gap-3">
+            <select
+              className="w-full max-w-xs rounded-md border border-gray-300 bg-white px-3 py-2 shadow-sm focus:border-[var(--color-gradient-to)] focus:ring-1 focus:ring-[var(--color-gradient-from)] focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+              value={sessionFilter}
+              onChange={(e) =>
+                handleFilterChange(
+                  e.target.value as "all" | "LOBBY" | "ACTIVE" | "COMPLETED",
+                )
+              }
+              disabled={isLoading || isApplyingFilter}
+            >
+              <option value="all">{t("classroom.allTopics")}</option>
+              <option value="LOBBY">{t("classroom.lobbyTopics")}</option>
+              <option value="COMPLETED">
+                {t("classroom.completedTopics")}
+              </option>
+              <option value="ACTIVE">{t("classroom.activeTopics")}</option>
+            </select>
+            {isApplyingFilter && (
+              <div className="h-5 w-5 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
+            )}
+          </div>
         </div>
 
         <h3 className="mb-4 text-xl font-bold text-gray-800 dark:text-white">
@@ -1600,7 +1501,7 @@ const ClassRoomDetail = () => {
         )}
 
         {/* End of data indicator */}
-        {!quizSessionsHasMore && classroom.assignments.length > 3 && (
+        {!quizSessionsHasMore && classroom.assignments.length > PAGE_SIZE && (
           <div className="flex justify-center py-4">
             <div className="text-sm text-gray-500 dark:text-gray-400">
               Đã hiển thị tất cả quiz sessions
@@ -1688,302 +1589,6 @@ const ClassRoomDetail = () => {
             ))}
           </div>
         </div>
-      </div>
-    );
-  };
-
-  // Render the practice tab
-  const renderPracticeTab = () => {
-    if (!classroom) return null;
-
-    return (
-      <div className="mt-6 space-y-6">
-        {/* Header */}
-        <div>
-          <h3 className="mb-4 text-xl font-bold text-gray-800 dark:text-white">
-            Practice Quizzes ({publicQuizzes.length})
-          </h3>
-          <p className="text-gray-600 dark:text-gray-400">
-            Select quizzes and customize the number of questions for your
-            practice session.
-          </p>
-        </div>
-
-        {/* Public Quizzes List */}
-        {isLoadingPublicQuizzes ? (
-          // Loading skeleton
-          <div className="space-y-4">
-            {[...Array(3)].map((_, index) => (
-              <div
-                key={`quiz-skeleton-${index}`}
-                className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800"
-              >
-                <div className="flex items-start gap-4">
-                  <div className="h-12 w-12 flex-shrink-0 animate-pulse rounded-lg bg-gray-200 dark:bg-gray-700" />
-                  <div className="flex-1">
-                    <div className="mb-2 h-6 w-3/4 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
-                    <div className="mb-2 h-4 w-full animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
-                    <div className="h-4 w-1/2 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
-                  </div>
-                  <div className="h-6 w-6 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : publicQuizzes.length === 0 ? (
-          // Empty state
-          <div className="rounded-lg border border-gray-200 bg-white p-8 text-center shadow-sm dark:border-gray-700 dark:bg-gray-800">
-            <FaGamepad className="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500" />
-            <h3 className="mt-4 text-lg font-semibold text-gray-700 dark:text-gray-300">
-              No practice quizzes available
-            </h3>
-            <p className="mt-2 text-gray-600 dark:text-gray-400">
-              There are no public quizzes available for practice in this
-              classroom yet.
-            </p>
-          </div>
-        ) : (
-          // Quiz list with selection
-          <div className="space-y-4">
-            {publicQuizzes.map((quiz) => (
-              <div
-                key={quiz.id}
-                className={`cursor-pointer rounded-lg border p-4 transition-all ${
-                  selectedQuizIds.includes(quiz.id)
-                    ? "border-blue-500 bg-blue-50 dark:border-blue-400 dark:bg-blue-900/20"
-                    : "border-gray-200 bg-white hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:hover:bg-gray-700"
-                }`}
-                onClick={() => handleQuizSelection(quiz.id)}
-              >
-                <div className="flex items-start gap-4">
-                  {/* Selection Checkbox */}
-                  <div className="mt-1 flex h-6 w-6 flex-shrink-0 items-center justify-center">
-                    <div
-                      className={`flex h-5 w-5 items-center justify-center rounded border-2 ${
-                        selectedQuizIds.includes(quiz.id)
-                          ? "border-blue-500 bg-blue-500"
-                          : "border-gray-300 dark:border-gray-600"
-                      }`}
-                    >
-                      {selectedQuizIds.includes(quiz.id) && (
-                        <FaCheck className="h-3 w-3 text-white" />
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Quiz Icon */}
-                  <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-lg bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-300">
-                    <FaGamepad className="h-6 w-6" />
-                  </div>
-
-                  {/* Quiz Details */}
-                  <div className="min-w-0 flex-1">
-                    <h5 className="text-lg font-semibold text-gray-800 dark:text-white">
-                      {quiz.name}
-                    </h5>
-                    {quiz.description && (
-                      <p className="mt-1 line-clamp-2 text-sm text-gray-600 dark:text-gray-400">
-                        {quiz.description}
-                      </p>
-                    )}
-                    <div className="mt-3 flex items-center gap-6 text-sm">
-                      <span className="flex items-center gap-1 text-green-600 dark:text-green-400">
-                        <FaQuestionCircle className="h-4 w-4" />
-                        {quiz.number_of_multiple_choice_questions} Multiple
-                        Choice
-                      </span>
-                      <span className="flex items-center gap-1 text-purple-600 dark:text-purple-400">
-                        <FaQuestionCircle className="h-4 w-4" />
-                        {quiz.number_of_matching_questions} Matching
-                      </span>
-                      <span
-                        className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium ${
-                          quiz.is_active
-                            ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300"
-                            : "bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300"
-                        }`}
-                      >
-                        {quiz.is_active ? "Active" : "Inactive"}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Selected Quizzes Summary & Question Configuration */}
-        {selectedQuizIds.length > 0 && (
-          <div className="rounded-lg border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-800">
-            <h4 className="mb-4 text-lg font-semibold text-gray-800 dark:text-white">
-              Configure Practice Session ({selectedQuizIds.length} quiz
-              {selectedQuizIds.length > 1 ? "es" : ""} selected)
-            </h4>
-
-            {/* Available Questions Summary */}
-            <div className="mb-6 rounded-lg bg-blue-50 p-4 dark:bg-blue-900/20">
-              <h5 className="mb-2 text-sm font-medium text-blue-800 dark:text-blue-200">
-                Total Available Questions:
-              </h5>
-              <div className="flex items-center gap-6 text-sm">
-                <span className="text-green-700 dark:text-green-300">
-                  <strong>{totalMultipleChoiceAvailable}</strong> Multiple
-                  Choice questions
-                </span>
-                <span className="text-purple-700 dark:text-purple-300">
-                  <strong>{totalMatchingAvailable}</strong> Matching questions
-                </span>
-              </div>
-            </div>
-
-            <div className="space-y-6">
-              {/* Multiple Choice Quantity */}
-              {totalMultipleChoiceAvailable > 0 && (
-                <div>
-                  <label className="mb-3 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Multiple Choice Questions:{" "}
-                    <span className="font-semibold text-blue-600 dark:text-blue-400">
-                      {quantityMultipleChoice}
-                    </span>
-                  </label>
-                  <div className="flex items-center gap-4">
-                    <input
-                      type="range"
-                      min={0}
-                      max={totalMultipleChoiceAvailable}
-                      value={quantityMultipleChoice}
-                      onChange={(e) =>
-                        setQuantityMultipleChoice(Number(e.target.value))
-                      }
-                      className="slider h-2 flex-1 cursor-pointer appearance-none rounded-lg bg-gray-200 dark:bg-gray-700"
-                      style={{
-                        background: `linear-gradient(to right, #3B82F6 0%, #3B82F6 ${(quantityMultipleChoice / totalMultipleChoiceAvailable) * 100}%, #E5E7EB ${(quantityMultipleChoice / totalMultipleChoiceAvailable) * 100}%, #E5E7EB 100%)`,
-                      }}
-                    />
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="number"
-                        min={0}
-                        max={totalMultipleChoiceAvailable}
-                        value={quantityMultipleChoice}
-                        onChange={(e) =>
-                          setQuantityMultipleChoice(
-                            Math.min(
-                              Number(e.target.value),
-                              totalMultipleChoiceAvailable,
-                            ),
-                          )
-                        }
-                        className="w-20 rounded border border-gray-300 px-3 py-2 text-center text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                      />
-                      <span className="text-sm text-gray-500 dark:text-gray-400">
-                        / {totalMultipleChoiceAvailable}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Matching Quantity */}
-              {totalMatchingAvailable > 0 && (
-                <div>
-                  <label className="mb-3 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Matching Questions:{" "}
-                    <span className="font-semibold text-purple-600 dark:text-purple-400">
-                      {quantityMatching}
-                    </span>
-                  </label>
-                  <div className="flex items-center gap-4">
-                    <input
-                      type="range"
-                      min={0}
-                      max={totalMatchingAvailable}
-                      value={quantityMatching}
-                      onChange={(e) =>
-                        setQuantityMatching(Number(e.target.value))
-                      }
-                      className="slider h-2 flex-1 cursor-pointer appearance-none rounded-lg bg-gray-200 dark:bg-gray-700"
-                      style={{
-                        background: `linear-gradient(to right, #7C3AED 0%, #7C3AED ${(quantityMatching / totalMatchingAvailable) * 100}%, #E5E7EB ${(quantityMatching / totalMatchingAvailable) * 100}%, #E5E7EB 100%)`,
-                      }}
-                    />
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="number"
-                        min={0}
-                        max={totalMatchingAvailable}
-                        value={quantityMatching}
-                        onChange={(e) =>
-                          setQuantityMatching(
-                            Math.min(
-                              Number(e.target.value),
-                              totalMatchingAvailable,
-                            ),
-                          )
-                        }
-                        className="w-20 rounded border border-gray-300 px-3 py-2 text-center text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                      />
-                      <span className="text-sm text-gray-500 dark:text-gray-400">
-                        / {totalMatchingAvailable}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Practice Summary & Start Button */}
-              <div className="flex items-center justify-between rounded-lg bg-gradient-to-r from-blue-50 to-purple-50 p-4 dark:from-blue-900/20 dark:to-purple-900/20">
-                <div>
-                  <p className="text-sm font-medium text-gray-800 dark:text-gray-200">
-                    Practice Session Summary:
-                  </p>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">
-                    <span className="font-semibold text-green-600 dark:text-green-400">
-                      {quantityMultipleChoice}
-                    </span>{" "}
-                    Multiple Choice +
-                    <span className="font-semibold text-purple-600 dark:text-purple-400">
-                      {" "}
-                      {quantityMatching}
-                    </span>{" "}
-                    Matching =
-                    <span className="font-semibold text-blue-600 dark:text-blue-400">
-                      {" "}
-                      {quantityMultipleChoice + quantityMatching}
-                    </span>{" "}
-                    total questions
-                  </p>
-                </div>
-                <Button
-                  variant="primary"
-                  onClick={handleCreatePractice}
-                  disabled={
-                    isCreatingPractice ||
-                    (quantityMultipleChoice === 0 && quantityMatching === 0)
-                  }
-                  className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
-                >
-                  <FaPlay className="h-4 w-4" />
-                  {isCreatingPractice ? "Creating..." : "Start Practice"}
-                </Button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Load More Button */}
-        {publicQuizzesHasMore && !isLoadingPublicQuizzes && (
-          <div className="flex justify-center pt-4">
-            <Button
-              variant="outline"
-              onClick={loadMorePublicQuizzes}
-              className="flex items-center gap-2"
-            >
-              <span>Load More Quizzes</span>
-            </Button>
-          </div>
-        )}
       </div>
     );
   };
@@ -2103,17 +1708,6 @@ const ClassRoomDetail = () => {
             <FaUsers className="h-4 w-4" />
             <span>{t("classroom.tabs.people")}</span>
           </button>
-          <button
-            onClick={() => setActiveTab("practice")}
-            className={`flex items-center gap-2 border-b-2 px-1 py-4 text-sm font-medium ${
-              activeTab === "practice"
-                ? "border-blue-500 text-blue-600 dark:border-blue-400 dark:text-blue-400"
-                : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400 dark:hover:border-gray-600 dark:hover:text-gray-200"
-            }`}
-          >
-            <FaGamepad className="h-4 w-4" />
-            <span>Practice</span>
-          </button>
         </nav>
       </div>
 
@@ -2122,7 +1716,6 @@ const ClassRoomDetail = () => {
         {activeTab === "stream" && renderStreamTab()}
         {activeTab === "classwork" && renderClassworkTab()}
         {activeTab === "people" && renderPeopleTab()}
-        {activeTab === "practice" && renderPracticeTab()}
       </div>
 
       {/* Toast */}

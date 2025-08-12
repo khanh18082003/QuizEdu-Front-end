@@ -218,7 +218,7 @@ const StudentRegister = () => {
           <h1 className="mb-2 text-3xl font-bold text-gray-900 dark:text-white">
             Student Registration
           </h1>
-          <p className="text-gray-600 dark:text-gray-300">
+          <p className="text-gray dark:text-gray-300">
             Create your student account to start learning
           </p>
         </div>
@@ -330,8 +330,6 @@ const StudentRegister = () => {
                   <option value="SECONDARY">Middle School</option>
                   <option value="HIGH_SCHOOL">High School</option>
                   <option value="UNDERGRADUATE">College/University</option>
-                  <option value="POSTGRADUATE">Graduate School</option>
-                  <option value="DOCTORATE">Doctorate</option>
                 </select>
                 {touched.level && errors.level && (
                   <p className="mt-1 text-sm text-red-500">{errors.level}</p>
@@ -392,7 +390,7 @@ const StudentRegister = () => {
         </div>
 
         <div className="mt-6 text-center">
-          <p className="text-gray-600 dark:text-gray-300">
+          <p className="text-gray dark:text-gray-300">
             Already have an account?{" "}
             <Link
               to="/authentication/login"
@@ -401,7 +399,7 @@ const StudentRegister = () => {
               Sign in
             </Link>
           </p>
-          <p className="mt-2 text-gray-600 dark:text-gray-300">
+          <p className="text-gray mt-2 dark:text-gray-300">
             Are you a teacher?{" "}
             <Link
               to="/authentication/register/teacher"

@@ -149,6 +149,25 @@ export interface ScoreboardEntry {
   quiz_session_id: string;
 }
 
+// New: Student scores across quiz sessions
+export interface StudentQuizSessionScore {
+  score?: number;
+  quiz_session_id: string;
+  quiz_name: string;
+  classroom_name: string;
+  start_time?: string;
+  end_time?: string;
+}
+
+export interface StudentScoreStats {
+  attempts: number; // total sessions in list
+  completed: number; // sessions with a score
+  avgScore: number | null;
+  bestScore: number | null;
+  worstScore: number | null;
+  trend: Array<{ t: string; score: number | null; label: string }>;
+}
+
 /**
  * Join a quiz session with access code
  */
@@ -324,4 +343,57 @@ export const getQuizSessionScoreboard = async (
     console.error("Error fetching quiz session scoreboard:", error);
     throw error;
   }
+};
+
+export const getStudentQuizSessionScores = async (): Promise<
+  SuccessApiResponse<StudentQuizSessionScore[]>
+> => {
+  try {
+    const response = await api.get<
+      SuccessApiResponse<StudentQuizSessionScore[]>
+    >(`/quiz-sessions/student/scores`);
+    return response.data;
+  } catch (error) {
+    console.error("Error fetching student quiz session scores:", error);
+    throw error;
+  }
+};
+
+export const computeStudentScoreStats = (
+  data: StudentQuizSessionScore[],
+): StudentScoreStats => {
+  const attempts = data.length;
+  const withScores = data.filter((d) => typeof d.score === "number");
+  const completed = withScores.length;
+
+  const avgScore = completed
+    ? parseFloat(
+        (
+          withScores.reduce((sum, d) => sum + (d.score as number), 0) /
+          completed
+        ).toFixed(2),
+      )
+    : null;
+
+  const bestScore = completed
+    ? withScores.reduce((max, d) => Math.max(max, d.score as number), -Infinity)
+    : null;
+  const worstScore = completed
+    ? withScores.reduce((min, d) => Math.min(min, d.score as number), Infinity)
+    : null;
+
+  // Sort by time ascending for trend (fallback to index order when no time)
+  const sorted = [...data].sort((a, b) => {
+    const ta = new Date(a.end_time || a.start_time || 0).getTime();
+    const tb = new Date(b.end_time || b.start_time || 0).getTime();
+    return ta - tb;
+  });
+
+  const trend = sorted.map((d) => ({
+    t: (d.end_time || d.start_time || "") as string,
+    score: typeof d.score === "number" ? (d.score as number) : null,
+    label: d.quiz_name,
+  }));
+
+  return { attempts, completed, avgScore, bestScore, worstScore, trend };
 };

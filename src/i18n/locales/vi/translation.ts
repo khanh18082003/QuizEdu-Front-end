@@ -92,7 +92,10 @@ export default {
     teachers: "Giáo viên",
     students: "Ban học",
     studentsCount: "sinh viên",
-    allTopics: "Tất cả chủ đề",
+    allTopics: "Các session mới nhất",
+    completedTopics: "Đã hoàn thành",
+    lobbyTopics: "Đang chờ",
+    activeTopics: "Đang hoạt động",
     assignedWork: "Bài tập được giao",
   },
 

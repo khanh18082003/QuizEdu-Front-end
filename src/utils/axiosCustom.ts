@@ -89,9 +89,15 @@ axiosInstance.interceptors.response.use(
     const originalRequest = error.config as AxiosRequestConfig & {
       _retry?: boolean;
     };
-
+    const requestUrl = (originalRequest?.url || "").toString().toLowerCase();
+    const isAuthEndpoint =
+      requestUrl.startsWith("/auth") || requestUrl.includes("/auth/");
     // Check if error is 401 and we haven't already tried to refresh
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    if (
+      error.response?.status === 401 &&
+      !isAuthEndpoint &&
+      !originalRequest._retry
+    ) {
       console.log("401 error detected, attempting to refresh token");
       originalRequest._retry = true;
 

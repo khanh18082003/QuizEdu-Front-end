@@ -319,13 +319,13 @@ const HomePage = () => {
             fun learning!
           </p>
           <Link
-            to="/register/student"
+            to="/authentication/register/student"
             className="mr-4 inline-block rounded-full bg-white px-8 py-3 font-bold text-[#5d7cff] shadow transition-colors hover:bg-gray-100"
           >
             I'm a Student
           </Link>
           <Link
-            to="/register/teacher"
+            to="/authentication/register/teacher"
             className="inline-block rounded-full bg-white px-8 py-3 font-bold text-[#7e51c2] shadow transition-colors hover:bg-gray-100"
           >
             I'm a Teacher
