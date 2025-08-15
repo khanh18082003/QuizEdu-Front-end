@@ -15,11 +15,15 @@ const initial: UserProfile = {
   first_name: "",
   last_name: "",
   display_name: "",
-  avatar: null,
+  avatar: "",
   is_active: false,
   role: "",
   created_at: "",
   updated_at: "",
+  subjects: [],
+  experience: "",
+  school_name: "",
+  no_password: false,
 };
 
 const userReducer = (state = initial, action: UserAction) => {

@@ -326,7 +326,7 @@ const Verification = () => {
       } else {
         setError("Could not resend the code. Please try again later.");
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Resend code error:", error);
       const errorCode = error?.response?.data?.code;
       console.error("Resend code error code:", errorCode);

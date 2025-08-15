@@ -12,7 +12,7 @@ export interface RegisterResponse {
   first_name: string;
   last_name: string;
   display_name: string;
-  avatar: string | null;
+  avatar: string;
   no_password: boolean;
   is_active: boolean;
   role: string;
@@ -157,14 +157,26 @@ export const createPassword = async (
  * @param role User role (default: "student")
  * @returns Promise with the updated profile data
  */
-export const updateUserProfile = async (
+export async function updateUserProfile(
+  userData: any,
+  avatarFile: File | null | undefined,
+  role: "student",
+): Promise<SuccessApiResponse<StudentProfileResponse>>;
+export async function updateUserProfile(
+  userData: any,
+  avatarFile: File | null | undefined,
+  role: "teacher",
+): Promise<SuccessApiResponse<TeacherProfileResponse>>;
+
+// Implementation
+export async function updateUserProfile(
   userData: Partial<StudentProfileResponse | TeacherProfileResponse>,
   avatarFile?: File | null,
-  role: string = "student",
+  role: "student" | "teacher" = "student",
 ): Promise<
   | SuccessApiResponse<StudentProfileResponse>
   | SuccessApiResponse<TeacherProfileResponse>
-> => {
+> {
   try {
     // Validate file size if avatar is provided
     if (avatarFile) {
@@ -214,14 +226,11 @@ export const updateUserProfile = async (
         | SuccessApiResponse<StudentProfileResponse>
         | SuccessApiResponse<TeacherProfileResponse>
       >(apiUrl, formData, {
-        headers: {
-          "Content-Type": "multipart/form-data",
-        },
+        headers: { "Content-Type": "multipart/form-data" },
         signal: controller.signal,
       });
 
       clearTimeout(timeoutId);
-
       return response.data;
     } catch (err) {
       clearTimeout(timeoutId);
@@ -235,4 +244,4 @@ export const updateUserProfile = async (
       throw new Error("Profile update failed due to an unknown error");
     }
   }
-};
+}

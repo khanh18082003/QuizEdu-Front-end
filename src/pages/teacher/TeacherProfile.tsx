@@ -20,9 +20,7 @@ import type {
   StudentProfileResponse,
   TeacherProfileResponse,
 } from "../../types/response";
-import { UserRole } from "../../types/userRole";
 import { setPageTitle, PAGE_TITLES, usePageTitle } from "../../utils/title";
-import { useTranslation } from "react-i18next";
 
 interface TeacherData {
   email: string;
@@ -32,11 +30,10 @@ interface TeacherData {
   subjects: Array<string>;
   experience: string;
   school_name: string;
-  avatar?: string | null;
+  avatar: string;
 }
 
 export const TeacherProfile = () => {
-  const { t } = useTranslation();
   // Set page title
   usePageTitle(PAGE_TITLES.TEACHER_PROFILE);
   const [isEditing, setIsEditing] = useState(false);
@@ -157,7 +154,7 @@ export const TeacherProfile = () => {
       const response = await updateUserProfile(
         userData,
         selectedAvatarFile,
-        UserRole.TEACHER.toLowerCase(),
+        "teacher",
       );
 
       const updatedData = {
@@ -167,7 +164,7 @@ export const TeacherProfile = () => {
         display_name: response.data.display_name || formData.display_name,
         subjects: response.data.subjects || formData.subjects,
         experience: response.data.experience || formData.experience,
-        school_name: response.data.schoolName || formData.school_name,
+        school_name: response.data.school_name || formData.school_name,
         avatar: response.data.avatar || formData.avatar,
       };
 

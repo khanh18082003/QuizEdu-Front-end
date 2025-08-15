@@ -1,9 +1,8 @@
 import { FaUsers, FaLightbulb, FaHeart } from "react-icons/fa";
 import { PAGE_TITLES, usePageTitle } from "../utils/title";
-import { useTranslation } from "react-i18next";
 
 const AboutUs = () => {
-  const { t } = useTranslation();
+  // const { t } = useTranslation();
   // Set page title
   usePageTitle(PAGE_TITLES.ABOUT_US);
 

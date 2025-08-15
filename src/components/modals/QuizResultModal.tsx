@@ -1,11 +1,5 @@
 import React from "react";
-import {
-  FaTrophy,
-  FaCheckCircle,
-  FaTimesCircle,
-  FaHome,
-  FaRedo,
-} from "react-icons/fa";
+import { FaTrophy, FaCheckCircle, FaHome, FaRedo } from "react-icons/fa";
 import Button from "../ui/Button";
 import type { QuizSubmissionResponse } from "../../services/quizSessionService";
 

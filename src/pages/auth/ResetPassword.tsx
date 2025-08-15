@@ -148,7 +148,7 @@ const ResetPassword = () => {
             "Failed to reset password. The server didn't respond as expected.",
           );
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error("Password reset failed:", error);
         if (error?.response?.status === 401) {
           setGeneralError(

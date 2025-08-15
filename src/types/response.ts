@@ -17,7 +17,7 @@ export interface ErrorApiResponse extends ApiResponse {
 }
 export interface PaginationResponse<T> {
   page: number;
-  page_size: number;  // API của bạn dùng page_size
+  page_size: number; // API của bạn dùng page_size
   pages: number;
   total: number;
   data: Array<T>;
@@ -31,4 +31,5 @@ export interface TeacherProfileResponse extends RegisterResponse {
   subjects: Array<string>;
   experience: string;
   school_name: string;
+  level?: string;
 }

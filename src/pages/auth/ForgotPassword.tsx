@@ -54,14 +54,12 @@ const ForgotPassword = () => {
           email: email,
         },
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Password reset request failed:", error);
 
       // Display error to user
       if (error?.response?.status === 404) {
         setError("No account found with this email address.");
-      } else if (error?.response?.status === 429) {
-        setError("Too many attempts. Please try again later.");
       } else if (error?.response?.data?.message) {
         setError(error.response.data.message);
       } else {

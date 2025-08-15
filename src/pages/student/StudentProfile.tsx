@@ -19,7 +19,7 @@ import type {
   StudentProfileResponse,
   TeacherProfileResponse,
 } from "../../types/response";
-import { UserRole } from "../../types/userRole";
+
 import { PAGE_TITLES, usePageTitle } from "../../utils/title";
 
 interface StudentData {
@@ -139,7 +139,7 @@ export const StudentProfile = () => {
       const response = await updateUserProfile(
         userData,
         selectedAvatarFile,
-        UserRole.STUDENT.toLowerCase(),
+        "student",
       );
 
       const updatedData = {
@@ -148,9 +148,9 @@ export const StudentProfile = () => {
         last_name: response.data.last_name || formData.last_name,
         display_name: response.data.display_name || formData.display_name,
         school_name: response.data.school_name || formData.school_name,
-        level: response.data.level || formData.level,
+        level: response.data?.level || formData.level,
         avatar: response.data.avatar || formData.avatar,
-      };
+      } as StudentData;
 
       setFormData(updatedData);
       setStudentData(updatedData);
@@ -165,7 +165,7 @@ export const StudentProfile = () => {
           display_name: updatedData.display_name,
           level: updatedData.level,
           school_name: updatedData.school_name,
-          avatar: updatedData.avatar ?? null,
+          avatar: updatedData.avatar ?? userProfile.avatar ?? "",
         }),
       );
 
@@ -215,7 +215,6 @@ export const StudentProfile = () => {
       fileInputRef.current.value = "";
     }
   };
-
 
   return (
     <div className="space-y-8">

@@ -7,8 +7,7 @@ import {
   FaBolt,
 } from "react-icons/fa";
 import { useState, useEffect } from "react";
-import { setPageTitle, PAGE_TITLES, usePageTitle } from "../utils/title";
-import { useTranslation } from "react-i18next";
+import { PAGE_TITLES, usePageTitle } from "../utils/title";
 
 const feedbacks = [
   {
@@ -36,7 +35,6 @@ const feedbacks = [
 const HomePage = () => {
   const [current, setCurrent] = useState(0);
   const [direction, setDirection] = useState<"left" | "right">("right");
-  const { t } = useTranslation();
   // Set page title
   usePageTitle(PAGE_TITLES.HOME);
 
