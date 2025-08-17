@@ -79,12 +79,12 @@ const PasswordCreation = () => {
       [name]: value,
     }));
 
-    // Clear errors when user starts typing
+    // Clear error for this field by removing the key
     if (errors[name]) {
-      setErrors((prev) => ({
-        ...prev,
-        [name]: "",
-      }));
+      setErrors((prev) => {
+        const { [name]: _, ...rest } = prev;
+        return rest;
+      });
     }
   };
 
@@ -112,6 +112,13 @@ const PasswordCreation = () => {
         ...prev,
         [name]: error,
       }));
+    } else {
+      // No error -> remove the key if it exists
+      setErrors((prev) => {
+        if (!(name in prev)) return prev;
+        const { [name]: _, ...rest } = prev;
+        return rest;
+      });
     }
   };
 
@@ -321,7 +328,7 @@ const PasswordCreation = () => {
               disabled={
                 !formData.password ||
                 !formData.confirmPassword ||
-                Object.keys(errors).length > 0
+                Object.values(errors).some(Boolean)
               }
             >
               Create Password
