@@ -966,11 +966,6 @@ const ClassDetailPage = () => {
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="text-xs text-gray-500">
-                        {student.is_active
-                          ? "Đang hoạt động"
-                          : "Không hoạt động"}
-                      </span>
                       <Button
                         variant="outline"
                         size="sm"
@@ -1818,8 +1813,9 @@ const ClassDetailPage = () => {
                                           onClick={() =>
                                             window.open(fileUrl, "_blank")
                                           }
+                                          className="cursor-pointer"
                                         >
-                                          Tải xuống
+                                          Xem
                                         </Button>
                                       </div>
                                     );
