@@ -296,6 +296,11 @@ const ClassRoomDetail = () => {
   const [quizSessionsHasMore, setQuizSessionsHasMore] = useState(true);
   const [isLoadingMoreSessions, setIsLoadingMoreSessions] = useState(false);
 
+  // NEW: filter state for sessions
+  const [sessionFilter, setSessionFilter] = useState<
+    "all" | "LOBBY" | "ACTIVE" | "COMPLETED"
+  >("all");
+
   // Public quizzes state for practice tab
   const [publicQuizzes, setPublicQuizzes] = useState<PublicQuiz[]>([]);
   const [publicQuizzesPage, setPublicQuizzesPage] = useState(1);
@@ -421,10 +426,17 @@ const ClassRoomDetail = () => {
       // Add delay to simulate slow loading and show skeleton
       await new Promise((resolve) => setTimeout(resolve, 1000));
 
+      // Build filters
+      const filters = [];
+      if (sessionFilter !== "all") {
+        filters.push(sessionFilter);
+      }
+
       const quizSessionsResponse = await getQuizSessionsInClassroom(
         id,
         nextPage,
         3,
+        filters,
       );
 
       if (quizSessionsResponse.code === "M000" && quizSessionsResponse.data) {
@@ -475,6 +487,7 @@ const ClassRoomDetail = () => {
     quizSessionsPage,
     quizSessionsData,
     classroom,
+    sessionFilter,
   ]);
 
   // Load more public quizzes function
@@ -934,7 +947,7 @@ const ClassRoomDetail = () => {
         ] = await Promise.all([
           getClassroomInfo(id),
           getClassroomStudents(id),
-          getQuizSessionsInClassroom(id),
+          getQuizSessionsInClassroom(id, 1, 3),
           getAllQuizIsPublicInClassroom(id, 1, 10),
         ]);
 
@@ -1060,6 +1073,70 @@ const ClassRoomDetail = () => {
 
   const handleGoBack = () => {
     navigate("/student/classrooms");
+  };
+
+  // Handler: change filter and reload sessions
+  const handleSessionFilterChange = async (
+    e: React.ChangeEvent<HTMLSelectElement>,
+  ) => {
+    const value = e.target.value as "all" | "LOBBY" | "ACTIVE" | "COMPLETED";
+    setSessionFilter(value);
+
+    if (!id) return;
+
+    try {
+      // reset paging
+      setQuizSessionsPage(1);
+      setQuizSessionsHasMore(true);
+      setIsLoadingMoreSessions(true);
+
+      const filters = [];
+      if (value !== "all") {
+        filters.push(value);
+      }
+
+      const quizSessionsResponse = await getQuizSessionsInClassroom(
+        id,
+        1,
+        3,
+        filters,
+      );
+
+      if (quizSessionsResponse.code === "M000" && quizSessionsResponse.data) {
+        const newSessions = quizSessionsResponse.data.data;
+
+        setQuizSessionsData(newSessions);
+        setQuizSessionsHasMore(1 < quizSessionsResponse.data.pages);
+
+        if (classroom) {
+          const newAssignments = newSessions.map((session) => ({
+            id: session.id,
+            title: session.name,
+            description: session.description,
+            quiz_session_id: session.quiz_session_id,
+            start_time: session.start_time,
+            end_time: session.end_time,
+            dueDate: new Date(),
+            assignedDate: new Date(session.start_time),
+            status: getQuizSessionStatus(session),
+          }));
+
+          setClassroom((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  assignments: newAssignments,
+                }
+              : null,
+          );
+        }
+      }
+    } catch (error) {
+      console.error("Error filtering quiz sessions:", error);
+      showToast("Không thể lọc quiz sessions", "error");
+    } finally {
+      setIsLoadingMoreSessions(false);
+    }
   };
 
   // Render the stream tab (announcements/feed and notifications)
@@ -1417,9 +1494,13 @@ const ClassRoomDetail = () => {
         <div className="mb-6">
           <select
             className="w-full max-w-xs rounded-md border border-gray-300 bg-white px-3 py-2 shadow-sm focus:border-[var(--color-gradient-to)] focus:ring-1 focus:ring-[var(--color-gradient-from)] focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-            defaultValue="all"
+            value={sessionFilter}
+            onChange={handleSessionFilterChange}
           >
             <option value="all">{t("classroom.allTopics")}</option>
+            <option value="LOBBY">{t("classroom.lobbyTopics")}</option>
+            <option value="ACTIVE">{t("classroom.activeTopics")}</option>
+            <option value="COMPLETED">{t("classroom.completedTopics")}</option>
           </select>
         </div>
 
