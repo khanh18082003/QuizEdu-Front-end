@@ -7,16 +7,16 @@ const Contact = () => {
 
   return (
     <div className="mx-auto max-w-2xl text-center">
-      <h1 className="mb-6 text-4xl font-extrabold text-[var(--color-gradient-from)]">
+      <h1 className="mb-6 text-4xl font-extrabold text-[#232946] dark:text-white">
         Contact Us
       </h1>
-      <p className="mb-8 text-lg text-gray-700 dark:text-gray-200">
+      <p className="mb-8 text-lg text-[#232946] dark:text-gray-200">
         Have questions or feedback? We&apos;d love to hear from you!
       </p>
       <div className="mb-12 grid gap-8 md:grid-cols-3">
         <div className="flex flex-col items-center">
-          <FaEnvelope className="mb-2 text-2xl text-[#7e51c2]" />
-          <span className="font-semibold">Email</span>
+          <FaEnvelope className="mb-2 text-2xl text-[var(--color-gradient-to)]" />
+          <span className="font-semibold dark:text-white">Email</span>
           <a
             href="mailto:support@quizedu.com"
             className="text-sm text-gray-600 hover:underline dark:text-gray-300"
@@ -25,20 +25,20 @@ const Contact = () => {
           </a>
         </div>
         <div className="flex flex-col items-center">
-          <FaPhone className="mb-2 text-2xl text-[#5d7cff]" />
-          <span className="font-semibold">Phone</span>
+          <FaPhone className="mb-2 text-2xl text-[var(--color-gradient-to)]" />
+          <span className="font-semibold dark:text-white">Phone</span>
           <a
             href="tel:+1234567890"
             className="text-sm text-gray-600 hover:underline dark:text-gray-300"
           >
-            +1 234 567 890
+            +84 378 277 559
           </a>
         </div>
         <div className="flex flex-col items-center">
-          <FaMapMarkerAlt className="mb-2 text-2xl text-[#7e51c2]" />
-          <span className="font-semibold">Address</span>
+          <FaMapMarkerAlt className="mb-2 text-2xl text-[var(--color-gradient-to)]" />
+          <span className="font-semibold dark:text-white">Address</span>
           <span className="text-sm text-gray-600 dark:text-gray-300">
-            123 Edu Street, Learning City
+            40/4 Hang Tre, Long Binh, Ho Chi Minh City
           </span>
         </div>
       </div>
@@ -50,17 +50,17 @@ const Contact = () => {
           <input
             type="text"
             placeholder="Your Name"
-            className="w-full rounded border border-gray-300 px-4 py-2 focus:ring-2 focus:ring-[#7e51c2] focus:outline-none dark:border-gray-700 dark:bg-gray-800"
+            className="w-full rounded border border-gray-300 px-4 py-2 focus:ring-2 focus:ring-[#7e51c2] focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-white"
           />
           <input
             type="email"
             placeholder="Your Email"
-            className="w-full rounded border border-gray-300 px-4 py-2 focus:ring-2 focus:ring-[#7e51c2] focus:outline-none dark:border-gray-700 dark:bg-gray-800"
+            className="w-full rounded border border-gray-300 px-4 py-2 focus:ring-2 focus:ring-[#7e51c2] focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-white"
           />
           <textarea
             placeholder="Your Message"
             rows={4}
-            className="w-full rounded border border-gray-300 px-4 py-2 focus:ring-2 focus:ring-[#7e51c2] focus:outline-none dark:border-gray-700 dark:bg-gray-800"
+            className="w-full rounded border border-gray-300 px-4 py-2 focus:ring-2 focus:ring-[#7e51c2] focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-white"
           />
           <button
             type="submit"

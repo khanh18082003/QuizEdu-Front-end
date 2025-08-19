@@ -77,7 +77,7 @@ const ForgotPassword = () => {
           <h1 className="mb-2 text-3xl font-bold text-gray-900 dark:text-white">
             Forgot Password
           </h1>
-          <p className="text-gray-600 dark:text-gray-300">
+          <p className="text-[#232946] dark:text-gray-300">
             Enter your email to receive a verification code
           </p>
         </div>

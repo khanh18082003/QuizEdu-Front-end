@@ -193,28 +193,62 @@ const CreateQuiz = () => {
 
   // Matching Functions
   const addMatchingGroup = (typeCombination: string) => {
-    const newGroup: MatchingGroup = {
-      id: `group_${Date.now()}`,
-      type_combination: typeCombination,
-      points_per_pair: 1,
-      questions: [],
-    };
+    setMatchingGroups((prev) => {
+      const existingIndex = prev.findIndex(
+        (g) => g.type_combination === typeCombination,
+      );
 
-    // Add minimum 2 empty questions
-    for (let i = 0; i < 2; i++) {
+      // Nếu đã có nhóm cùng loại -> chỉ thêm 1 cặp vào nhóm đó (tối đa 5)
+      if (existingIndex !== -1) {
+        const group = prev[existingIndex];
+
+        if (group.questions.length >= 5) {
+          showToast("Mỗi nhóm chỉ được tối đa 5 cặp!", "info");
+          return prev;
+        }
+
+        const [typeA, typeB] = typeCombination.split("-");
+        const newQuestion: CreateMatchingQuestionWithFile = {
+          content_a: "",
+          type_a: typeA as "TEXT" | "IMAGE",
+          content_b: "",
+          type_b: typeB as "TEXT" | "IMAGE",
+          points: group.points_per_pair,
+          file_a: undefined,
+          file_b: undefined,
+        };
+
+        const next = [...prev];
+        next[existingIndex] = {
+          ...group,
+          questions: [...group.questions, newQuestion],
+        };
+        return next;
+      }
+
+      // Chưa có nhóm -> tạo nhóm mới với 2 cặp mặc định
+      const newGroup: MatchingGroup = {
+        id: `group_${Date.now()}`,
+        type_combination: typeCombination,
+        points_per_pair: 1,
+        questions: [],
+      };
+
       const [typeA, typeB] = typeCombination.split("-");
-      newGroup.questions.push({
-        content_a: "",
-        type_a: typeA as "TEXT" | "IMAGE",
-        content_b: "",
-        type_b: typeB as "TEXT" | "IMAGE",
-        points: 1,
-        file_a: undefined,
-        file_b: undefined,
-      });
-    }
+      for (let i = 0; i < 2; i++) {
+        newGroup.questions.push({
+          content_a: "",
+          type_a: typeA as "TEXT" | "IMAGE",
+          content_b: "",
+          type_b: typeB as "TEXT" | "IMAGE",
+          points: newGroup.points_per_pair,
+          file_a: undefined,
+          file_b: undefined,
+        });
+      }
 
-    setMatchingGroups([...matchingGroups, newGroup]);
+      return [...prev, newGroup];
+    });
   };
 
   const updateMatchingGroup = <K extends keyof MatchingGroup>(

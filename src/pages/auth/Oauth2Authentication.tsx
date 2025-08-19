@@ -91,7 +91,7 @@ export const Oauth2Authentication = () => {
   };
 
   const handleRetry = () => {
-    navigate("/auth/login");
+    navigate("/authentication/login");
   };
 
   return (
